@@ -136,4 +136,34 @@ describe("Parser", () => {
     expect(sexp).toContain("module_block");
     expect(sexp).toContain("feature_block");
   });
+
+  describe("empty document parsing", () => {
+    test("parses completely empty document", () => {
+      const code = "";
+      
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+      expect(tree!.rootNode.childCount).toBe(0);
+    });
+
+    test("parses document with only whitespace", () => {
+      const code = "   \n\n   \t   \n   ";
+      
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+    });
+
+    test("parses document with only newlines", () => {
+      const code = "\n\n\n\n";
+      
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+    });
+  });
 });
