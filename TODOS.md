@@ -1,0 +1,422 @@
+# Blueprint LSP Implementation Plan
+
+## Overview
+
+This document outlines the implementation plan for the Blueprint DSL Language Server Protocol (LSP) implementation. The LSP will provide IDE integration for `.bp` requirement files including syntax highlighting, diagnostics, hover information, navigation, and integration with ticket artifacts.
+
+**Tech Stack:**
+- Language/Runtime: TypeScript/Node
+- Package Manager: Bun
+- Parser: tree-sitter
+- LSP Framework: vscode-languageserver + vscode-languageclient
+- Testing: Bun
+- Bundling: zshy
+
+---
+
+## Phase 1: Project Setup & Infrastructure
+
+### 1.1 Project Initialization
+- [ ] Initialize monorepo structure with packages for `server`, `client`, and `tree-sitter-blueprint`
+- [ ] Configure `package.json` with workspaces for monorepo management
+- [ ] Set up TypeScript configuration (`tsconfig.json`) for each package
+- [ ] Configure Bun as the package manager and test runner
+- [ ] Set up zshy bundler configuration for production builds
+- [ ] Create `.gitignore` with appropriate exclusions
+
+### 1.2 Development Environment
+- [ ] Configure ESLint and Prettier for code quality
+- [ ] Set up VS Code workspace settings for development
+- [ ] Create launch configurations for debugging the LSP server and client
+- [ ] Set up hot-reload for development iteration
+
+---
+
+## Phase 2: Tree-sitter Grammar Definition
+
+### 2.1 Grammar Specification
+- [ ] Create `tree-sitter-blueprint` package directory structure
+- [ ] Define `grammar.js` with lexical rules:
+  - [ ] UTF-8 character set handling
+  - [ ] Line ending normalization (LF/CRLF)
+  - [ ] Single-line comments (`// ...`)
+  - [ ] Multi-line comments (`/* ... */`)
+  - [ ] Identifier pattern: `[a-zA-Z_][a-zA-Z0-9_-]*`
+  - [ ] Whitespace and indentation handling
+
+### 2.2 Document-Level Rules
+- [ ] Define `@description` keyword and block parsing
+- [ ] Implement description-text capture (free-form prose until next keyword)
+
+### 2.3 Hierarchy Keywords
+- [ ] Define `@module` rule with identifier and description-text
+- [ ] Define `@feature` rule with identifier and description-text
+- [ ] Define `@requirement` rule with identifier and description-text
+- [ ] Implement proper nesting validation (features in modules, requirements in features)
+
+### 2.4 Annotation Keywords
+- [ ] Define `@depends-on` rule with comma-separated reference list
+- [ ] Implement reference parsing (dot-notation: `module.feature.requirement`)
+- [ ] Define `@constraint` rule with identifier and description-text
+
+### 2.5 Description Block Handling
+- [ ] Parse free-form prose text
+- [ ] Handle fenced code blocks (``` ... ```)
+- [ ] Preserve paragraph separation (blank lines)
+
+### 2.6 Grammar Testing
+- [ ] Write corpus tests for valid syntax cases
+- [ ] Write corpus tests for edge cases (empty files, minimal documents)
+- [ ] Write corpus tests for error recovery scenarios
+- [ ] Generate and compile the tree-sitter parser
+- [ ] Create Node.js bindings for the parser
+
+---
+
+## Phase 3: Core LSP Server Implementation
+
+### 3.1 Server Initialization
+- [ ] Create LSP server entry point using `vscode-languageserver/node`
+- [ ] Implement `initialize` handler with capability negotiation
+- [ ] Implement `initialized` handler for post-initialization setup
+- [ ] Implement `shutdown` and `exit` handlers
+- [ ] Set up connection and document manager
+
+### 3.2 Document Management
+- [ ] Implement `TextDocuments` manager for open `.bp` files
+- [ ] Handle `textDocument/didOpen` - parse and index document
+- [ ] Handle `textDocument/didChange` - incremental re-parsing
+- [ ] Handle `textDocument/didClose` - cleanup document state
+- [ ] Handle `textDocument/didSave` - trigger full validation
+
+### 3.3 Document Parsing & AST
+- [ ] Integrate tree-sitter parser into server
+- [ ] Create AST node types mirroring Blueprint hierarchy:
+  - [ ] `DescriptionNode`
+  - [ ] `ModuleNode`
+  - [ ] `FeatureNode`
+  - [ ] `RequirementNode`
+  - [ ] `DependsOnNode`
+  - [ ] `ConstraintNode`
+- [ ] Implement tree-sitter to AST transformation
+- [ ] Build source location tracking for all nodes
+- [ ] Create document symbol table (identifier → node mapping)
+
+### 3.4 Workspace Indexing
+- [ ] Implement workspace folder scanning for `.bp` files
+- [ ] Build cross-file symbol index
+- [ ] Implement file watcher for `.bp` file changes
+- [ ] Handle workspace folder additions/removals
+
+---
+
+## Phase 4: Ticket Artifact Integration
+
+### 4.1 Ticket File Discovery
+- [ ] Implement ticket file path resolution (`requirements/foo.bp` → `.blueprint/tickets/foo.tickets.json`)
+- [ ] Handle configurable tickets path from settings
+- [ ] Set up file watcher for `.tickets.json` changes
+
+### 4.2 Ticket Schema Validation
+- [ ] Define TypeScript interfaces for ticket schema:
+  - [ ] `TicketFile` (version, source, tickets array)
+  - [ ] `Ticket` (id, ref, description, status, constraints_satisfied, implementation)
+  - [ ] `Implementation` (files, tests)
+  - [ ] `TicketStatus` enum (pending, in-progress, complete, obsolete)
+- [ ] Implement JSON schema validation for ticket files
+- [ ] Report schema validation errors as diagnostics
+
+### 4.3 Requirement-Ticket Correlation
+- [ ] Build mapping from requirement refs to tickets
+- [ ] Handle one-to-many requirement-to-ticket relationships
+- [ ] Aggregate constraint satisfaction across tickets sharing same ref
+- [ ] Compute requirement completion status
+
+---
+
+## Phase 5: Dependency Resolution
+
+### 5.1 Reference Resolution
+- [ ] Parse dot-notation references (`module.feature.requirement`)
+- [ ] Resolve references to target nodes (same file)
+- [ ] Resolve cross-file references
+- [ ] Handle partial references (module-only, module.feature)
+
+### 5.2 Dependency Graph
+- [ ] Build directed dependency graph from `@depends-on` declarations
+- [ ] Implement topological sort for dependency ordering
+- [ ] Detect circular dependencies using cycle detection algorithm
+- [ ] Compute transitive dependencies
+
+### 5.3 Blocking Status Computation
+- [ ] Determine if a requirement is blocked by incomplete dependencies
+- [ ] Propagate blocking status through hierarchy
+- [ ] Cache and invalidate blocking status on changes
+
+---
+
+## Phase 6: Diagnostics
+
+### 6.1 Syntax Errors
+- [ ] Report tree-sitter parse errors as diagnostics
+- [ ] Provide meaningful error messages for common syntax mistakes
+- [ ] Include source location (line, column, range)
+
+### 6.2 Semantic Errors
+- [ ] Detect circular dependencies (Error)
+- [ ] Detect references to non-existent requirements (Error)
+- [ ] Detect duplicate identifiers in scope (Error)
+- [ ] Detect multiple `@description` blocks in one file (Error)
+- [ ] Detect `@description` after `@module` (Error)
+
+### 6.3 Warnings
+- [ ] Warn when requirement has no ticket
+- [ ] Warn when ticket references removed requirement
+- [ ] Warn on constraint identifier mismatch between `.bp` and ticket
+
+### 6.4 Informational
+- [ ] Info diagnostic when requirement is blocked by pending dependencies
+
+### 6.5 Diagnostic Publishing
+- [ ] Implement debounced diagnostic publishing
+- [ ] Clear diagnostics when document is closed
+- [ ] Update diagnostics on ticket file changes
+
+---
+
+## Phase 7: Semantic Tokens (Syntax Highlighting)
+
+### 7.1 Token Type Registration
+- [ ] Register semantic token types:
+  - [ ] `keyword` (for @description, @module, @feature, @requirement, @depends-on, @constraint)
+  - [ ] `variable` (for identifiers)
+  - [ ] `type` (for references)
+  - [ ] `comment` (for comments)
+- [ ] Register semantic token modifiers (declaration, definition, reference)
+
+### 7.2 Token Generation
+- [ ] Implement `textDocument/semanticTokens/full` handler
+- [ ] Walk AST and emit tokens for each element
+- [ ] Handle token encoding (delta line, delta column, length, type, modifiers)
+
+### 7.3 Progress-Based Highlighting
+- [ ] Emit tokens with status-based modifiers for requirements:
+  - [ ] No ticket → dim styling
+  - [ ] pending → default styling
+  - [ ] blocked → error styling
+  - [ ] in-progress → warning styling
+  - [ ] complete → success styling
+  - [ ] obsolete → strikethrough styling
+
+---
+
+## Phase 8: Hover Information
+
+### 8.1 Hover Handler
+- [ ] Implement `textDocument/hover` handler
+- [ ] Determine hovered element from position
+
+### 8.2 Requirement Hover
+- [ ] Display ticket ID(s) associated with requirement
+- [ ] Display aggregated status across all tickets
+- [ ] Display constraint satisfaction (X/Y satisfied with checkmarks)
+- [ ] Display computed dependency status (resolved by LSP)
+- [ ] Display implementation files from tickets
+
+### 8.3 Feature/Module Hover
+- [ ] Compute aggregate progress (X/Y requirements complete)
+- [ ] Display progress bar visualization
+- [ ] List requirements with their individual statuses
+- [ ] Show blocked requirements with blocking reason
+
+### 8.4 Reference Hover
+- [ ] Show preview of referenced element's description
+- [ ] Display reference target's status
+
+---
+
+## Phase 9: Navigation Features
+
+### 9.1 Go-to-Definition
+- [ ] Implement `textDocument/definition` handler
+- [ ] Requirement identifier → ticket in `.tickets.json`
+- [ ] `@depends-on` reference → referenced requirement
+- [ ] Constraint identifier → constraint definition
+- [ ] File path in hover → source file
+
+### 9.2 Find References
+- [ ] Implement `textDocument/references` handler
+- [ ] Find all `@depends-on` declarations referencing an element
+- [ ] Find tickets tracking a requirement
+- [ ] Find source files implementing a requirement (via ticket data)
+
+### 9.3 Document Symbols
+- [ ] Implement `textDocument/documentSymbol` handler
+- [ ] Return hierarchical symbol tree (modules → features → requirements)
+- [ ] Include constraints as children of requirements
+
+### 9.4 Workspace Symbols
+- [ ] Implement `workspace/symbol` handler
+- [ ] Enable searching across all `.bp` files in workspace
+
+---
+
+## Phase 10: Code Actions & Quick Fixes
+
+### 10.1 Quick Fix Suggestions
+- [ ] Suggest creating ticket for requirement without ticket
+- [ ] Suggest fixing typos in references (did-you-mean)
+- [ ] Suggest removing obsolete ticket references
+
+### 10.2 Code Actions
+- [ ] "Go to ticket" action for requirements
+- [ ] "Show all dependencies" action
+- [ ] "Show all dependents" action
+
+---
+
+## Phase 11: VS Code Extension (Client)
+
+### 11.1 Extension Setup
+- [ ] Create VS Code extension package structure
+- [ ] Define `package.json` with extension manifest
+- [ ] Configure extension activation events (`.bp` files)
+- [ ] Set up language configuration for Blueprint
+
+### 11.2 Language Client
+- [ ] Initialize `LanguageClient` with server options
+- [ ] Configure server module path and debug options
+- [ ] Set document selector for `.bp` files
+- [ ] Handle client lifecycle (start, stop, restart)
+
+### 11.3 Language Configuration
+- [ ] Define bracket pairs and auto-closing
+- [ ] Configure comment toggling (`//` and `/* */`)
+- [ ] Set up word pattern for identifiers
+- [ ] Configure indentation rules
+
+### 11.4 TextMate Grammar (Fallback)
+- [ ] Create `.tmLanguage.json` for basic syntax highlighting
+- [ ] Define scopes for keywords, identifiers, comments
+- [ ] Register grammar with VS Code
+
+### 11.5 Extension Settings
+- [ ] Implement `blueprint.ticketsPath` setting
+- [ ] Implement highlighting color customization settings
+- [ ] Implement `blueprint.gotoModifier` setting
+- [ ] Implement `blueprint.showProgressInGutter` setting
+- [ ] Implement `blueprint.hoverDelay` setting
+
+### 11.6 Progress Decorations
+- [ ] Create decoration types for each status
+- [ ] Apply decorations based on semantic tokens
+- [ ] Update decorations on document/ticket changes
+
+### 11.7 Gutter Icons
+- [ ] Create icons for completion status (checkmark, progress, blocked)
+- [ ] Apply gutter decorations based on requirement status
+- [ ] Make gutter icons configurable
+
+---
+
+## Phase 12: Testing
+
+### 12.1 Unit Tests
+- [ ] Test tree-sitter grammar with corpus files
+- [ ] Test AST transformation
+- [ ] Test dependency graph construction
+- [ ] Test cycle detection algorithm
+- [ ] Test ticket file parsing and validation
+- [ ] Test requirement-ticket correlation
+- [ ] Test semantic token generation
+
+### 12.2 Integration Tests
+- [ ] Test LSP initialization handshake
+- [ ] Test document synchronization
+- [ ] Test diagnostic publishing
+- [ ] Test hover information content
+- [ ] Test go-to-definition navigation
+- [ ] Test find-references results
+- [ ] Test cross-file reference resolution
+
+### 12.3 End-to-End Tests
+- [ ] Test full VS Code extension activation
+- [ ] Test syntax highlighting appearance
+- [ ] Test hover popup rendering
+- [ ] Test navigation commands
+- [ ] Test settings application
+
+### 12.4 Performance Tests
+- [ ] Benchmark parsing large `.bp` files
+- [ ] Benchmark workspace indexing time
+- [ ] Benchmark hover response latency
+- [ ] Profile memory usage with many open files
+
+---
+
+## Phase 13: Documentation & Polish
+
+### 13.1 User Documentation
+- [ ] Write README with installation instructions
+- [ ] Document all configuration options
+- [ ] Create usage guide with screenshots
+- [ ] Document keyboard shortcuts
+
+### 13.2 Developer Documentation
+- [ ] Document architecture and code organization
+- [ ] Document AST node types and properties
+- [ ] Document contribution guidelines
+- [ ] Document release process
+
+### 13.3 Polish
+- [ ] Add extension icon and branding
+- [ ] Write extension marketplace description
+- [ ] Create demo GIF/video
+- [ ] Review and improve error messages
+
+---
+
+## Phase 14: Packaging & Distribution
+
+### 14.1 Build Pipeline
+- [ ] Configure zshy bundler for server
+- [ ] Configure zshy bundler for client extension
+- [ ] Set up tree-sitter WASM compilation for browser compatibility
+- [ ] Create production build scripts
+
+### 14.2 VS Code Extension Packaging
+- [ ] Create `.vscodeignore` for extension
+- [ ] Package extension with `vsce package`
+- [ ] Test extension installation from `.vsix`
+
+### 14.3 Distribution
+- [ ] Set up CI/CD pipeline for automated builds
+- [ ] Configure automated testing in CI
+- [ ] Publish to VS Code Marketplace
+- [ ] Create GitHub releases with changelog
+
+---
+
+## Implementation Order Recommendation
+
+1. **Start with Phase 1-2**: Get project structure and parser working
+2. **Phase 3.1-3.3**: Basic LSP server with document management
+3. **Phase 6.1**: Syntax error diagnostics (validates parser integration)
+4. **Phase 7**: Semantic tokens for visible progress
+5. **Phase 11.1-11.4**: Basic VS Code extension to test above features
+6. **Phase 3.4 + 4**: Workspace indexing and ticket integration
+7. **Phase 5**: Dependency resolution
+8. **Phase 6.2-6.5**: Full diagnostics
+9. **Phase 8-9**: Hover and navigation
+10. **Phase 10-11.5-11.7**: Advanced features
+11. **Phase 12-14**: Testing, documentation, packaging
+
+---
+
+## Notes
+
+- The LSP is the source of truth for computed data (dependencies, blocking status, aggregate progress)
+- Tickets are intentionally minimal; avoid storing derived data
+- Cross-file operations require workspace-wide indexing
+- Debounce expensive operations (parsing, diagnostics) for performance
+- Consider WASM tree-sitter for browser-based editors in future
