@@ -218,25 +218,27 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 8: Hover Information
 
 ### 8.1 Hover Handler
-- [ ] Implement `textDocument/hover` handler
-- [ ] Determine hovered element from position
+- [x] Implement `textDocument/hover` handler (Completed: Added `hover.ts` module with `findHoverTarget()` and `buildHover()` functions. Integrated with LSP server in `index.ts` via `connection.onHover()` handler. Added `hoverProvider: true` to server capabilities.)
+- [x] Determine hovered element from position (Completed: `findNodeAtPosition()` uses tree-sitter to find the deepest node at cursor position. `findHoverTarget()` walks up the tree to identify module, feature, requirement, constraint, reference, or keyword targets.)
 
 ### 8.2 Requirement Hover
-- [ ] Display ticket ID(s) associated with requirement
-- [ ] Display aggregated status across all tickets
-- [ ] Display constraint satisfaction (X/Y satisfied with checkmarks)
-- [ ] Display computed dependency status (resolved by LSP)
-- [ ] Display implementation files from tickets
+- [x] Display ticket ID(s) associated with requirement (Completed: `buildRequirementHover()` shows all tickets associated with a requirement, including ticket ID and description.)
+- [x] Display aggregated status across all tickets (Completed: Shows aggregated status computed by `RequirementTicketMap` - complete, in-progress, pending, no-ticket, or obsolete.)
+- [x] Display constraint satisfaction (X/Y satisfied with checkmarks) (Completed: Shows "X/Y satisfied" with checkmark or empty circle icons for each constraint. Uses `computeConstraintStatuses()` from requirement-ticket-map.)
+- [x] Display computed dependency status (resolved by LSP) (Completed: Shows blocking info computed by `computeBlockingInfo()` - displays direct and transitive blockers with their statuses, or cycle information if in a circular dependency.)
+- [x] Display implementation files from tickets (Completed: Shows implementation files and test files from ticket data.)
 
 ### 8.3 Feature/Module Hover
-- [ ] Compute aggregate progress (X/Y requirements complete)
-- [ ] Display progress bar visualization
-- [ ] List requirements with their individual statuses
-- [ ] Show blocked requirements with blocking reason
+- [x] Compute aggregate progress (X/Y requirements complete) (Completed: `buildFeatureHover()` and `buildModuleHover()` use `getCompletionSummary()` and `filterByPathPrefix()` to compute progress.)
+- [x] Display progress bar visualization (Completed: `buildProgressBar()` creates a text-based progress bar with filled/empty blocks.)
+- [x] List requirements with their individual statuses (Completed: Feature hover lists direct child requirements with status icons. Module hover shows status breakdown and features list.)
+- [x] Show blocked requirements with blocking reason (Completed: Requirements in feature list show "blocked" or "in cycle" suffix when applicable.)
 
 ### 8.4 Reference Hover
-- [ ] Show preview of referenced element's description
-- [ ] Display reference target's status
+- [x] Show preview of referenced element's description (Completed: `buildReferenceHover()` shows the resolved symbol's kind and path, with status/progress info for requirements and features/modules.)
+- [x] Display reference target's status (Completed: Shows ticket status for requirements, progress for features/modules, or "Unresolved reference" warning if not found.)
+
+Note: 29 tests added in `hover.test.ts` covering all hover functionality including requirement, feature, module, constraint, reference, and keyword hovers, as well as blocking status and multiple tickets per requirement.
 
 ---
 
@@ -334,6 +336,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Test ticket file parsing and validation (40 tests in `tickets.test.ts`)
 - [x] Test requirement-ticket correlation (40 tests in `requirement-ticket-map.test.ts`)
 - [x] Test semantic token generation (32 tests in `semantic-tokens.test.ts` covering token types, modifiers, progress-based highlighting, and `buildRequirementStatusMap()`)
+- [x] Test hover information (29 tests in `hover.test.ts` covering node finding, hover targets, requirement/feature/module/constraint/reference/keyword hovers, blocking status display, and multiple tickets per requirement)
 
 ### 12.2 Integration Tests
 - [ ] Test LSP initialization handshake

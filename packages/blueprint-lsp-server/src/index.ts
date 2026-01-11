@@ -13,8 +13,12 @@ import type {
   InitializeResult,
   TextDocumentSyncOptions,
   SemanticTokensParams,
+  HoverParams,
 } from "vscode-languageserver/node";
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
+import { findHoverTarget, buildHover, type HoverContext } from "./hover";
+import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
+import { DependencyGraph } from "./dependency-graph";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initializeParser, cleanupParser, parseDocument } from "./parser";
 import { DocumentManager } from "./documents";
@@ -214,6 +218,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   const result: InitializeResult = {
     capabilities: {
       textDocumentSync,
+      hoverProvider: true,
       semanticTokensProvider: {
         legend: semanticTokensLegend,
         full: true,
@@ -560,6 +565,68 @@ connection.languages.semanticTokens.on((params: SemanticTokensParams) => {
   }
 
   return buildSemanticTokens(state.tree);
+});
+
+// Handle hover request
+connection.onHover((params: HoverParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  const filePath = getFilePath(params.textDocument.uri);
+  if (!isBlueprintFilePath(filePath)) {
+    return null;
+  }
+
+  if (!parserInitialized) {
+    return null;
+  }
+
+  // Get the parse tree from the document manager
+  const state = documentManager.getState(params.textDocument.uri);
+  if (!state?.tree) {
+    return null;
+  }
+
+  // Find what we're hovering over
+  const target = findHoverTarget(
+    state.tree,
+    params.position,
+    symbolIndex,
+    params.textDocument.uri
+  );
+
+  if (!target) {
+    return null;
+  }
+
+  // Build the hover context with ticket and dependency information
+  const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
+  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
+  
+  // Create a mock ticket file for the map builder
+  const ticketFile = allTickets.length > 0 
+    ? { version: "1.0", source: "", tickets: allTickets }
+    : null;
+  
+  const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
+    requirementSymbols,
+    ticketFile
+  );
+
+  // Build the dependency graph
+  const { graph: dependencyGraph, cycles } = DependencyGraph.build(symbolIndex);
+
+  const hoverContext: HoverContext = {
+    symbolIndex,
+    ticketMap,
+    dependencyGraph,
+    cycles,
+    fileUri: params.textDocument.uri,
+  };
+
+  return buildHover(target, hoverContext);
 });
 
 connection.onShutdown(() => {
