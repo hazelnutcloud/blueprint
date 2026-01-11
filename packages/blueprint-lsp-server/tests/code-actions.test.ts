@@ -4,11 +4,13 @@ import { DiagnosticSeverity, CodeActionKind } from "vscode-languageserver/node";
 import {
   buildCodeActions,
   extractRequirementPathFromMessage,
+  extractOrphanedTicketInfo,
   generateTicketId,
   createTicket,
   findWorkspaceFolder,
   createAddTicketEdit,
   createNewTicketFileEdit,
+  createRemoveTicketEdit,
   type CodeActionsContext,
 } from "../src/code-actions";
 import { CrossFileSymbolIndex } from "../src/symbol-index";
@@ -65,6 +67,49 @@ describe("extractRequirementPathFromMessage", () => {
 
   test("returns null for empty message", () => {
     expect(extractRequirementPathFromMessage("")).toBeNull();
+  });
+});
+
+describe("extractOrphanedTicketInfo", () => {
+  test("extracts ticket ID and ref from standard orphaned-ticket message", () => {
+    const message = "Ticket 'TKT-001' references removed requirement 'auth.login.verify'";
+    const info = extractOrphanedTicketInfo(message);
+    expect(info).toEqual({
+      ticketId: "TKT-001",
+      requirementRef: "auth.login.verify",
+    });
+  });
+
+  test("extracts info with multi-digit ticket ID", () => {
+    const message = "Ticket 'TKT-123' references removed requirement 'module.feature.req'";
+    const info = extractOrphanedTicketInfo(message);
+    expect(info).toEqual({
+      ticketId: "TKT-123",
+      requirementRef: "module.feature.req",
+    });
+  });
+
+  test("extracts info with non-standard ticket ID", () => {
+    const message = "Ticket 'CUSTOM-99' references removed requirement 'simple'";
+    const info = extractOrphanedTicketInfo(message);
+    expect(info).toEqual({
+      ticketId: "CUSTOM-99",
+      requirementRef: "simple",
+    });
+  });
+
+  test("returns null for non-matching message", () => {
+    const message = "Some other error message";
+    expect(extractOrphanedTicketInfo(message)).toBeNull();
+  });
+
+  test("returns null for empty message", () => {
+    expect(extractOrphanedTicketInfo("")).toBeNull();
+  });
+
+  test("returns null for no-ticket message", () => {
+    const message = "Requirement 'auth.login.verify' has no associated ticket";
+    expect(extractOrphanedTicketInfo(message)).toBeNull();
   });
 });
 
@@ -223,6 +268,191 @@ describe("createAddTicketEdit", () => {
 
     expect(edit.changes).toBeDefined();
     expect(edit.changes![ticketFileUri]).toBeDefined();
+  });
+});
+
+describe("createRemoveTicketEdit", () => {
+  test("removes single ticket from array", () => {
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const content = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.verify",
+      "description": "Verify user credentials",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const edit = createRemoveTicketEdit(ticketFileUri, content, "TKT-001");
+
+    expect(edit).not.toBeNull();
+    expect(edit!.changes).toBeDefined();
+    expect(edit!.changes![ticketFileUri]).toBeDefined();
+    expect(edit!.changes![ticketFileUri]!.length).toBeGreaterThan(0);
+  });
+
+  test("removes first ticket from multiple tickets", () => {
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const content = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.old",
+      "description": "Old requirement",
+      "status": "complete",
+      "constraints_satisfied": []
+    },
+    {
+      "id": "TKT-002",
+      "ref": "auth.login.verify",
+      "description": "Verify user credentials",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const edit = createRemoveTicketEdit(ticketFileUri, content, "TKT-001");
+
+    expect(edit).not.toBeNull();
+    expect(edit!.changes).toBeDefined();
+    expect(edit!.changes![ticketFileUri]).toBeDefined();
+  });
+
+  test("removes last ticket from multiple tickets and handles comma", () => {
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const content = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.verify",
+      "description": "Verify user credentials",
+      "status": "complete",
+      "constraints_satisfied": []
+    },
+    {
+      "id": "TKT-002",
+      "ref": "auth.login.old",
+      "description": "Old requirement",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const edit = createRemoveTicketEdit(ticketFileUri, content, "TKT-002");
+
+    expect(edit).not.toBeNull();
+    expect(edit!.changes).toBeDefined();
+    expect(edit!.changes![ticketFileUri]).toBeDefined();
+    // Should have 2 edits: remove comma from previous ticket, remove the ticket
+    expect(edit!.changes![ticketFileUri]!.length).toBe(2);
+  });
+
+  test("removes middle ticket from three tickets", () => {
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const content = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.first",
+      "description": "First",
+      "status": "complete",
+      "constraints_satisfied": []
+    },
+    {
+      "id": "TKT-002",
+      "ref": "auth.login.middle",
+      "description": "Middle - to be removed",
+      "status": "complete",
+      "constraints_satisfied": []
+    },
+    {
+      "id": "TKT-003",
+      "ref": "auth.login.last",
+      "description": "Last",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const edit = createRemoveTicketEdit(ticketFileUri, content, "TKT-002");
+
+    expect(edit).not.toBeNull();
+    expect(edit!.changes).toBeDefined();
+    expect(edit!.changes![ticketFileUri]).toBeDefined();
+  });
+
+  test("returns null for non-existent ticket ID", () => {
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const content = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.verify",
+      "description": "Verify",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const edit = createRemoveTicketEdit(ticketFileUri, content, "TKT-999");
+
+    expect(edit).toBeNull();
+  });
+
+  test("returns null for empty tickets array", () => {
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const content = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": []
+}`;
+
+    const edit = createRemoveTicketEdit(ticketFileUri, content, "TKT-001");
+
+    expect(edit).toBeNull();
+  });
+
+  test("handles ticket with implementation field", () => {
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const content = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.verify",
+      "description": "Verify user credentials",
+      "status": "complete",
+      "constraints_satisfied": ["bcrypt-cost"],
+      "implementation": {
+        "files": ["src/auth/login.ts"],
+        "tests": ["tests/auth/login.test.ts"]
+      }
+    }
+  ]
+}`;
+
+    const edit = createRemoveTicketEdit(ticketFileUri, content, "TKT-001");
+
+    expect(edit).not.toBeNull();
+    expect(edit!.changes).toBeDefined();
   });
 });
 
@@ -609,6 +839,286 @@ describe("buildCodeActions", () => {
       "file:///workspace/requirements/auth.bp",
       [diagnostic]
     );
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.diagnostics).toEqual([diagnostic]);
+  });
+
+  // Tests for orphaned-ticket code actions
+  function createOrphanedTicketDiagnostic(ticketId: string, requirementRef: string): Diagnostic {
+    return {
+      severity: DiagnosticSeverity.Warning,
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 0 },
+      },
+      message: `Ticket '${ticketId}' references removed requirement '${requirementRef}'`,
+      source: "blueprint",
+      code: "orphaned-ticket",
+    };
+  }
+
+  test("creates code action to remove orphaned ticket", () => {
+    const symbolIndex = new CrossFileSymbolIndex();
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const ticketFileContent = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.removed",
+      "description": "Removed requirement",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const mockTicketManager = new MockTicketDocumentManager();
+    mockTicketManager.setTickets([
+      {
+        ticket: {
+          id: "TKT-001",
+          ref: "auth.login.removed",
+          description: "Removed requirement",
+          status: "complete",
+          constraints_satisfied: [],
+        },
+        fileUri: ticketFileUri,
+      },
+    ]);
+    mockTicketManager.setTicketFiles([
+      {
+        uri: ticketFileUri,
+        content: ticketFileContent,
+        data: {
+          version: "1.0",
+          source: "requirements/auth.bp",
+          tickets: [
+            {
+              id: "TKT-001",
+              ref: "auth.login.removed",
+              description: "Removed requirement",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+          ],
+        },
+      },
+    ]);
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    const params = createMockParams(ticketFileUri, [
+      createOrphanedTicketDiagnostic("TKT-001", "auth.login.removed"),
+    ]);
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.title).toBe("Remove orphaned ticket 'TKT-001'");
+    expect(actions[0]!.kind).toBe(CodeActionKind.QuickFix);
+    expect(actions[0]!.isPreferred).toBe(true);
+    expect(actions[0]!.edit).toBeDefined();
+  });
+
+  test("handles multiple orphaned ticket diagnostics", () => {
+    const symbolIndex = new CrossFileSymbolIndex();
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const ticketFileContent = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.removed1",
+      "description": "First removed",
+      "status": "complete",
+      "constraints_satisfied": []
+    },
+    {
+      "id": "TKT-002",
+      "ref": "auth.login.removed2",
+      "description": "Second removed",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const mockTicketManager = new MockTicketDocumentManager();
+    mockTicketManager.setTicketFiles([
+      {
+        uri: ticketFileUri,
+        content: ticketFileContent,
+        data: {
+          version: "1.0",
+          source: "requirements/auth.bp",
+          tickets: [
+            {
+              id: "TKT-001",
+              ref: "auth.login.removed1",
+              description: "First removed",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+            {
+              id: "TKT-002",
+              ref: "auth.login.removed2",
+              description: "Second removed",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+          ],
+        },
+      },
+    ]);
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    const params = createMockParams(ticketFileUri, [
+      createOrphanedTicketDiagnostic("TKT-001", "auth.login.removed1"),
+      createOrphanedTicketDiagnostic("TKT-002", "auth.login.removed2"),
+    ]);
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions).toHaveLength(2);
+    expect(actions[0]!.title).toBe("Remove orphaned ticket 'TKT-001'");
+    expect(actions[1]!.title).toBe("Remove orphaned ticket 'TKT-002'");
+  });
+
+  test("ignores orphaned-ticket diagnostic when ticket file not found", () => {
+    const symbolIndex = new CrossFileSymbolIndex();
+    const mockTicketManager = new MockTicketDocumentManager();
+    mockTicketManager.setTicketFiles([]); // No ticket files
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    const params = createMockParams(
+      "file:///workspace/.blueprint/tickets/auth.tickets.json",
+      [createOrphanedTicketDiagnostic("TKT-001", "auth.login.removed")]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions).toHaveLength(0);
+  });
+
+  test("ignores orphaned-ticket diagnostic when ticket ID not found in file", () => {
+    const symbolIndex = new CrossFileSymbolIndex();
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const ticketFileContent = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-999",
+      "ref": "auth.login.other",
+      "description": "Different ticket",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const mockTicketManager = new MockTicketDocumentManager();
+    mockTicketManager.setTicketFiles([
+      {
+        uri: ticketFileUri,
+        content: ticketFileContent,
+        data: {
+          version: "1.0",
+          source: "requirements/auth.bp",
+          tickets: [
+            {
+              id: "TKT-999",
+              ref: "auth.login.other",
+              description: "Different ticket",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+          ],
+        },
+      },
+    ]);
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    const params = createMockParams(ticketFileUri, [
+      createOrphanedTicketDiagnostic("TKT-001", "auth.login.removed"),
+    ]);
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions).toHaveLength(0);
+  });
+
+  test("associates orphaned-ticket diagnostic with code action", () => {
+    const symbolIndex = new CrossFileSymbolIndex();
+    const ticketFileUri = "file:///workspace/.blueprint/tickets/auth.tickets.json";
+    const ticketFileContent = `{
+  "version": "1.0",
+  "source": "requirements/auth.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.removed",
+      "description": "Removed",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+    const mockTicketManager = new MockTicketDocumentManager();
+    mockTicketManager.setTicketFiles([
+      {
+        uri: ticketFileUri,
+        content: ticketFileContent,
+        data: {
+          version: "1.0",
+          source: "requirements/auth.bp",
+          tickets: [
+            {
+              id: "TKT-001",
+              ref: "auth.login.removed",
+              description: "Removed",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+          ],
+        },
+      },
+    ]);
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    const diagnostic = createOrphanedTicketDiagnostic("TKT-001", "auth.login.removed");
+    const params = createMockParams(ticketFileUri, [diagnostic]);
 
     const actions = buildCodeActions(params, context);
 

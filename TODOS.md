@@ -273,7 +273,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ### 10.1 Quick Fix Suggestions
 - [x] Suggest creating ticket for requirement without ticket (Completed: Added `code-actions.ts` module with `buildCodeActions()` function. Handles "no-ticket" diagnostics by generating code actions that create tickets in existing or new `.tickets.json` files. Includes ticket ID generation, workspace folder resolution, and both edit types (add to existing file, create new file). Registered `codeActionProvider` capability and `onCodeAction` handler in `index.ts`. 31 tests added in `code-actions.test.ts`.)
 - [ ] Suggest fixing typos in references (did-you-mean)
-- [ ] Suggest removing obsolete ticket references
+- [x] Suggest removing obsolete ticket references (Completed: Extended `code-actions.ts` with `extractOrphanedTicketInfo()` to parse "orphaned-ticket" diagnostic messages and `createRemoveTicketEdit()` to generate edits that remove tickets from `.tickets.json` files. Handles comma removal for proper JSON formatting. Added handling for "orphaned-ticket" diagnostics in `buildCodeActions()`. 18 new tests added in `code-actions.test.ts`.)
 
 ### 10.2 Code Actions
 - [ ] "Go to ticket" action for requirements

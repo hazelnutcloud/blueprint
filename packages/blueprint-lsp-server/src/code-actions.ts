@@ -37,6 +37,32 @@ export function extractRequirementPathFromMessage(message: string): string | nul
 }
 
 /**
+ * Information extracted from an orphaned-ticket diagnostic message.
+ */
+export interface OrphanedTicketInfo {
+  /** The ticket ID (e.g., "TKT-001") */
+  ticketId: string;
+  /** The requirement ref path that no longer exists */
+  requirementRef: string;
+}
+
+/**
+ * Extracts ticket information from an "orphaned-ticket" diagnostic message.
+ * The message format is: "Ticket 'TKT-XXX' references removed requirement 'path.to.requirement'"
+ *
+ * @param message The diagnostic message
+ * @returns The ticket info, or null if not found
+ */
+export function extractOrphanedTicketInfo(message: string): OrphanedTicketInfo | null {
+  const match = message.match(/Ticket '([^']+)' references removed requirement '([^']+)'/);
+  if (!match) return null;
+  return {
+    ticketId: match[1]!,
+    requirementRef: match[2]!,
+  };
+}
+
+/**
  * Generates a new ticket ID based on existing tickets.
  * Format: TKT-XXX where XXX is a zero-padded number.
  *
@@ -269,6 +295,162 @@ export function createAddTicketEdit(
 }
 
 /**
+ * Creates a WorkspaceEdit to remove a ticket from a ticket file.
+ *
+ * @param ticketFileUri The URI of the ticket file
+ * @param ticketFileContent The current content of the ticket file
+ * @param ticketId The ID of the ticket to remove
+ * @returns A WorkspaceEdit that removes the ticket, or null if ticket not found
+ */
+export function createRemoveTicketEdit(
+  ticketFileUri: string,
+  ticketFileContent: string,
+  ticketId: string
+): WorkspaceEdit | null {
+  const lines = ticketFileContent.split("\n");
+
+  // Find the ticket object in the JSON content
+  // We need to find the ticket with the matching ID and remove it along with any trailing comma
+
+  let ticketStartLine = -1;
+  let ticketEndLine = -1;
+  let braceDepth = 0;
+  let inTicketsArray = false;
+  let foundTicketId = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+
+    // Track when we enter the tickets array
+    if (line.includes('"tickets"') && line.includes("[")) {
+      inTicketsArray = true;
+      continue;
+    }
+
+    if (!inTicketsArray) continue;
+
+    // Look for the start of a ticket object
+    if (ticketStartLine === -1 && line.includes("{")) {
+      ticketStartLine = i;
+      braceDepth = 1;
+      foundTicketId = false;
+      continue;
+    }
+
+    if (ticketStartLine !== -1) {
+      // Check if this line contains the ticket ID we're looking for
+      const idMatch = line.match(/"id"\s*:\s*"([^"]+)"/);
+      if (idMatch && idMatch[1] === ticketId) {
+        foundTicketId = true;
+      }
+
+      // Track brace depth
+      for (const char of line) {
+        if (char === "{") braceDepth++;
+        if (char === "}") braceDepth--;
+      }
+
+      // Found the end of a ticket object
+      if (braceDepth === 0) {
+        ticketEndLine = i;
+
+        if (foundTicketId) {
+          // Found the ticket to remove!
+          break;
+        }
+
+        // Reset for next ticket
+        ticketStartLine = -1;
+        ticketEndLine = -1;
+        foundTicketId = false;
+      }
+    }
+
+    // Check if we've exited the tickets array
+    if (line.includes("]") && !line.includes("[")) {
+      // If we're at the closing bracket and haven't found the ticket yet, it's not here
+      if (ticketStartLine === -1) {
+        break;
+      }
+    }
+  }
+
+  if (ticketStartLine === -1 || ticketEndLine === -1 || !foundTicketId) {
+    return null;
+  }
+
+  // Determine what to remove:
+  // - The ticket object itself
+  // - Any trailing comma on the previous ticket if this is not the first ticket
+  // - Any trailing comma on this ticket if it exists
+
+  let removeStartLine = ticketStartLine;
+  let removeEndLine = ticketEndLine;
+
+  // Check if there's a trailing comma after this ticket
+  const endLine = lines[ticketEndLine]!;
+  const hasTrailingComma = endLine.trimEnd().endsWith(",");
+
+  // Check if there's a ticket before this one (by looking for a comma on the previous non-empty line)
+  let prevTicketLine = -1;
+  for (let i = ticketStartLine - 1; i >= 0; i--) {
+    const line = lines[i]!.trim();
+    if (line.length > 0) {
+      if (line.endsWith("},") || line.endsWith("}")) {
+        prevTicketLine = i;
+      }
+      break;
+    }
+  }
+
+  // Check if there's a ticket after this one
+  let nextTicketExists = false;
+  for (let i = ticketEndLine + 1; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (line.length === 0) continue;
+    if (line.startsWith("{")) {
+      nextTicketExists = true;
+      break;
+    }
+    if (line === "]") break;
+    break;
+  }
+
+  // Build the edit
+  const edits: TextEdit[] = [];
+
+  if (prevTicketLine !== -1 && !nextTicketExists) {
+    // This is the last ticket and there are tickets before it
+    // We need to remove the comma from the previous ticket
+    const prevLine = lines[prevTicketLine]!;
+    if (prevLine.trimEnd().endsWith(",")) {
+      edits.push({
+        range: {
+          start: { line: prevTicketLine, character: prevLine.length - 1 },
+          end: { line: prevTicketLine, character: prevLine.length },
+        },
+        newText: "",
+      });
+    }
+  }
+
+  // Remove the ticket lines (including trailing newline)
+  edits.push({
+    range: {
+      start: { line: removeStartLine, character: 0 },
+      end: { line: removeEndLine + 1, character: 0 },
+    },
+    newText: "",
+  });
+
+  return {
+    changes: {
+      [ticketFileUri]: edits,
+    },
+  };
+}
+
+/**
  * Creates a WorkspaceEdit to create a new ticket file with a single ticket.
  *
  * @param ticketFileUri The URI for the new ticket file
@@ -425,6 +607,50 @@ export function buildCodeActions(
 
       const action: CodeAction = {
         title,
+        kind: CodeActionKind.QuickFix,
+        diagnostics: [diagnostic],
+        isPreferred: true,
+        edit,
+      };
+
+      actions.push(action);
+    }
+
+    // Handle "orphaned-ticket" diagnostics
+    if (
+      diagnostic.code === "orphaned-ticket" &&
+      diagnostic.severity === DiagnosticSeverity.Warning
+    ) {
+      const orphanedInfo = extractOrphanedTicketInfo(diagnostic.message);
+      if (!orphanedInfo) {
+        continue;
+      }
+
+      // Find the ticket file that contains this orphaned ticket
+      // The diagnostic is reported on the ticket file, so params.textDocument.uri is the ticket file
+      const ticketFileUri = params.textDocument.uri;
+
+      const ticketFile = context.ticketDocumentManager
+        .getAllTicketFilesWithContent()
+        .find((tf) => tf.uri === ticketFileUri);
+
+      if (!ticketFile) {
+        continue;
+      }
+
+      // Create an edit to remove the orphaned ticket
+      const edit = createRemoveTicketEdit(
+        ticketFileUri,
+        ticketFile.content,
+        orphanedInfo.ticketId
+      );
+
+      if (!edit) {
+        continue;
+      }
+
+      const action: CodeAction = {
+        title: `Remove orphaned ticket '${orphanedInfo.ticketId}'`,
         kind: CodeActionKind.QuickFix,
         diagnostics: [diagnostic],
         isPreferred: true,
