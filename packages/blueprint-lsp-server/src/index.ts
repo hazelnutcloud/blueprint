@@ -385,6 +385,9 @@ connection.onDidChangeWatchedFiles(async (params) => {
             // Use onDocumentChange to validate and update state
             // We use version 0 for external file changes since we don't have a real version
             ticketDocumentManager.onDocumentChange(change.uri, 0, content);
+            // Re-publish workspace diagnostics since ticket status affects
+            // no-ticket warnings and blocked requirement info
+            scheduleWorkspaceDiagnostics();
           } catch (error) {
             connection.console.error(
               `Error reading ticket file ${filePath}: ${error}`
@@ -395,6 +398,8 @@ connection.onDidChangeWatchedFiles(async (params) => {
         case FileChangeType.Deleted: {
           // Clean up the ticket document state
           ticketDocumentManager.onDocumentClose(change.uri);
+          // Re-publish workspace diagnostics after ticket file removal
+          scheduleWorkspaceDiagnostics();
           break;
         }
       }
@@ -413,6 +418,9 @@ documents.onDidOpen((event) => {
       event.document.version,
       event.document.getText()
     );
+    // Re-publish workspace diagnostics since ticket status affects
+    // no-ticket warnings and blocked requirement info
+    scheduleWorkspaceDiagnostics();
     return;
   }
   
@@ -443,6 +451,9 @@ documents.onDidChangeContent((event) => {
       event.document.version,
       event.document.getText()
     );
+    // Re-publish workspace diagnostics since ticket status affects
+    // no-ticket warnings and blocked requirement info
+    scheduleWorkspaceDiagnostics();
     return;
   }
   
@@ -489,6 +500,9 @@ documents.onDidSave((event) => {
       event.document.version,
       event.document.getText()
     );
+    // Re-publish workspace diagnostics since ticket status affects
+    // no-ticket warnings and blocked requirement info
+    scheduleWorkspaceDiagnostics();
     return;
   }
   

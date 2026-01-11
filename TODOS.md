@@ -184,8 +184,8 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### 6.5 Diagnostic Publishing
 - [x] Implement debounced diagnostic publishing (Completed: Added `scheduleWorkspaceDiagnostics()` function with 150ms debounce delay in `index.ts`. Uses `setTimeout`/`clearTimeout` pattern to batch rapid changes. Timer is cancelled on shutdown to prevent callbacks after cleanup.)
-- [ ] Clear diagnostics when document is closed
-- [ ] Update diagnostics on ticket file changes
+- [x] Clear diagnostics when document is closed (Already implemented: `DocumentManager.onDocumentClose()` in `documents.ts:65` and `TicketDocumentManager.onDocumentClose()` in `ticket-documents.ts:65` both call `connection.sendDiagnostics({ uri, diagnostics: [] })` to clear diagnostics when documents are closed.)
+- [x] Update diagnostics on ticket file changes (Completed: Added `scheduleWorkspaceDiagnostics()` calls to all ticket file lifecycle handlers in `index.ts`: `onDidOpen`, `onDidChangeContent`, `onDidSave` for open documents, and `onDidChangeWatchedFiles` for file system changes. This ensures workspace diagnostics like no-ticket warnings and blocked requirement info are updated when ticket status changes.)
 
 ---
 
