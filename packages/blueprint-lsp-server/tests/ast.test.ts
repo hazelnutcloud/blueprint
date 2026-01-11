@@ -217,6 +217,229 @@ describe("AST Transformation", () => {
   });
 
   describe("buildSymbolTable", () => {
+    describe("duplicate identifier handling", () => {
+      test("duplicate module names - last one wins", () => {
+        const code = `
+@module authentication
+  First auth module.
+
+@module authentication
+  Second auth module (duplicate).
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        // Map.set() overwrites, so only one entry exists
+        expect(symbols.modules.size).toBe(1);
+        expect(symbols.modules.has("authentication")).toBe(true);
+        // The last module wins (second one)
+        expect(symbols.modules.get("authentication")!.description).toContain("Second auth module");
+      });
+
+      test("duplicate feature names within same module - last one wins", () => {
+        const code = `
+@module authentication
+
+@feature login
+  First login feature.
+
+@feature login
+  Second login feature (duplicate).
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        expect(symbols.features.size).toBe(1);
+        expect(symbols.features.has("authentication.login")).toBe(true);
+        expect(symbols.features.get("authentication.login")!.description).toContain(
+          "Second login feature"
+        );
+      });
+
+      test("same feature name in different modules - both preserved", () => {
+        const code = `
+@module authentication
+
+@feature login
+  Auth login.
+
+@module payments
+
+@feature login
+  Payments login.
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        // Different fully-qualified paths, so both are kept
+        expect(symbols.features.size).toBe(2);
+        expect(symbols.features.has("authentication.login")).toBe(true);
+        expect(symbols.features.has("payments.login")).toBe(true);
+        expect(symbols.features.get("authentication.login")!.description).toContain("Auth login");
+        expect(symbols.features.get("payments.login")!.description).toContain("Payments login");
+      });
+
+      test("duplicate requirement names within same feature - last one wins", () => {
+        const code = `
+@module authentication
+
+@feature login
+
+@requirement basic-auth
+  First basic-auth.
+
+@requirement basic-auth
+  Second basic-auth (duplicate).
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        expect(symbols.requirements.size).toBe(1);
+        expect(symbols.requirements.has("authentication.login.basic-auth")).toBe(true);
+        expect(
+          symbols.requirements.get("authentication.login.basic-auth")!.description
+        ).toContain("Second basic-auth");
+      });
+
+      test("same requirement name in different features - both preserved", () => {
+        const code = `
+@module authentication
+
+@feature login
+
+@requirement validate
+  Login validation.
+
+@feature logout
+
+@requirement validate
+  Logout validation.
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        expect(symbols.requirements.size).toBe(2);
+        expect(symbols.requirements.has("authentication.login.validate")).toBe(true);
+        expect(symbols.requirements.has("authentication.logout.validate")).toBe(true);
+      });
+
+      test("duplicate constraint names within same requirement - last one wins", () => {
+        const code = `
+@module authentication
+
+@feature login
+
+@requirement basic-auth
+  Basic auth.
+
+  @constraint security
+    First security constraint.
+
+  @constraint security
+    Second security constraint (duplicate).
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        // Only one constraint with this path
+        expect(symbols.constraints.has("authentication.login.basic-auth.security")).toBe(true);
+
+        // Count how many constraints have "security" in their path
+        let securityCount = 0;
+        for (const key of symbols.constraints.keys()) {
+          if (key.endsWith(".security")) {
+            securityCount++;
+          }
+        }
+        expect(securityCount).toBe(1);
+
+        // Last one wins
+        expect(
+          symbols.constraints.get("authentication.login.basic-auth.security")!.description
+        ).toContain("Second security constraint");
+      });
+
+      test("same constraint name in different requirements - both preserved", () => {
+        const code = `
+@module authentication
+
+@feature login
+
+@requirement basic-auth
+  Basic auth.
+
+  @constraint rate-limit
+    Rate limit for basic auth.
+
+@requirement oauth
+  OAuth auth.
+
+  @constraint rate-limit
+    Rate limit for OAuth.
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        expect(symbols.constraints.has("authentication.login.basic-auth.rate-limit")).toBe(true);
+        expect(symbols.constraints.has("authentication.login.oauth.rate-limit")).toBe(true);
+        expect(
+          symbols.constraints.get("authentication.login.basic-auth.rate-limit")!.description
+        ).toContain("basic auth");
+        expect(
+          symbols.constraints.get("authentication.login.oauth.rate-limit")!.description
+        ).toContain("OAuth");
+      });
+
+      test("duplicate module-level requirements - last one wins", () => {
+        const code = `
+@module authentication
+
+@requirement global-check
+  First global check.
+
+@requirement global-check
+  Second global check (duplicate).
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        expect(symbols.requirements.size).toBe(1);
+        expect(symbols.requirements.has("authentication.global-check")).toBe(true);
+        expect(
+          symbols.requirements.get("authentication.global-check")!.description
+        ).toContain("Second global check");
+      });
+
+      test("duplicate module-level constraints - last one wins", () => {
+        const code = `
+@module authentication
+  Auth module.
+
+  @constraint global-security
+    First global security.
+
+  @constraint global-security
+    Second global security (duplicate).
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        expect(symbols.constraints.has("authentication.global-security")).toBe(true);
+        expect(
+          symbols.constraints.get("authentication.global-security")!.description
+        ).toContain("Second global security");
+      });
+    });
+
     test("builds symbol table for modules", () => {
       const code = `
 @module authentication

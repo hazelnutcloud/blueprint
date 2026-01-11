@@ -486,7 +486,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 - [x] **Add test for @description after @module** - Should verify the AST still parses (for error recovery) but diagnostics can detect the invalid ordering. (Completed: Added two tests in `ast.test.ts` - one verifying error recovery extracts the description block, another verifying the ERROR node pattern that diagnostics can use to detect misplaced @description.)
 
-- [ ] **Add test for duplicate identifiers** - Test that `buildSymbolTable()` handles duplicate module names, feature names, requirement names, and constraint names appropriately.
+- [x] **Add test for duplicate identifiers** - Test that `buildSymbolTable()` handles duplicate module names, feature names, requirement names, and constraint names appropriately. (Completed: Added 9 tests in `ast.test.ts` covering duplicate modules, features, requirements, and constraints. Tests verify "last one wins" behavior when duplicates share the same fully-qualified path, and that items with different paths are preserved.)
 
 - [ ] **Add test for empty identifier** - Test behavior when identifier is missing (e.g., `@module` without a name).
 
