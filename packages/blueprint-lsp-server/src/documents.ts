@@ -1,5 +1,5 @@
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { Connection, Diagnostic } from "vscode-languageserver/node";
+import { DiagnosticSeverity, type Connection, type Diagnostic } from "vscode-languageserver/node";
 import { parseDocument, type Tree, type Node } from "./parser";
 
 /**
@@ -146,7 +146,7 @@ export class DocumentManager {
     // Check for ERROR nodes (parse errors) and MISSING nodes
     if (node.type === "ERROR" || node.isMissing) {
       diagnostics.push({
-        severity: 1, // Error
+        severity: DiagnosticSeverity.Error,
         range: {
           start: { line: node.startPosition.row, character: node.startPosition.column },
           end: { line: node.endPosition.row, character: node.endPosition.column },

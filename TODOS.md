@@ -431,13 +431,13 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### Blockers
 
-- [ ] **Fix `Node` type import in parser.ts** - `Node` is not a named export from `web-tree-sitter`. Should use `Parser.SyntaxNode` or access via the `Tree` type. This will cause TypeScript/runtime errors.
-- [ ] **Fix `Node` type import in documents.ts** - Same issue, imports non-existent `Node` type from `./parser`.
+- [x] **Fix `Node` type import in parser.ts** - ~~`Node` is not a named export from `web-tree-sitter`.~~ Verified: `Node` is correctly exported as a class from `web-tree-sitter`. No fix needed.
+- [x] **Fix `Node` type import in documents.ts** - ~~Same issue.~~ Verified: Import works correctly. No fix needed.
 
 ### Code Quality
 
 - [ ] **Add parser cleanup in shutdown handler** - The parser and document manager resources are not cleaned up when the server shuts down. Add cleanup logic in `connection.onShutdown()`.
-- [ ] **Use `DiagnosticSeverity` constant** - In `documents.ts:133`, use `DiagnosticSeverity.Error` from `vscode-languageserver` instead of hardcoded `severity: 1`.
+- [x] **Use `DiagnosticSeverity` constant** - In `documents.ts`, use `DiagnosticSeverity.Error` from `vscode-languageserver` instead of hardcoded `severity: 1`. (Fixed)
 - [ ] **Remove unused `document` parameter** - In `documents.ts:120`, the `document` parameter in `collectDiagnostics()` is not used.
 
 ### Error Handling
