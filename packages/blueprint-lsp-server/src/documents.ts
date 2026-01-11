@@ -100,7 +100,7 @@ export class DocumentManager {
     
     // Check for parse errors in the tree
     const hasErrors = tree ? this.treeHasErrors(tree.rootNode) : true;
-    const diagnostics = tree ? this.collectDiagnostics(document, tree) : [];
+    const diagnostics = tree ? this.collectDiagnostics(tree) : [];
 
     return {
       uri: document.uri,
@@ -129,9 +129,9 @@ export class DocumentManager {
   /**
    * Collect diagnostics from parse errors in the tree.
    */
-  private collectDiagnostics(document: TextDocument, tree: Tree): Diagnostic[] {
+  private collectDiagnostics(tree: Tree): Diagnostic[] {
     const diagnostics: Diagnostic[] = [];
-    this.collectErrorNodes(tree.rootNode, document, diagnostics);
+    this.collectErrorNodes(tree.rootNode, diagnostics);
     return diagnostics;
   }
 
@@ -140,7 +140,6 @@ export class DocumentManager {
    */
   private collectErrorNodes(
     node: Node,
-    document: TextDocument,
     diagnostics: Diagnostic[]
   ): void {
     // Check for ERROR nodes (parse errors) and MISSING nodes
@@ -160,7 +159,7 @@ export class DocumentManager {
 
     // Recurse into children
     for (const child of node.children) {
-      this.collectErrorNodes(child, document, diagnostics);
+      this.collectErrorNodes(child, diagnostics);
     }
   }
 
