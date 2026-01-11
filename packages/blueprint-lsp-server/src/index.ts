@@ -16,11 +16,13 @@ import type {
   HoverParams,
   DefinitionParams,
   ReferenceParams,
+  DocumentSymbolParams,
 } from "vscode-languageserver/node";
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
 import { findDefinitionTarget, buildDefinition, type DefinitionContext } from "./definition";
 import { findReferencesTarget, buildReferences, type ReferencesContext } from "./references";
+import { buildDocumentSymbols } from "./document-symbol";
 import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
 import { DependencyGraph } from "./dependency-graph";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -225,6 +227,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
+      documentSymbolProvider: true,
       semanticTokensProvider: {
         legend: semanticTokensLegend,
         full: true,
@@ -749,6 +752,38 @@ connection.onReferences((params: ReferenceParams) => {
   };
 
   return buildReferences(target, referencesContext);
+});
+
+// Handle document symbol request (outline view)
+connection.onDocumentSymbol((params: DocumentSymbolParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  const filePath = getFilePath(params.textDocument.uri);
+  if (!isBlueprintFilePath(filePath)) {
+    return null;
+  }
+
+  if (!parserInitialized) {
+    return null;
+  }
+
+  // Get the parse tree from the document manager
+  const state = documentManager.getState(params.textDocument.uri);
+  if (!state?.tree) {
+    // Try to parse the document if not already parsed
+    const tree = parseDocument(document.getText());
+    if (!tree) {
+      return null;
+    }
+    const symbols = buildDocumentSymbols(tree);
+    tree.delete();
+    return symbols;
+  }
+
+  return buildDocumentSymbols(state.tree);
 });
 
 connection.onShutdown(() => {

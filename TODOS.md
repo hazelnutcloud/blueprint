@@ -258,9 +258,9 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] Find source files implementing a requirement (via ticket data)
 
 ### 9.3 Document Symbols
-- [ ] Implement `textDocument/documentSymbol` handler
-- [ ] Return hierarchical symbol tree (modules → features → requirements)
-- [ ] Include constraints as children of requirements
+- [x] Implement `textDocument/documentSymbol` handler (Completed: Added `document-symbol.ts` module with `buildDocumentSymbols()` function. Integrated with LSP server in `index.ts` via `connection.onDocumentSymbol()` handler. Added `documentSymbolProvider: true` to server capabilities. 26 tests added in `document-symbol.test.ts`.)
+- [x] Return hierarchical symbol tree (modules → features → requirements) (Completed: `buildModuleSymbol()`, `buildFeatureSymbol()`, `buildRequirementSymbol()` functions build nested `DocumentSymbol` hierarchy.)
+- [x] Include constraints as children of requirements (Completed: `buildConstraintSymbol()` creates `DocumentSymbol` for constraints, included as children at module, feature, and requirement levels.)
 
 ### 9.4 Workspace Symbols
 - [ ] Implement `workspace/symbol` handler
@@ -339,6 +339,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Test hover information (29 tests in `hover.test.ts` covering node finding, hover targets, requirement/feature/module/constraint/reference/keyword hovers, blocking status display, and multiple tickets per requirement)
 - [x] Test go-to-definition (17 tests in `definition.test.ts` covering node finding, definition targets for module/feature/requirement/constraint/reference/keyword, cross-file navigation, ticket file navigation, and fallback behavior)
 - [x] Test find-references (21 tests in `references.test.ts` covering node finding, references targets for module/feature/requirement/constraint/reference/keyword, cross-file references, multiple references, includeDeclaration option, and parent reference matching)
+- [x] Test document symbols (26 tests in `document-symbol.test.ts` covering empty documents, single/multiple modules, features, requirements, constraints at all levels, module-level requirements, symbol ranges, hierarchy building, and complex SPEC.md example structure)
 
 ### 12.2 Integration Tests
 - [ ] Test LSP initialization handshake
