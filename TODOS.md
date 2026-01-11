@@ -450,7 +450,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] **Complete "detects parse errors" test** - Test at `documents.test.ts:83-91` has no assertions. Should verify `tree.rootNode.hasError` is `true` or that error nodes exist. (Completed: Added assertions verifying `tree.rootNode.hasError` is `true` and that an `ERROR` node exists in the parse tree children.)
 - [ ] **Add edge case tests**:
   - [x] Empty document parsing (Added tests for empty string, whitespace-only, and newlines-only documents in `documents.test.ts`)
-  - [ ] Document with only comments
+  - [x] Document with only comments (Added tests for single-line only, multi-line only, and mixed comments in `documents.test.ts`. Note: Tests revealed a grammar bug where multi-line comments are sometimes parsed as `description_block` - see Grammar Bugs section.)
   - [ ] Very large documents
   - [ ] Invalid UTF-8 sequences
 
@@ -497,3 +497,15 @@ easier to distribute and works across all platforms without native compilation. 
 - [ ] **Import `ReferenceNode` type in ast.test.ts** - The test file tests `ReferenceNode` properties but doesn't import the type. Add to imports for type safety.
 
 - [ ] **Add JSDoc for `SymbolTable` interface fields** - The `SymbolTable` interface lacks documentation for what each map contains. Add JSDoc comments explaining the key format and value type for each map.
+
+---
+
+## Grammar Bugs
+
+### Multi-line Comment Parsing
+
+- [ ] **Multi-line comments parsed as `description_block`** - The multi-line comment regex in `grammar.js` does not correctly match `/* ... */` comments. Instead of being recognized as `comment` tokens (which are in `extras`), they are incorrectly parsed as `description_block` nodes. This causes issues when documents contain multiple multi-line comments, resulting in parse errors. The problematic regex is:
+  ```javascript
+  token(seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/"))
+  ```
+  This regex fails to match simpler cases like `/* block */`. The regex should be fixed or replaced with a simpler pattern that correctly handles all multi-line comment cases.

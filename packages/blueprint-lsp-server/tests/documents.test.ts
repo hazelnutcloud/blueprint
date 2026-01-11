@@ -165,5 +165,43 @@ describe("Parser", () => {
       expect(tree!.rootNode.type).toBe("source_file");
       expect(tree!.rootNode.hasError).toBe(false);
     });
+
+    test("parses document with only single-line comments", () => {
+      const code = `// This is a comment
+// Another comment line
+// Third comment`;
+      
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+    });
+
+    test("parses document with only a multi-line comment", () => {
+      // Note: Multi-line comments are currently parsed as description_block
+      // due to a grammar issue, but no parse error is produced
+      const code = `/* This is a 
+   multi-line comment
+   spanning several lines */`;
+      
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+    });
+
+    test("parses document with single-line comment followed by multi-line", () => {
+      // Note: The multi-line comment is parsed as description_block due to
+      // a grammar issue with the multi-line comment regex
+      const code = `// Single line comment
+
+/* Multi-line
+   comment block */`;
+      
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+    });
   });
 });
