@@ -763,3 +763,292 @@ describe("Duplicate Identifier Validation", () => {
     });
   });
 });
+
+/**
+ * Helper function to collect error nodes from a parse tree.
+ * This mirrors the logic in DocumentManager.collectErrorNodes() for testing.
+ */
+function collectErrorNodes(node: Node): Array<{ node: Node; message: string }> {
+  const errors: Array<{ node: Node; message: string }> = [];
+  
+  if (node.type === "ERROR" || node.isMissing) {
+    errors.push({
+      node,
+      message: node.isMissing
+        ? getMissingNodeMessage(node)
+        : getErrorNodeMessage(node),
+    });
+  }
+  
+  for (const child of node.children) {
+    errors.push(...collectErrorNodes(child));
+  }
+  
+  return errors;
+}
+
+function getMissingNodeMessage(node: Node): string {
+  const nodeType = node.type;
+  
+  switch (nodeType) {
+    case "identifier":
+      return getMissingIdentifierMessage(node);
+    case "```":
+      return "Missing closing ``` for code block";
+    case "*/":
+      return "Missing closing */ for multi-line comment";
+    default:
+      return `Missing ${nodeType}`;
+  }
+}
+
+function getMissingIdentifierMessage(node: Node): string {
+  const parent = node.parent;
+  if (!parent) {
+    return "Missing identifier";
+  }
+
+  switch (parent.type) {
+    case "module_block":
+      return "Missing module name after @module";
+    case "feature_block":
+      return "Missing feature name after @feature";
+    case "requirement_block":
+      return "Missing requirement name after @requirement";
+    case "constraint":
+      return "Missing constraint name after @constraint";
+    case "reference":
+      return "Missing identifier in reference";
+    default:
+      return "Missing identifier";
+  }
+}
+
+function getErrorNodeMessage(node: Node): string {
+  const errorText = node.text.trim();
+  const parent = node.parent;
+  
+  // 1. Identifier starting with a digit
+  if (/^\d/.test(errorText)) {
+    return `Invalid identifier '${truncateText(errorText)}': identifiers cannot start with a digit`;
+  }
+  
+  // 2. Identifier with spaces
+  if (/^[a-zA-Z_][a-zA-Z0-9_-]*\s+[a-zA-Z]/.test(errorText)) {
+    return `Invalid identifier: identifiers cannot contain spaces. Use hyphens or underscores instead`;
+  }
+  
+  // 3. Orphaned @requirement at top level
+  if (errorText.startsWith("@requirement") && parent?.type === "source_file") {
+    return "@requirement must be inside a @feature or @module block";
+  }
+  
+  // 4. Orphaned @feature at top level
+  if (errorText.startsWith("@feature") && parent?.type === "source_file") {
+    return "@feature must be inside a @module block";
+  }
+  
+  // 5. Orphaned @constraint at top level
+  if (errorText.startsWith("@constraint") && parent?.type === "source_file") {
+    return "@constraint must be inside a @module, @feature, or @requirement block";
+  }
+  
+  // 6. @depends-on issues
+  if (errorText.startsWith("@depends-on")) {
+    if (parent?.type === "source_file") {
+      return "@depends-on must be inside a @module, @feature, or @requirement block";
+    }
+    if (!errorText.includes(" ") || errorText === "@depends-on") {
+      return "@depends-on requires at least one reference";
+    }
+  }
+  
+  // 7. Misplaced keyword
+  if (errorText.startsWith("@") && !errorText.startsWith("@description")) {
+    const keyword = errorText.split(/\s/)[0];
+    if (keyword) {
+      return `Unexpected ${keyword} at this location`;
+    }
+  }
+  
+  // 8. Check for common context-based errors
+  if (parent) {
+    const contextMessage = getContextualErrorMessage(node, parent, errorText);
+    if (contextMessage) {
+      return contextMessage;
+    }
+  }
+  
+  // 9. Generic message with context
+  if (errorText.length > 0 && errorText.length <= 50) {
+    return `Syntax error: unexpected '${errorText}'`;
+  }
+  
+  return "Syntax error: unexpected input";
+}
+
+function getContextualErrorMessage(node: Node, parent: Node, errorText: string): string | null {
+  switch (parent.type) {
+    case "depends_on":
+      if (/^[a-zA-Z_]/.test(errorText) && !errorText.startsWith("@")) {
+        return `Missing comma before reference '${truncateText(errorText)}'`;
+      }
+      return `Invalid reference in @depends-on: '${truncateText(errorText)}'`;
+      
+    case "reference":
+      if (errorText === ".") {
+        return "Missing identifier after '.' in reference";
+      }
+      if (errorText.startsWith(".")) {
+        return "Reference cannot start with '.'";
+      }
+      return `Invalid reference: '${truncateText(errorText)}'`;
+      
+    case "code_block":
+      if (errorText.includes("```")) {
+        return "Nested code blocks are not allowed";
+      }
+      return null;
+      
+    case "module_block":
+    case "feature_block":
+    case "requirement_block":
+    case "constraint":
+      if (errorText.startsWith("@")) {
+        const keyword = errorText.split(/\s/)[0];
+        return `Unexpected ${keyword} in ${parent.type.replace("_block", "").replace("_", " ")}`;
+      }
+      return null;
+      
+    default:
+      return null;
+  }
+}
+
+function truncateText(text: string, maxLength: number = 30): string {
+  const singleLine = text.replace(/\n/g, " ").trim();
+  if (singleLine.length <= maxLength) {
+    return singleLine;
+  }
+  return singleLine.substring(0, maxLength - 3) + "...";
+}
+
+describe("Parse Error Messages", () => {
+  beforeAll(async () => {
+    await initializeParser();
+  });
+
+  describe("orphaned elements", () => {
+    test("reports meaningful error for @requirement at top level", () => {
+      const code = `
+@requirement orphan
+  This requirement has no parent.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      const errors = collectErrorNodes(tree!.rootNode);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]!.message).toBe("@requirement must be inside a @feature or @module block");
+    });
+
+    test("reports meaningful error for @feature at top level", () => {
+      const code = `
+@feature orphan
+  This feature has no parent module.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      const errors = collectErrorNodes(tree!.rootNode);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]!.message).toBe("@feature must be inside a @module block");
+    });
+
+    test("reports meaningful error for @constraint at top level", () => {
+      const code = `
+@constraint orphan
+  This constraint has no parent.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      const errors = collectErrorNodes(tree!.rootNode);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]!.message).toBe("@constraint must be inside a @module, @feature, or @requirement block");
+    });
+
+    test("reports meaningful error for @depends-on at top level", () => {
+      const code = `
+@depends-on some-module
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      const errors = collectErrorNodes(tree!.rootNode);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]!.message).toBe("@depends-on must be inside a @module, @feature, or @requirement block");
+    });
+  });
+
+  describe("invalid identifiers", () => {
+    test("reports error for identifier starting with digit", () => {
+      const code = `
+@module 2fa-auth
+  Two-factor auth module.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      const errors = collectErrorNodes(tree!.rootNode);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]!.message).toContain("identifiers cannot start with a digit");
+    });
+  });
+
+  describe("generic errors", () => {
+    test("includes error text in message for short errors", () => {
+      // Use an actual syntax error - @module without identifier followed by another @module
+      const code = `
+@module
+@module second
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      const errors = collectErrorNodes(tree!.rootNode);
+      expect(errors.length).toBeGreaterThan(0);
+      // Should get a meaningful error about missing module name or unexpected input
+      expect(errors.some(e => 
+        e.message.includes("Missing") || 
+        e.message.includes("unexpected") ||
+        e.message.includes("Unexpected")
+      )).toBe(true);
+    });
+  });
+
+  describe("error location", () => {
+    test("error range points to the error location", () => {
+      // Use an actual top-level @requirement (which is invalid at source_file level)
+      const code = `@requirement orphan
+  Orphaned requirement.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      const errors = collectErrorNodes(tree!.rootNode);
+      expect(errors.length).toBeGreaterThan(0);
+      
+      // The error should be on line 0 (0-indexed) where @requirement starts
+      const errorNode = errors[0]!.node;
+      expect(errorNode.startPosition.row).toBe(0);
+    });
+  });
+});

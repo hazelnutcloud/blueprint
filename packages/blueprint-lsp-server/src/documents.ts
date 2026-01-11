@@ -306,8 +306,8 @@ export class DocumentManager {
           end: { line: node.endPosition.row, character: node.endPosition.column },
         },
         message: node.isMissing
-          ? `Missing ${node.type}`
-          : `Syntax error: unexpected input`,
+          ? this.getMissingNodeMessage(node)
+          : this.getErrorNodeMessage(node),
         source: "blueprint",
       });
     }
@@ -316,6 +316,172 @@ export class DocumentManager {
     for (const child of node.children) {
       this.collectErrorNodes(child, diagnostics);
     }
+  }
+
+  /**
+   * Generate a meaningful error message for a MISSING node.
+   */
+  private getMissingNodeMessage(node: Node): string {
+    const nodeType = node.type;
+    
+    // Handle specific missing node types
+    switch (nodeType) {
+      case "identifier":
+        return this.getMissingIdentifierMessage(node);
+      case "```":
+        return "Missing closing ``` for code block";
+      case "*/":
+        return "Missing closing */ for multi-line comment";
+      default:
+        return `Missing ${nodeType}`;
+    }
+  }
+
+  /**
+   * Generate a message for a missing identifier based on its parent context.
+   */
+  private getMissingIdentifierMessage(node: Node): string {
+    const parent = node.parent;
+    if (!parent) {
+      return "Missing identifier";
+    }
+
+    switch (parent.type) {
+      case "module_block":
+        return "Missing module name after @module";
+      case "feature_block":
+        return "Missing feature name after @feature";
+      case "requirement_block":
+        return "Missing requirement name after @requirement";
+      case "constraint":
+        return "Missing constraint name after @constraint";
+      case "reference":
+        return "Missing identifier in reference";
+      default:
+        return "Missing identifier";
+    }
+  }
+
+  /**
+   * Generate a meaningful error message for an ERROR node.
+   */
+  private getErrorNodeMessage(node: Node): string {
+    const errorText = node.text.trim();
+    const parent = node.parent;
+    
+    // Check for common error patterns
+    
+    // 1. Identifier starting with a digit
+    if (/^\d/.test(errorText)) {
+      return `Invalid identifier '${this.truncateText(errorText)}': identifiers cannot start with a digit`;
+    }
+    
+    // 2. Identifier with spaces
+    if (/^[a-zA-Z_][a-zA-Z0-9_-]*\s+[a-zA-Z]/.test(errorText)) {
+      return `Invalid identifier: identifiers cannot contain spaces. Use hyphens or underscores instead`;
+    }
+    
+    // 3. Orphaned @requirement at top level
+    if (errorText.startsWith("@requirement") && parent?.type === "source_file") {
+      return "@requirement must be inside a @feature or @module block";
+    }
+    
+    // 4. Orphaned @feature at top level
+    if (errorText.startsWith("@feature") && parent?.type === "source_file") {
+      return "@feature must be inside a @module block";
+    }
+    
+    // 5. Orphaned @constraint at top level
+    if (errorText.startsWith("@constraint") && parent?.type === "source_file") {
+      return "@constraint must be inside a @module, @feature, or @requirement block";
+    }
+    
+    // 6. @depends-on issues
+    if (errorText.startsWith("@depends-on")) {
+      if (parent?.type === "source_file") {
+        return "@depends-on must be inside a @module, @feature, or @requirement block";
+      }
+      if (!errorText.includes(" ") || errorText === "@depends-on") {
+        return "@depends-on requires at least one reference";
+      }
+    }
+    
+    // 7. Misplaced keyword
+    if (errorText.startsWith("@") && !errorText.startsWith("@description")) {
+      const keyword = errorText.split(/\s/)[0];
+      if (keyword) {
+        return `Unexpected ${keyword} at this location`;
+      }
+    }
+    
+    // 8. Check for common context-based errors
+    if (parent) {
+      const contextMessage = this.getContextualErrorMessage(node, parent, errorText);
+      if (contextMessage) {
+        return contextMessage;
+      }
+    }
+    
+    // 9. Generic message with context
+    if (errorText.length > 0 && errorText.length <= 50) {
+      return `Syntax error: unexpected '${errorText}'`;
+    }
+    
+    return "Syntax error: unexpected input";
+  }
+
+  /**
+   * Get an error message based on the parent context.
+   */
+  private getContextualErrorMessage(node: Node, parent: Node, errorText: string): string | null {
+    switch (parent.type) {
+      case "depends_on":
+        // Check for missing comma between references
+        if (/^[a-zA-Z_]/.test(errorText) && !errorText.startsWith("@")) {
+          return `Missing comma before reference '${this.truncateText(errorText)}'`;
+        }
+        return `Invalid reference in @depends-on: '${this.truncateText(errorText)}'`;
+        
+      case "reference":
+        if (errorText === ".") {
+          return "Missing identifier after '.' in reference";
+        }
+        if (errorText.startsWith(".")) {
+          return "Reference cannot start with '.'";
+        }
+        return `Invalid reference: '${this.truncateText(errorText)}'`;
+        
+      case "code_block":
+        if (errorText.includes("```")) {
+          return "Nested code blocks are not allowed";
+        }
+        return null;
+        
+      case "module_block":
+      case "feature_block":
+      case "requirement_block":
+      case "constraint":
+        // Error in a block - could be many things
+        if (errorText.startsWith("@")) {
+          const keyword = errorText.split(/\s/)[0];
+          return `Unexpected ${keyword} in ${parent.type.replace("_block", "").replace("_", " ")}`;
+        }
+        return null;
+        
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Truncate text for display in error messages.
+   */
+  private truncateText(text: string, maxLength: number = 30): string {
+    const singleLine = text.replace(/\n/g, " ").trim();
+    if (singleLine.length <= maxLength) {
+      return singleLine;
+    }
+    return singleLine.substring(0, maxLength - 3) + "...";
   }
 
   /**

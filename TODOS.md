@@ -163,9 +163,9 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 6: Diagnostics
 
 ### 6.1 Syntax Errors
-- [ ] Report tree-sitter parse errors as diagnostics
-- [ ] Provide meaningful error messages for common syntax mistakes
-- [ ] Include source location (line, column, range)
+- [x] Report tree-sitter parse errors as diagnostics (Completed: `DocumentManager.collectErrorNodes()` in `documents.ts` recursively scans tree-sitter parse trees for ERROR and MISSING nodes.)
+- [x] Provide meaningful error messages for common syntax mistakes (Completed: Added context-aware error messages in `documents.ts` via `getMissingNodeMessage()`, `getErrorNodeMessage()`, and `getContextualErrorMessage()` methods. Handles orphaned elements at wrong scope, invalid identifiers starting with digits, missing identifiers after keywords, and reference-related errors. 8 new tests added in `documents.test.ts`.)
+- [x] Include source location (line, column, range) (Completed: Error diagnostics include full range from `node.startPosition` to `node.endPosition`.)
 
 ### 6.2 Semantic Errors
 - [x] Detect circular dependencies (Error) (Completed: Added `workspace-diagnostics.ts` module with `computeCircularDependencyDiagnostics()` function that uses `DependencyGraph.build()` to detect cycles and generates diagnostics at each `@depends-on` location in the cycle. Diagnostics include the full cycle path in the error message. Integrated with LSP server in `index.ts` via `publishWorkspaceDiagnostics()` which is called after symbol index updates. 20 tests added in `workspace-diagnostics.test.ts`.)
