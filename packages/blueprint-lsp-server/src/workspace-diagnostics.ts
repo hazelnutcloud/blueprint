@@ -1,6 +1,7 @@
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
-import type { CrossFileSymbolIndex } from "./symbol-index";
+import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import { DependencyGraph, type CircularDependency } from "./dependency-graph";
+import type { Ticket } from "./tickets";
 
 /**
  * Represents diagnostics for a specific file.
@@ -180,20 +181,90 @@ export function mergeDiagnosticResults(
 }
 
 /**
+ * Compute diagnostics for requirements that have no associated tickets.
+ *
+ * Per SPEC.md Section 5.8:
+ * - Warning | Requirement has no ticket
+ *
+ * @param symbolIndex The cross-file symbol index
+ * @param tickets Array of all tickets from all ticket files
+ * @returns Diagnostics grouped by file URI
+ */
+export function computeNoTicketDiagnostics(
+  symbolIndex: CrossFileSymbolIndex,
+  tickets: Ticket[]
+): WorkspaceDiagnosticsResult {
+  const byFile = new Map<string, Diagnostic[]>();
+
+  // Build a set of requirement refs that have tickets
+  const refsWithTickets = new Set<string>();
+  for (const ticket of tickets) {
+    refsWithTickets.add(ticket.ref);
+  }
+
+  // Get all requirements from the symbol index
+  const requirements = symbolIndex.getSymbolsByKind("requirement");
+
+  for (const req of requirements) {
+    // Check if this requirement has any tickets
+    if (!refsWithTickets.has(req.path)) {
+      const node = req.node;
+      const diagnostic: Diagnostic = {
+        severity: DiagnosticSeverity.Warning,
+        range: {
+          start: {
+            line: node.location.startLine,
+            character: node.location.startColumn,
+          },
+          end: {
+            line: node.location.startLine,
+            // Highlight just the @requirement line, not the whole block
+            character: node.location.startColumn + "@requirement".length + 1 + (node as { name: string }).name.length,
+          },
+        },
+        message: `Requirement '${req.path}' has no associated ticket`,
+        source: "blueprint",
+        code: "no-ticket",
+      };
+
+      const fileDiagnostics = byFile.get(req.fileUri);
+      if (fileDiagnostics) {
+        fileDiagnostics.push(diagnostic);
+      } else {
+        byFile.set(req.fileUri, [diagnostic]);
+      }
+    }
+  }
+
+  return {
+    byFile,
+    filesWithDiagnostics: Array.from(byFile.keys()),
+  };
+}
+
+/**
  * Compute all workspace-level diagnostics.
  *
  * This combines:
  * - Circular dependency detection
  * - Unresolved reference detection
+ * - Requirements without tickets (warning)
  *
  * @param symbolIndex The cross-file symbol index
+ * @param tickets Optional array of all tickets (for no-ticket warnings)
  * @returns Combined diagnostics grouped by file URI
  */
 export function computeWorkspaceDiagnostics(
-  symbolIndex: CrossFileSymbolIndex
+  symbolIndex: CrossFileSymbolIndex,
+  tickets?: Ticket[]
 ): WorkspaceDiagnosticsResult {
   const circularDeps = computeCircularDependencyDiagnostics(symbolIndex);
   const unresolvedRefs = computeUnresolvedReferenceDiagnostics(symbolIndex);
+
+  if (tickets) {
+    const noTicket = computeNoTicketDiagnostics(symbolIndex, tickets);
+    return mergeDiagnosticResults(circularDeps, unresolvedRefs, noTicket);
+  }
 
   return mergeDiagnosticResults(circularDeps, unresolvedRefs);
 }

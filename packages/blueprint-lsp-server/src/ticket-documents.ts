@@ -100,6 +100,40 @@ export class TicketDocumentManager {
   }
 
   /**
+   * Get all parsed ticket files from all tracked documents.
+   * Returns only valid, successfully parsed ticket files.
+   * 
+   * @returns Array of parsed ticket files with their URIs
+   */
+  getAllTicketFiles(): Array<{ uri: string; data: TicketFile }> {
+    const result: Array<{ uri: string; data: TicketFile }> = [];
+    for (const [uri, state] of this.states) {
+      if (state.data) {
+        result.push({ uri, data: state.data });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Get all tickets from all tracked documents.
+   * Aggregates tickets from all valid ticket files.
+   * 
+   * @returns Array of all tickets with their source file URIs
+   */
+  getAllTickets(): Array<{ ticket: import("./tickets").Ticket; fileUri: string }> {
+    const result: Array<{ ticket: import("./tickets").Ticket; fileUri: string }> = [];
+    for (const [uri, state] of this.states) {
+      if (state.data) {
+        for (const ticket of state.data.tickets) {
+          result.push({ ticket, fileUri: uri });
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
    * Validate a ticket document and create its state.
    */
   private validateAndCreateState(

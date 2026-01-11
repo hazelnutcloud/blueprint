@@ -57,13 +57,15 @@ let parserInitialized = false;
 let filesWithWorkspaceDiagnostics = new Set<string>();
 
 /**
- * Publish workspace-level diagnostics (circular dependencies, unresolved references).
+ * Publish workspace-level diagnostics (circular dependencies, unresolved references, no-ticket warnings).
  * 
  * This function computes diagnostics across all indexed files and publishes them.
  * It also clears diagnostics from files that no longer have issues.
  */
 function publishWorkspaceDiagnostics(): void {
-  const result = computeWorkspaceDiagnostics(symbolIndex);
+  // Get all tickets from the ticket document manager
+  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
+  const result = computeWorkspaceDiagnostics(symbolIndex, allTickets);
   
   // Clear diagnostics from files that no longer have workspace-level issues
   for (const fileUri of filesWithWorkspaceDiagnostics) {

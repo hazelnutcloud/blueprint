@@ -170,12 +170,12 @@ easier to distribute and works across all platforms without native compilation. 
 ### 6.2 Semantic Errors
 - [x] Detect circular dependencies (Error) (Completed: Added `workspace-diagnostics.ts` module with `computeCircularDependencyDiagnostics()` function that uses `DependencyGraph.build()` to detect cycles and generates diagnostics at each `@depends-on` location in the cycle. Diagnostics include the full cycle path in the error message. Integrated with LSP server in `index.ts` via `publishWorkspaceDiagnostics()` which is called after symbol index updates. 20 tests added in `workspace-diagnostics.test.ts`.)
 - [x] Detect references to non-existent requirements (Error) (Completed: Added `computeUnresolvedReferenceDiagnostics()` in `workspace-diagnostics.ts` that uses `CrossFileSymbolIndex.getUnresolvedReferences()` to find all unresolved `@depends-on` references and generates diagnostics with the unresolved path in the error message. Tests added in `workspace-diagnostics.test.ts`.)
-- [ ] Detect duplicate identifiers in scope (Error)
+- [x] Detect duplicate identifiers in scope (Error) (Completed: `buildSymbolTable()` in `ast.ts` returns duplicates, `validateDuplicateIdentifiers()` in `documents.ts` creates diagnostics. Tests in `ast.test.ts` and `documents.test.ts`.)
 - [x] Detect multiple `@description` blocks in one file (Error)
 - [x] Detect `@description` after `@module` (Error)
 
 ### 6.3 Warnings
-- [ ] Warn when requirement has no ticket
+- [x] Warn when requirement has no ticket (Completed: Added `computeNoTicketDiagnostics()` in `workspace-diagnostics.ts` that compares requirements from `CrossFileSymbolIndex` against tickets. Integrated with `computeWorkspaceDiagnostics()` which now accepts optional tickets array. Updated `publishWorkspaceDiagnostics()` in `index.ts` to pass tickets from `TicketDocumentManager.getAllTickets()`. Added `getAllTicketFiles()` and `getAllTickets()` methods to `TicketDocumentManager`. 11 new tests in `workspace-diagnostics.test.ts`.)
 - [ ] Warn when ticket references removed requirement
 - [ ] Warn on constraint identifier mismatch between `.bp` and ticket
 

@@ -6,9 +6,11 @@ import { CrossFileSymbolIndex } from "../src/symbol-index";
 import {
   computeCircularDependencyDiagnostics,
   computeUnresolvedReferenceDiagnostics,
+  computeNoTicketDiagnostics,
   computeWorkspaceDiagnostics,
   mergeDiagnosticResults,
 } from "../src/workspace-diagnostics";
+import type { Ticket } from "../src/tickets";
 
 describe("workspace-diagnostics", () => {
   let index: CrossFileSymbolIndex;
@@ -414,6 +416,202 @@ describe("workspace-diagnostics", () => {
     });
   });
 
+  describe("computeNoTicketDiagnostics", () => {
+    /**
+     * Helper to create a ticket object.
+     */
+    function createTicket(
+      id: string,
+      ref: string,
+      status: "pending" | "in-progress" | "complete" | "obsolete" = "pending"
+    ): Ticket {
+      return {
+        id,
+        ref,
+        description: `Ticket for ${ref}`,
+        status,
+        constraints_satisfied: [],
+      };
+    }
+
+    test("returns empty result for empty index", () => {
+      const result = computeNoTicketDiagnostics(index, []);
+
+      expect(result.byFile.size).toBe(0);
+      expect(result.filesWithDiagnostics).toHaveLength(0);
+    });
+
+    test("returns empty result when all requirements have tickets", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+
+@requirement oauth
+  OAuth authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const tickets = [
+        createTicket("TKT-001", "auth.login.basic-auth"),
+        createTicket("TKT-002", "auth.login.oauth"),
+      ];
+
+      const result = computeNoTicketDiagnostics(index, tickets);
+
+      expect(result.byFile.size).toBe(0);
+      expect(result.filesWithDiagnostics).toHaveLength(0);
+    });
+
+    test("warns when requirement has no ticket", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const result = computeNoTicketDiagnostics(index, []);
+
+      expect(result.filesWithDiagnostics).toContain("file:///auth.bp");
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.severity).toBe(DiagnosticSeverity.Warning);
+      expect(diags[0]!.message).toContain("auth.login.basic-auth");
+      expect(diags[0]!.message).toContain("no associated ticket");
+      expect(diags[0]!.code).toBe("no-ticket");
+      expect(diags[0]!.source).toBe("blueprint");
+    });
+
+    test("warns for multiple requirements without tickets", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+
+@requirement oauth
+  OAuth authentication.
+
+@requirement two-factor
+  2FA authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // Only one requirement has a ticket
+      const tickets = [createTicket("TKT-001", "auth.login.oauth")];
+
+      const result = computeNoTicketDiagnostics(index, tickets);
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(2);
+
+      const messages = diags.map((d) => d.message);
+      expect(messages.some((m) => m.includes("basic-auth"))).toBe(true);
+      expect(messages.some((m) => m.includes("two-factor"))).toBe(true);
+    });
+
+    test("handles requirements across multiple files", () => {
+      const authCode = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+`;
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+`;
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+
+      // Only auth requirement has a ticket
+      const tickets = [createTicket("TKT-001", "auth.login.basic-auth")];
+
+      const result = computeNoTicketDiagnostics(index, tickets);
+
+      expect(result.filesWithDiagnostics).toContain("file:///storage.bp");
+      expect(result.filesWithDiagnostics).not.toContain("file:///auth.bp");
+
+      const diags = result.byFile.get("file:///storage.bp")!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("storage.database.user-table");
+    });
+
+    test("handles multiple tickets for same requirement", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // Multiple tickets for same requirement (allowed per SPEC)
+      const tickets = [
+        createTicket("TKT-001", "auth.login.basic-auth"),
+        createTicket("TKT-002", "auth.login.basic-auth"),
+      ];
+
+      const result = computeNoTicketDiagnostics(index, tickets);
+
+      expect(result.byFile.size).toBe(0);
+    });
+
+    test("handles module-level requirements", () => {
+      const code = `
+@module auth
+
+@requirement global-check
+  Global authentication check.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const result = computeNoTicketDiagnostics(index, []);
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("auth.global-check");
+    });
+
+    test("diagnostic range points to requirement declaration", () => {
+      const code = `@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const result = computeNoTicketDiagnostics(index, []);
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+
+      // @requirement basic-auth is on line 4 (0-indexed)
+      expect(diags[0]!.range.start.line).toBe(4);
+      expect(diags[0]!.range.start.character).toBe(0);
+    });
+  });
+
   describe("computeWorkspaceDiagnostics", () => {
     test("returns empty result for empty index", () => {
       const result = computeWorkspaceDiagnostics(index);
@@ -476,6 +674,95 @@ describe("workspace-diagnostics", () => {
 
       expect(result.byFile.size).toBe(0);
       expect(result.filesWithDiagnostics).toHaveLength(0);
+    });
+
+    test("includes no-ticket warnings when tickets are provided", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+
+@requirement oauth
+  OAuth authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // Only one requirement has a ticket
+      const tickets: Ticket[] = [
+        {
+          id: "TKT-001",
+          ref: "auth.login.basic-auth",
+          description: "Implement basic auth",
+          status: "complete",
+          constraints_satisfied: [],
+        },
+      ];
+
+      const result = computeWorkspaceDiagnostics(index, tickets);
+
+      expect(result.filesWithDiagnostics).toContain("file:///auth.bp");
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      const noTicketDiags = diags.filter((d) => d.code === "no-ticket");
+      expect(noTicketDiags).toHaveLength(1);
+      expect(noTicketDiags[0]!.message).toContain("oauth");
+      expect(noTicketDiags[0]!.severity).toBe(DiagnosticSeverity.Warning);
+    });
+
+    test("does not include no-ticket warnings when tickets not provided", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // Don't pass tickets
+      const result = computeWorkspaceDiagnostics(index);
+
+      // Should not have any diagnostics since there are no circular deps or unresolved refs
+      expect(result.byFile.size).toBe(0);
+    });
+
+    test("combines all diagnostic types", () => {
+      const codeA = `
+@module a
+  @depends-on b
+  @depends-on nonexistent
+
+@feature login
+
+@requirement req-a
+  A requirement.
+`;
+      const codeB = `
+@module b
+  @depends-on a
+`;
+      index.addFile("file:///a.bp", parseToAST(codeA));
+      index.addFile("file:///b.bp", parseToAST(codeB));
+
+      // No tickets provided for any requirements
+      const tickets: Ticket[] = [];
+
+      const result = computeWorkspaceDiagnostics(index, tickets);
+
+      const diagsA = result.byFile.get("file:///a.bp")!;
+
+      // Should have all three types of diagnostics
+      const circularDiags = diagsA.filter((d) => d.code === "circular-dependency");
+      const unresolvedDiags = diagsA.filter((d) => d.code === "unresolved-reference");
+      const noTicketDiags = diagsA.filter((d) => d.code === "no-ticket");
+
+      expect(circularDiags.length).toBeGreaterThanOrEqual(1);
+      expect(unresolvedDiags).toHaveLength(1);
+      expect(noTicketDiags).toHaveLength(1);
     });
   });
 });
