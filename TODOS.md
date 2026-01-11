@@ -132,10 +132,10 @@ easier to distribute and works across all platforms without native compilation. 
 - [ ] Report schema validation errors as diagnostics
 
 ### 4.3 Requirement-Ticket Correlation
-- [ ] Build mapping from requirement refs to tickets
-- [ ] Handle one-to-many requirement-to-ticket relationships
-- [ ] Aggregate constraint satisfaction across tickets sharing same ref
-- [ ] Compute requirement completion status
+- [x] Build mapping from requirement refs to tickets (Completed: Added `requirement-ticket-map.ts` module with `buildRequirementTicketMap()` and `buildRequirementTicketMapFromSymbols()` functions. 40 tests added in `requirement-ticket-map.test.ts`.)
+- [x] Handle one-to-many requirement-to-ticket relationships (Completed: `groupTicketsByRef()` groups tickets by their ref, `RequirementTicketInfo` stores array of tickets per requirement.)
+- [x] Aggregate constraint satisfaction across tickets sharing same ref (Completed: `computeConstraintStatuses()` aggregates `constraints_satisfied` from all tickets, tracks which ticket IDs satisfy each constraint.)
+- [x] Compute requirement completion status (Completed: `computeRequirementStatus()` computes aggregated status, `getCompletionSummary()` provides module/feature-level progress stats, `filterByPathPrefix()` enables scoped queries.)
 
 ---
 
