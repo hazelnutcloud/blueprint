@@ -21,7 +21,7 @@ import { WorkspaceManager } from "./workspace";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
 import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
-import { computeWorkspaceDiagnostics, computeOrphanedTicketDiagnostics } from "./workspace-diagnostics";
+import { computeWorkspaceDiagnostics, computeOrphanedTicketDiagnostics, computeConstraintMismatchDiagnostics, mergeDiagnosticResults } from "./workspace-diagnostics";
 import { readFile } from "node:fs/promises";
 import { URI } from "vscode-uri";
 
@@ -71,9 +71,15 @@ function publishWorkspaceDiagnostics(): void {
   const ticketFiles = ticketDocumentManager.getAllTicketFiles();
   const orphanedResult = computeOrphanedTicketDiagnostics(symbolIndex, ticketFiles);
   
+  // Compute constraint mismatch diagnostics (tickets claiming undefined constraints)
+  const constraintMismatchResult = computeConstraintMismatchDiagnostics(symbolIndex, ticketFiles);
+  
+  // Merge ticket file diagnostics (orphaned + constraint mismatch)
+  const ticketFileDiagnostics = mergeDiagnosticResults(orphanedResult, constraintMismatchResult);
+  
   // Clear diagnostics from files that no longer have workspace-level issues
   for (const fileUri of filesWithWorkspaceDiagnostics) {
-    if (!result.byFile.has(fileUri) && !orphanedResult.byFile.has(fileUri)) {
+    if (!result.byFile.has(fileUri) && !ticketFileDiagnostics.byFile.has(fileUri)) {
       // This file no longer has workspace diagnostics, but we need to preserve
       // its document-level diagnostics. We send an empty array for workspace diagnostics
       // which will be merged with document diagnostics by the document manager.
@@ -120,13 +126,13 @@ function publishWorkspaceDiagnostics(): void {
     });
   }
   
-  // Publish orphaned ticket diagnostics for .tickets.json files, merging with ticket document diagnostics
-  for (const [fileUri, orphanedDiagnostics] of orphanedResult.byFile) {
+  // Publish ticket file diagnostics (orphaned + constraint mismatch), merging with ticket document diagnostics
+  for (const [fileUri, workspaceDiagnostics] of ticketFileDiagnostics.byFile) {
     const ticketState = ticketDocumentManager.getState(fileUri);
     const ticketDocumentDiagnostics = ticketState?.diagnostics ?? [];
     
-    // Merge ticket document diagnostics with orphaned ticket diagnostics
-    const allDiagnostics = [...ticketDocumentDiagnostics, ...orphanedDiagnostics];
+    // Merge ticket document diagnostics with workspace diagnostics
+    const allDiagnostics = [...ticketDocumentDiagnostics, ...workspaceDiagnostics];
     
     connection.sendDiagnostics({
       uri: fileUri,
@@ -137,10 +143,10 @@ function publishWorkspaceDiagnostics(): void {
   // Update the set of files with workspace diagnostics
   filesWithWorkspaceDiagnostics = new Set([
     ...result.filesWithDiagnostics,
-    ...orphanedResult.filesWithDiagnostics,
+    ...ticketFileDiagnostics.filesWithDiagnostics,
   ]);
   
-  const totalFiles = result.filesWithDiagnostics.length + orphanedResult.filesWithDiagnostics.length;
+  const totalFiles = result.filesWithDiagnostics.length + ticketFileDiagnostics.filesWithDiagnostics.length;
   if (totalFiles > 0) {
     connection.console.log(
       `Published workspace diagnostics for ${totalFiles} files`

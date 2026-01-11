@@ -8,6 +8,7 @@ import {
   computeUnresolvedReferenceDiagnostics,
   computeNoTicketDiagnostics,
   computeOrphanedTicketDiagnostics,
+  computeConstraintMismatchDiagnostics,
   computeWorkspaceDiagnostics,
   mergeDiagnosticResults,
   type TicketFileInfo,
@@ -1081,6 +1082,386 @@ describe("workspace-diagnostics", () => {
         "file:///.blueprint/tickets/auth.tickets.json"
       )!;
       expect(diags).toHaveLength(1);
+    });
+  });
+
+  describe("computeConstraintMismatchDiagnostics", () => {
+    /**
+     * Helper to create a ticket file info object.
+     */
+    function createTicketFileInfo(
+      uri: string,
+      tickets: Ticket[],
+      source: string = "requirements/test.bp"
+    ): TicketFileInfo {
+      return {
+        uri,
+        data: {
+          version: "1.0",
+          source,
+          tickets,
+        },
+      };
+    }
+
+    /**
+     * Helper to create a ticket object with constraints_satisfied.
+     */
+    function createTicket(
+      id: string,
+      ref: string,
+      constraintsSatisfied: string[],
+      status: "pending" | "in-progress" | "complete" | "obsolete" = "pending"
+    ): Ticket {
+      return {
+        id,
+        ref,
+        description: `Ticket for ${ref}`,
+        status,
+        constraints_satisfied: constraintsSatisfied,
+      };
+    }
+
+    test("returns empty result for empty index and no ticket files", () => {
+      const result = computeConstraintMismatchDiagnostics(index, []);
+
+      expect(result.byFile.size).toBe(0);
+      expect(result.filesWithDiagnostics).toHaveLength(0);
+    });
+
+    test("returns empty result when all constraints are valid", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+  
+  @constraint bcrypt
+    Use bcrypt hashing.
+    
+  @constraint rate-limit
+    Rate limit login attempts.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          createTicket("TKT-001", "auth.login.basic-auth", ["bcrypt"]),
+          createTicket("TKT-002", "auth.login.basic-auth", ["rate-limit"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      expect(result.byFile.size).toBe(0);
+      expect(result.filesWithDiagnostics).toHaveLength(0);
+    });
+
+    test("warns when ticket claims undefined constraint", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+  
+  @constraint bcrypt
+    Use bcrypt hashing.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          createTicket("TKT-001", "auth.login.basic-auth", ["bcrypt", "nonexistent-constraint"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      expect(result.filesWithDiagnostics).toContain(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      );
+
+      const diags = result.byFile.get(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      )!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.severity).toBe(DiagnosticSeverity.Warning);
+      expect(diags[0]!.message).toContain("TKT-001");
+      expect(diags[0]!.message).toContain("nonexistent-constraint");
+      expect(diags[0]!.message).toContain("auth.login.basic-auth");
+      expect(diags[0]!.code).toBe("constraint-mismatch");
+      expect(diags[0]!.source).toBe("blueprint");
+    });
+
+    test("warns for multiple undefined constraints in same ticket", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+  
+  @constraint bcrypt
+    Use bcrypt hashing.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          createTicket("TKT-001", "auth.login.basic-auth", ["undefined-one", "undefined-two"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      const diags = result.byFile.get(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      )!;
+      expect(diags).toHaveLength(2);
+
+      const messages = diags.map((d) => d.message);
+      expect(messages.some((m) => m.includes("undefined-one"))).toBe(true);
+      expect(messages.some((m) => m.includes("undefined-two"))).toBe(true);
+    });
+
+    test("warns for undefined constraints across multiple tickets", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+  
+  @constraint bcrypt
+    Use bcrypt hashing.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          createTicket("TKT-001", "auth.login.basic-auth", ["bcrypt"]),
+          createTicket("TKT-002", "auth.login.basic-auth", ["bad-constraint"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      const diags = result.byFile.get(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      )!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("TKT-002");
+      expect(diags[0]!.message).toContain("bad-constraint");
+    });
+
+    test("does not warn for tickets referencing non-existent requirements", () => {
+      // This case is handled by orphaned-ticket diagnostic, not constraint-mismatch
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          // This ticket references a non-existent requirement
+          createTicket("TKT-001", "auth.login.nonexistent", ["some-constraint"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      // Should not produce constraint-mismatch diagnostics
+      // (orphaned-ticket handles this case)
+      expect(result.byFile.size).toBe(0);
+    });
+
+    test("handles requirement with no constraints", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          // Ticket claims a constraint but requirement has none
+          createTicket("TKT-001", "auth.login.basic-auth", ["some-constraint"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      expect(result.filesWithDiagnostics).toContain(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      );
+
+      const diags = result.byFile.get(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      )!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("some-constraint");
+    });
+
+    test("handles empty constraints_satisfied array", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+  
+  @constraint bcrypt
+    Use bcrypt hashing.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          createTicket("TKT-001", "auth.login.basic-auth", []),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      expect(result.byFile.size).toBe(0);
+    });
+
+    test("handles multiple ticket files", () => {
+      const authCode = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+  
+  @constraint bcrypt
+    Use bcrypt hashing.
+`;
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+  
+  @constraint indexed
+    Email must be indexed.
+`;
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          createTicket("TKT-001", "auth.login.basic-auth", ["bad-auth-constraint"]),
+        ]),
+        createTicketFileInfo("file:///.blueprint/tickets/storage.tickets.json", [
+          createTicket("TKT-002", "storage.database.user-table", ["bad-storage-constraint"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      expect(result.filesWithDiagnostics).toHaveLength(2);
+      expect(result.filesWithDiagnostics).toContain(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      );
+      expect(result.filesWithDiagnostics).toContain(
+        "file:///.blueprint/tickets/storage.tickets.json"
+      );
+
+      const authDiags = result.byFile.get(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      )!;
+      expect(authDiags).toHaveLength(1);
+      expect(authDiags[0]!.message).toContain("bad-auth-constraint");
+
+      const storageDiags = result.byFile.get(
+        "file:///.blueprint/tickets/storage.tickets.json"
+      )!;
+      expect(storageDiags).toHaveLength(1);
+      expect(storageDiags[0]!.message).toContain("bad-storage-constraint");
+    });
+
+    test("handles module-level requirements with constraints", () => {
+      const code = `
+@module auth
+
+@requirement global-check
+  Global authentication check.
+  
+  @constraint audit-log
+    Must log all checks.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          createTicket("TKT-001", "auth.global-check", ["audit-log"]),
+          createTicket("TKT-002", "auth.global-check", ["nonexistent"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      const diags = result.byFile.get(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      )!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("TKT-002");
+      expect(diags[0]!.message).toContain("nonexistent");
+    });
+
+    test("case-sensitive constraint matching", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+  
+  @constraint Bcrypt
+    Use bcrypt hashing.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const ticketFiles = [
+        createTicketFileInfo("file:///.blueprint/tickets/auth.tickets.json", [
+          // Different case - should be a mismatch
+          createTicket("TKT-001", "auth.login.basic-auth", ["bcrypt"]),
+        ]),
+      ];
+
+      const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
+
+      // Should warn because "bcrypt" !== "Bcrypt"
+      expect(result.filesWithDiagnostics).toContain(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      );
+
+      const diags = result.byFile.get(
+        "file:///.blueprint/tickets/auth.tickets.json"
+      )!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("bcrypt");
     });
   });
 });

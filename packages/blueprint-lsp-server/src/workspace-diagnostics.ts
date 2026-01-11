@@ -2,6 +2,7 @@ import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node"
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import { DependencyGraph, type CircularDependency } from "./dependency-graph";
 import type { Ticket, TicketFile } from "./tickets";
+import type { RequirementNode } from "./ast";
 
 /**
  * Represents diagnostics for a specific file.
@@ -307,6 +308,86 @@ export function computeOrphanedTicketDiagnostics(
 
     if (orphanedTicketDiagnostics.length > 0) {
       byFile.set(ticketFileInfo.uri, orphanedTicketDiagnostics);
+    }
+  }
+
+  return {
+    byFile,
+    filesWithDiagnostics: Array.from(byFile.keys()),
+  };
+}
+
+/**
+ * Compute diagnostics for tickets that claim to satisfy constraints that don't exist
+ * in the corresponding requirement definition.
+ *
+ * Per SPEC.md Section 5.8:
+ * - Warning | Constraint identifier mismatch between `.bp` and ticket
+ *
+ * A mismatch occurs when a ticket's `constraints_satisfied` array contains
+ * a constraint identifier that is not defined in the requirement's `@constraint` list.
+ *
+ * These diagnostics are reported on the .tickets.json files.
+ *
+ * @param symbolIndex The cross-file symbol index
+ * @param ticketFiles Array of ticket files with their URIs
+ * @returns Diagnostics grouped by file URI (ticket file URIs)
+ */
+export function computeConstraintMismatchDiagnostics(
+  symbolIndex: CrossFileSymbolIndex,
+  ticketFiles: TicketFileInfo[]
+): WorkspaceDiagnosticsResult {
+  const byFile = new Map<string, Diagnostic[]>();
+
+  // Build a map from requirement path to set of valid constraint names
+  const requirementConstraints = new Map<string, Set<string>>();
+  const requirements = symbolIndex.getSymbolsByKind("requirement");
+
+  for (const reqSymbol of requirements) {
+    const reqNode = reqSymbol.node as RequirementNode;
+    const constraintNames = new Set<string>();
+    for (const constraint of reqNode.constraints) {
+      constraintNames.add(constraint.name);
+    }
+    requirementConstraints.set(reqSymbol.path, constraintNames);
+  }
+
+  // Check each ticket file for constraint mismatches
+  for (const ticketFileInfo of ticketFiles) {
+    const mismatchDiagnostics: Diagnostic[] = [];
+
+    for (const ticket of ticketFileInfo.data.tickets) {
+      // Get the valid constraints for this ticket's requirement
+      const validConstraints = requirementConstraints.get(ticket.ref);
+
+      // If the requirement doesn't exist, skip (handled by orphaned-ticket diagnostic)
+      if (!validConstraints) {
+        continue;
+      }
+
+      // Check each constraint the ticket claims to satisfy
+      for (const constraintName of ticket.constraints_satisfied) {
+        if (!validConstraints.has(constraintName)) {
+          const diagnostic: Diagnostic = {
+            severity: DiagnosticSeverity.Warning,
+            range: {
+              // We point to line 0 since we don't have precise location info in JSON
+              // A future enhancement could locate the exact position within the JSON
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 0 },
+            },
+            message: `Ticket '${ticket.id}' claims to satisfy undefined constraint '${constraintName}' for requirement '${ticket.ref}'`,
+            source: "blueprint",
+            code: "constraint-mismatch",
+          };
+
+          mismatchDiagnostics.push(diagnostic);
+        }
+      }
+    }
+
+    if (mismatchDiagnostics.length > 0) {
+      byFile.set(ticketFileInfo.uri, mismatchDiagnostics);
     }
   }
 
