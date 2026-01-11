@@ -13,6 +13,7 @@ import type {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initializeParser, cleanupParser } from "./parser";
 import { DocumentManager } from "./documents";
+import { WorkspaceManager } from "./workspace";
 
 // Create a connection for the server using Node's IPC as transport.
 // Also includes all proposed protocol features.
@@ -23,6 +24,9 @@ const documents = new TextDocuments(TextDocument);
 
 // Create the document manager for tracking parsed state
 const documentManager = new DocumentManager(connection);
+
+// Create the workspace manager for scanning workspace folders
+const workspaceManager = new WorkspaceManager(connection);
 
 // Track whether the client supports dynamic registration for configuration changes
 let hasConfigurationCapability = false;
@@ -41,6 +45,11 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasWorkspaceFolderCapability = !!(
     capabilities.workspace && !!capabilities.workspace.workspaceFolders
   );
+
+  // Store initial workspace folders
+  if (hasWorkspaceFolderCapability && params.workspaceFolders) {
+    workspaceManager.setWorkspaceFolders(params.workspaceFolders);
+  }
 
   // Configure text document sync with save notifications
   const textDocumentSync: TextDocumentSyncOptions = {
@@ -78,8 +87,9 @@ connection.onInitialized(async () => {
     );
   }
   if (hasWorkspaceFolderCapability) {
-    connection.workspace.onDidChangeWorkspaceFolders((_event) => {
+    connection.workspace.onDidChangeWorkspaceFolders(async (event) => {
       connection.console.log("Workspace folder change event received.");
+      await workspaceManager.handleWorkspaceFoldersChange(event);
     });
   }
 
@@ -94,6 +104,13 @@ connection.onInitialized(async () => {
     connection.window.showErrorMessage(
       "Blueprint LSP: Parser initialization failed. Syntax highlighting and diagnostics will be unavailable. Please check that the tree-sitter-blueprint WASM file is properly installed."
     );
+  }
+
+  // Scan workspace folders for .bp files after parser is initialized
+  if (hasWorkspaceFolderCapability) {
+    workspaceManager.scanAllFolders().catch((error) => {
+      connection.console.error(`Error scanning workspace folders: ${error}`);
+    });
   }
 
   connection.console.log("Blueprint LSP server ready");
@@ -131,6 +148,9 @@ connection.onShutdown(() => {
   
   // Clean up document manager resources (syntax trees)
   documentManager.cleanup();
+  
+  // Clean up workspace manager resources
+  workspaceManager.cleanup();
   
   // Clean up parser resources
   cleanupParser();
