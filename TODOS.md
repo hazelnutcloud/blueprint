@@ -95,16 +95,16 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### 3.3 Document Parsing & AST
 - [x] Integrate tree-sitter parser into server (via web-tree-sitter WASM)
-- [ ] Create AST node types mirroring Blueprint hierarchy:
-  - [ ] `DescriptionNode`
-  - [ ] `ModuleNode`
-  - [ ] `FeatureNode`
-  - [ ] `RequirementNode`
-  - [ ] `DependsOnNode`
-  - [ ] `ConstraintNode`
-- [ ] Implement tree-sitter to AST transformation
-- [ ] Build source location tracking for all nodes
-- [ ] Create document symbol table (identifier → node mapping)
+- [x] Create AST node types mirroring Blueprint hierarchy:
+  - [x] `DescriptionNode`
+  - [x] `ModuleNode`
+  - [x] `FeatureNode`
+  - [x] `RequirementNode`
+  - [x] `DependsOnNode`
+  - [x] `ConstraintNode`
+- [x] Implement tree-sitter to AST transformation
+- [x] Build source location tracking for all nodes
+- [x] Create document symbol table (identifier → node mapping)
 
 ### 3.4 Workspace Indexing
 - [ ] Implement workspace folder scanning for `.bp` files
@@ -326,8 +326,8 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 12: Testing
 
 ### 12.1 Unit Tests
-- [ ] Test tree-sitter grammar with corpus files
-- [ ] Test AST transformation
+- [x] Test tree-sitter grammar with corpus files
+- [x] Test AST transformation
 - [ ] Test dependency graph construction
 - [ ] Test cycle detection algorithm
 - [ ] Test ticket file parsing and validation

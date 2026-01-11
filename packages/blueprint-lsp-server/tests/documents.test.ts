@@ -33,7 +33,7 @@ describe("Parser", () => {
     const tree = parseDocument(code);
     expect(tree).not.toBeNull();
     
-    const moduleNode = tree!.rootNode.children[0];
+    const moduleNode = tree!.rootNode.children[0]!;
     expect(moduleNode.type).toBe("module_block");
   });
 
