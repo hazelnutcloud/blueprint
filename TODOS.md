@@ -154,9 +154,9 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Compute transitive dependencies (Completed: `getTransitiveDependencies()` and `getTransitiveDependents()` methods compute transitive closures.)
 
 ### 5.3 Blocking Status Computation
-- [ ] Determine if a requirement is blocked by incomplete dependencies
-- [ ] Propagate blocking status through hierarchy
-- [ ] Cache and invalidate blocking status on changes
+- [x] Determine if a requirement is blocked by incomplete dependencies (Completed: Added `blocking-status.ts` module with `computeBlockingInfo()` that checks direct and transitive dependencies against ticket status. Returns `BlockingInfo` with status (`not-blocked`, `blocked`, `in-cycle`) and lists of `BlockerInfo` objects. 27 tests added in `blocking-status.test.ts`.)
+- [x] Propagate blocking status through hierarchy (Completed: `propagateBlockingToHierarchy()` aggregates blocking status from requirements up to features and modules. In-cycle status takes precedence over blocked.)
+- [x] Cache and invalidate blocking status on changes (Completed: Added `BlockingStatusCache` type with `createBlockingStatusCache()`, `invalidateBlockingStatusCache()`, `updateBlockingStatusCache()`, and `shouldInvalidateCache()` functions for cache management.)
 
 ---
 
