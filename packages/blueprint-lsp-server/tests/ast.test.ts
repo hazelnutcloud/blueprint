@@ -432,6 +432,34 @@ describe("AST Transformation", () => {
     });
   });
 
+  describe("error recovery", () => {
+    test("handles multiple @description blocks (uses last one)", () => {
+      const code = `
+@description
+  First description.
+
+@description
+  Second description.
+
+@module test
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      // The parse tree should have an error (grammar only allows one @description)
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      // transformToAST should still work, using the last description block
+      const ast = transformToAST(tree!);
+
+      expect(ast.description).not.toBeNull();
+      // The current behavior is to use the last description block encountered
+      expect(ast.description!.text).toContain("Second description");
+      expect(ast.modules).toHaveLength(1);
+      expect(ast.modules[0]!.name).toBe("test");
+    });
+  });
+
   describe("complex document", () => {
     test("transforms complete Blueprint document", () => {
       const code = `

@@ -482,7 +482,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### Test Coverage Gaps
 
-- [ ] **Add test for multiple @description blocks** - Should verify behavior when a document contains multiple `@description` blocks.
+- [x] **Add test for multiple @description blocks** - Should verify behavior when a document contains multiple `@description` blocks. (Completed: Added test in `ast.test.ts` that verifies the grammar produces an ERROR node for multiple descriptions, and that `transformToAST` uses the last description block.)
 
 - [ ] **Add test for @description after @module** - Should verify the AST still parses (for error recovery) but diagnostics can detect the invalid ordering.
 
