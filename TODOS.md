@@ -183,7 +183,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Info diagnostic when requirement is blocked by pending dependencies
 
 ### 6.5 Diagnostic Publishing
-- [ ] Implement debounced diagnostic publishing
+- [x] Implement debounced diagnostic publishing (Completed: Added `scheduleWorkspaceDiagnostics()` function with 150ms debounce delay in `index.ts`. Uses `setTimeout`/`clearTimeout` pattern to batch rapid changes. Timer is cancelled on shutdown to prevent callbacks after cleanup.)
 - [ ] Clear diagnostics when document is closed
 - [ ] Update diagnostics on ticket file changes
 

@@ -56,13 +56,39 @@ let parserInitialized = false;
 // Used to clear diagnostics when they're no longer relevant
 let filesWithWorkspaceDiagnostics = new Set<string>();
 
+// Debounce timer for workspace diagnostics publishing
+let workspaceDiagnosticsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Debounce delay in milliseconds for workspace diagnostics
+// This allows batching rapid changes together for better performance
+const WORKSPACE_DIAGNOSTICS_DEBOUNCE_MS = 150;
+
 /**
- * Publish workspace-level diagnostics (circular dependencies, unresolved references, no-ticket warnings, orphaned tickets).
+ * Schedule workspace diagnostics to be published after a debounce delay.
+ * If called multiple times within the delay period, only the last call will execute.
+ * This prevents excessive recomputation during rapid typing.
+ */
+function scheduleWorkspaceDiagnostics(): void {
+  // Clear any existing timer
+  if (workspaceDiagnosticsDebounceTimer !== null) {
+    clearTimeout(workspaceDiagnosticsDebounceTimer);
+  }
+  
+  // Schedule new diagnostic computation
+  workspaceDiagnosticsDebounceTimer = setTimeout(() => {
+    workspaceDiagnosticsDebounceTimer = null;
+    publishWorkspaceDiagnosticsImmediate();
+  }, WORKSPACE_DIAGNOSTICS_DEBOUNCE_MS);
+}
+
+/**
+ * Publish workspace-level diagnostics immediately (internal implementation).
+ * For debounced publishing, use scheduleWorkspaceDiagnostics() instead.
  * 
  * This function computes diagnostics across all indexed files and publishes them.
  * It also clears diagnostics from files that no longer have issues.
  */
-function publishWorkspaceDiagnostics(): void {
+function publishWorkspaceDiagnosticsImmediate(): void {
   // Get all tickets from the ticket document manager
   const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
   const result = computeWorkspaceDiagnostics(symbolIndex, allTickets);
@@ -264,7 +290,7 @@ connection.onInitialized(async () => {
     );
     
     // Publish workspace-level diagnostics after indexing
-    publishWorkspaceDiagnostics();
+    scheduleWorkspaceDiagnostics();
   });
 
   // Scan workspace folders for .bp files after parser is initialized
@@ -319,7 +345,7 @@ connection.onDidChangeWatchedFiles(async (params) => {
           workspaceManager.addFile(change.uri, filePath);
           if (parserInitialized) {
             await indexFile(change.uri, filePath);
-            publishWorkspaceDiagnostics();
+            scheduleWorkspaceDiagnostics();
           }
           break;
         }
@@ -328,7 +354,7 @@ connection.onDidChangeWatchedFiles(async (params) => {
           // When a file is open, document change events handle updates
           if (!documents.get(change.uri) && parserInitialized) {
             await indexFile(change.uri, filePath);
-            publishWorkspaceDiagnostics();
+            scheduleWorkspaceDiagnostics();
           }
           break;
         }
@@ -339,7 +365,7 @@ connection.onDidChangeWatchedFiles(async (params) => {
           // Also clean up document manager state if it exists
           documentManager.onDocumentClose(change.uri);
           // Re-publish workspace diagnostics after file removal
-          publishWorkspaceDiagnostics();
+          scheduleWorkspaceDiagnostics();
           break;
         }
       }
@@ -402,7 +428,7 @@ documents.onDidOpen((event) => {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
       // Publish workspace diagnostics after indexing
-      publishWorkspaceDiagnostics();
+      scheduleWorkspaceDiagnostics();
     }
   }
 });
@@ -431,7 +457,7 @@ documents.onDidChangeContent((event) => {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
       // Publish workspace diagnostics after indexing
-      publishWorkspaceDiagnostics();
+      scheduleWorkspaceDiagnostics();
     }
   }
 });
@@ -477,13 +503,19 @@ documents.onDidSave((event) => {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
       // Publish workspace diagnostics after indexing
-      publishWorkspaceDiagnostics();
+      scheduleWorkspaceDiagnostics();
     }
   }
 });
 
 connection.onShutdown(() => {
   connection.console.log("Blueprint LSP server shutting down");
+  
+  // Cancel any pending debounced diagnostics
+  if (workspaceDiagnosticsDebounceTimer !== null) {
+    clearTimeout(workspaceDiagnosticsDebounceTimer);
+    workspaceDiagnosticsDebounceTimer = null;
+  }
   
   // Clean up document manager resources (syntax trees)
   documentManager.cleanup();
