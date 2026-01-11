@@ -74,9 +74,11 @@ async function doInitialize(): Promise<Parser> {
 
 /**
  * Parse a Blueprint document and return the syntax tree.
+ * Returns null if the parser has not been initialized.
  */
 export function parseDocument(text: string): Tree | null {
   if (!parser) {
+    console.warn("[Blueprint LSP] parseDocument called before parser initialization");
     return null;
   }
   return parser.parse(text);

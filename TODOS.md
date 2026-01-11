@@ -443,7 +443,7 @@ easier to distribute and works across all platforms without native compilation. 
 ### Error Handling
 
 - [x] **Send client notification on parser failure** - If parser initialization fails, the server continues but all document operations are no-ops. Should notify the client about degraded functionality. (Fixed: Added `connection.window.showErrorMessage()` in `onInitialized` handler to notify client when parser fails.)
-- [ ] **Add warning in `parseDocument` when parser not initialized** - Currently returns `null` silently; consider logging a warning for debugging.
+- [x] **Add warning in `parseDocument` when parser not initialized** - Currently returns `null` silently; consider logging a warning for debugging. (Fixed: Added `console.warn()` in `parseDocument()` when parser is not initialized.)
 
 ### Test Coverage
 
