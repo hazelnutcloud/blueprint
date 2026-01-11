@@ -12,7 +12,9 @@ import type {
   InitializeParams,
   InitializeResult,
   TextDocumentSyncOptions,
+  SemanticTokensParams,
 } from "vscode-languageserver/node";
+import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initializeParser, cleanupParser, parseDocument } from "./parser";
 import { DocumentManager } from "./documents";
@@ -212,6 +214,11 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   const result: InitializeResult = {
     capabilities: {
       textDocumentSync,
+      semanticTokensProvider: {
+        legend: semanticTokensLegend,
+        full: true,
+        range: false,
+      },
     },
   };
 
@@ -520,6 +527,39 @@ documents.onDidSave((event) => {
       scheduleWorkspaceDiagnostics();
     }
   }
+});
+
+// Handle semantic tokens request
+connection.languages.semanticTokens.on((params: SemanticTokensParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return { data: [] };
+  }
+
+  const filePath = getFilePath(params.textDocument.uri);
+  if (!isBlueprintFilePath(filePath)) {
+    return { data: [] };
+  }
+
+  if (!parserInitialized) {
+    connection.console.warn("Parser not initialized, cannot provide semantic tokens");
+    return { data: [] };
+  }
+
+  // Get the parse tree from the document manager
+  const state = documentManager.getState(params.textDocument.uri);
+  if (!state?.tree) {
+    // Try to parse the document if not already parsed
+    const tree = parseDocument(document.getText());
+    if (!tree) {
+      return { data: [] };
+    }
+    const tokens = buildSemanticTokens(tree);
+    tree.delete();
+    return tokens;
+  }
+
+  return buildSemanticTokens(state.tree);
 });
 
 connection.onShutdown(() => {

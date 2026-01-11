@@ -192,17 +192,17 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 7: Semantic Tokens (Syntax Highlighting)
 
 ### 7.1 Token Type Registration
-- [ ] Register semantic token types:
-  - [ ] `keyword` (for @description, @module, @feature, @requirement, @depends-on, @constraint)
-  - [ ] `variable` (for identifiers)
-  - [ ] `type` (for references)
-  - [ ] `comment` (for comments)
-- [ ] Register semantic token modifiers (declaration, definition, reference)
+- [x] Register semantic token types (Completed: Added `semantic-tokens.ts` module with `semanticTokensLegend` defining token types and modifiers. Integrated with LSP server in `index.ts` via `semanticTokensProvider` capability. 18 tests added in `semantic-tokens.test.ts`.):
+  - [x] `keyword` (for @description, @module, @feature, @requirement, @depends-on, @constraint)
+  - [x] `variable` (for identifiers)
+  - [x] `type` (for references)
+  - [x] `comment` (for comments)
+- [x] Register semantic token modifiers (declaration, definition)
 
 ### 7.2 Token Generation
-- [ ] Implement `textDocument/semanticTokens/full` handler
-- [ ] Walk AST and emit tokens for each element
-- [ ] Handle token encoding (delta line, delta column, length, type, modifiers)
+- [x] Implement `textDocument/semanticTokens/full` handler (Completed: Added `connection.languages.semanticTokens.on()` handler in `index.ts` that calls `buildSemanticTokens()` from `semantic-tokens.ts`.)
+- [x] Walk AST and emit tokens for each element (Completed: `walkTree()` and `processNode()` functions recursively traverse the tree-sitter parse tree.)
+- [x] Handle token encoding (delta line, delta column, length, type, modifiers) (Completed: Uses `SemanticTokensBuilder` from vscode-languageserver with proper sorting of tokens before building.)
 
 ### 7.3 Progress-Based Highlighting
 - [ ] Emit tokens with status-based modifiers for requirements:
