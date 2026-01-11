@@ -4,6 +4,9 @@ import {
   ProposedFeatures,
   TextDocumentSyncKind,
   DidChangeConfigurationNotification,
+  DidChangeWatchedFilesNotification,
+  FileChangeType,
+  WatchKind,
 } from "vscode-languageserver/node";
 import type {
   InitializeParams,
@@ -43,6 +46,7 @@ const symbolIndex = new CrossFileSymbolIndex();
 // Track whether the client supports dynamic registration for configuration changes
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
+let hasDidChangeWatchedFilesCapability = false;
 
 // Track parser initialization state
 let parserInitialized = false;
@@ -56,6 +60,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   );
   hasWorkspaceFolderCapability = !!(
     capabilities.workspace && !!capabilities.workspace.workspaceFolders
+  );
+  hasDidChangeWatchedFilesCapability = !!(
+    capabilities.workspace &&
+    !!capabilities.workspace.didChangeWatchedFiles?.dynamicRegistration
   );
 
   // Store initial workspace folders
@@ -103,6 +111,20 @@ connection.onInitialized(async () => {
       connection.console.log("Workspace folder change event received.");
       await workspaceManager.handleWorkspaceFoldersChange(event);
     });
+  }
+
+  // Register file watcher for .tickets.json files
+  if (hasDidChangeWatchedFilesCapability) {
+    connection.client.register(DidChangeWatchedFilesNotification.type, {
+      watchers: [
+        {
+          // Watch all .tickets.json files in the .blueprint/tickets directory
+          globPattern: "**/.blueprint/tickets/*.tickets.json",
+          kind: WatchKind.Create | WatchKind.Change | WatchKind.Delete,
+        },
+      ],
+    });
+    connection.console.log("Registered file watcher for .tickets.json files");
   }
 
   // Initialize the tree-sitter parser
@@ -167,6 +189,45 @@ async function indexFile(fileUri: string, filePath: string): Promise<void> {
 function getFilePath(uri: string): string {
   return URI.parse(uri).fsPath;
 }
+
+// Handle file system changes for watched files (.tickets.json)
+connection.onDidChangeWatchedFiles(async (params) => {
+  for (const change of params.changes) {
+    const filePath = getFilePath(change.uri);
+
+    // Only process .tickets.json files
+    if (!isTicketFilePath(filePath)) {
+      continue;
+    }
+
+    connection.console.log(
+      `Ticket file ${change.type === FileChangeType.Created ? "created" : change.type === FileChangeType.Changed ? "changed" : "deleted"}: ${filePath}`
+    );
+
+    switch (change.type) {
+      case FileChangeType.Created:
+      case FileChangeType.Changed: {
+        // Read the file and update the ticket document manager
+        try {
+          const content = await readFile(filePath, "utf-8");
+          // Use onDocumentChange to validate and update state
+          // We use version 0 for external file changes since we don't have a real version
+          ticketDocumentManager.onDocumentChange(change.uri, 0, content);
+        } catch (error) {
+          connection.console.error(
+            `Error reading ticket file ${filePath}: ${error}`
+          );
+        }
+        break;
+      }
+      case FileChangeType.Deleted: {
+        // Clean up the ticket document state
+        ticketDocumentManager.onDocumentClose(change.uri);
+        break;
+      }
+    }
+  }
+});
 
 // Document lifecycle events
 documents.onDidOpen((event) => {

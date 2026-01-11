@@ -120,7 +120,7 @@ easier to distribute and works across all platforms without native compilation. 
 ### 4.1 Ticket File Discovery
 - [x] Implement ticket file path resolution (`requirements/foo.bp` → `.blueprint/tickets/foo.tickets.json`) (Completed: Added `tickets.ts` module with `resolveTicketFilePath()`, `resolveTicketFileUri()`, `ticketFileExists()`, `resolveBpFileBaseName()`, `getTicketFileName()`, `isTicketFilePath()`, and `isBlueprintFilePath()` functions. Supports configurable tickets path via parameter. 27 tests added in `tickets.test.ts`.)
 - [x] Handle configurable tickets path from settings (Completed: All ticket path functions accept an optional `ticketsPath` parameter that defaults to `.blueprint/tickets` per SPEC.md Section 5.9.)
-- [ ] Set up file watcher for `.tickets.json` changes
+- [x] Set up file watcher for `.tickets.json` changes (Completed: Added `DidChangeWatchedFilesNotification` registration in `onInitialized` for `**/.blueprint/tickets/*.tickets.json` glob pattern. Added `connection.onDidChangeWatchedFiles` handler that processes `Created`, `Changed`, and `Deleted` events, reading file content and updating `TicketDocumentManager` state accordingly.)
 
 ### 4.2 Ticket Schema Validation
 - [x] Define TypeScript interfaces for ticket schema (Completed: Using valibot schemas in `tickets.ts` with types inferred via `v.InferOutput<>`. Full SPEC.md Section 4 compliance):
