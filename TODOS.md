@@ -447,7 +447,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### Test Coverage
 
-- [ ] **Complete "detects parse errors" test** - Test at `documents.test.ts:83-91` has no assertions. Should verify `tree.rootNode.hasError` is `true` or that error nodes exist.
+- [x] **Complete "detects parse errors" test** - Test at `documents.test.ts:83-91` has no assertions. Should verify `tree.rootNode.hasError` is `true` or that error nodes exist. (Completed: Added assertions verifying `tree.rootNode.hasError` is `true` and that an `ERROR` node exists in the parse tree children.)
 - [ ] **Add edge case tests**:
   - [ ] Empty document parsing
   - [ ] Document with only comments

@@ -97,7 +97,7 @@ describe("Parser", () => {
   });
 
   test("detects parse errors", () => {
-    // Invalid syntax - @requirement outside of @feature
+    // Invalid syntax - @requirement outside of @feature/@module
     const code = `
 @requirement orphan
   This requirement has no parent feature.
@@ -105,8 +105,15 @@ describe("Parser", () => {
 
     const tree = parseDocument(code);
     expect(tree).not.toBeNull();
-    // The grammar should produce an error for invalid structure
-    // (exact behavior depends on grammar definition)
+    
+    // The grammar produces an error for invalid structure
+    expect(tree!.rootNode.hasError).toBe(true);
+    
+    // Verify an ERROR node exists in the parse tree
+    const hasErrorNode = tree!.rootNode.children.some(
+      (child) => child.type === "ERROR"
+    );
+    expect(hasErrorNode).toBe(true);
   });
 
   test("parses comments correctly", () => {
