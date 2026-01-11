@@ -112,6 +112,28 @@ This is a monorepo with packages in `packages/`:
 - `blueprint-lsp-client` - VS Code extension client
 - `tree-sitter-blueprint` - Tree-sitter grammar for Blueprint
 
+## Schema Validation
+
+Use `valibot` for JSON schema validation (e.g., `.tickets.json` files). Don't use `zod` or `ajv`.
+
+```ts
+import * as v from "valibot";
+
+const MySchema = v.object({
+  name: v.string(),
+  count: v.number(),
+});
+
+type MyType = v.InferOutput<typeof MySchema>;
+
+const result = v.safeParse(MySchema, data);
+if (result.success) {
+  console.log(result.output);
+} else {
+  console.log(result.issues);
+}
+```
+
 ## Type Checking
 
 Type check individual packages:

@@ -9,6 +9,7 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 - Package Manager: Bun
 - Parser: tree-sitter
 - LSP Framework: vscode-languageserver + vscode-languageclient
+- Schema Validation: valibot (for JSON files like .tickets.json)
 - Testing: Bun
 - Bundling: zshy
 
@@ -122,12 +123,12 @@ easier to distribute and works across all platforms without native compilation. 
 - [ ] Set up file watcher for `.tickets.json` changes
 
 ### 4.2 Ticket Schema Validation
-- [ ] Define TypeScript interfaces for ticket schema:
-  - [ ] `TicketFile` (version, source, tickets array)
-  - [ ] `Ticket` (id, ref, description, status, constraints_satisfied, implementation)
-  - [ ] `Implementation` (files, tests)
-  - [ ] `TicketStatus` enum (pending, in-progress, complete, obsolete)
-- [ ] Implement JSON schema validation for ticket files
+- [x] Define TypeScript interfaces for ticket schema (Completed: Using valibot schemas in `tickets.ts` with types inferred via `v.InferOutput<>`. Full SPEC.md Section 4 compliance):
+  - [x] `TicketFileSchema` / `TicketFile` (version, source, tickets array)
+  - [x] `TicketSchema` / `Ticket` (id, ref, description, status, constraints_satisfied, implementation)
+  - [x] `TicketImplementationSchema` / `TicketImplementation` (files, tests)
+  - [x] `TicketStatusSchema` / `TicketStatus` (pending, in-progress, complete, obsolete)
+- [x] Implement JSON schema validation for ticket files (Completed: Using valibot's `v.safeParse()` with custom error formatting. Added `validateTicketFile()`, `parseTicketFileContent()`, and `parseTicketFile()` functions. Includes duplicate ticket ID detection. 40 new tests in `tickets.test.ts`.)
 - [ ] Report schema validation errors as diagnostics
 
 ### 4.3 Requirement-Ticket Correlation

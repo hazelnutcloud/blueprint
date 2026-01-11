@@ -9,6 +9,17 @@ import {
   isBlueprintFilePath,
   DEFAULT_TICKETS_PATH,
   TICKET_FILE_EXTENSION,
+  TICKET_SCHEMA_VERSION,
+  VALID_TICKET_STATUSES,
+  validateTicketFile,
+  parseTicketFileContent,
+  parseTicketFile,
+  type Ticket,
+  type TicketFile,
+  type TicketImplementation,
+  type TicketStatus,
+  type TicketValidationError,
+  type TicketValidationResult,
 } from "../src/tickets";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -268,6 +279,580 @@ describe("tickets", () => {
       expect(isBlueprintFilePath("/project/auth.json")).toBe(false);
       expect(isBlueprintFilePath("/project/auth.bpp")).toBe(false);
       expect(isBlueprintFilePath("/project/bp")).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // Ticket Schema Validation Tests
+  // ==========================================================================
+
+  describe("schema constants", () => {
+    test("TICKET_SCHEMA_VERSION is 1.0", () => {
+      expect(TICKET_SCHEMA_VERSION).toBe("1.0");
+    });
+
+    test("VALID_TICKET_STATUSES contains all valid statuses", () => {
+      expect(VALID_TICKET_STATUSES).toContain("pending");
+      expect(VALID_TICKET_STATUSES).toContain("in-progress");
+      expect(VALID_TICKET_STATUSES).toContain("complete");
+      expect(VALID_TICKET_STATUSES).toContain("obsolete");
+      expect(VALID_TICKET_STATUSES).toHaveLength(4);
+    });
+
+    test("blocked is NOT a valid ticket status (per SPEC)", () => {
+      expect(VALID_TICKET_STATUSES).not.toContain("blocked");
+    });
+  });
+
+  describe("validateTicketFile", () => {
+    const validTicket: Ticket = {
+      id: "TKT-001",
+      ref: "authentication.login.basic-auth",
+      description: "Implement email/password login endpoint",
+      status: "in-progress",
+      constraints_satisfied: ["bcrypt-cost"],
+      implementation: {
+        files: ["src/auth/login.ts"],
+        tests: ["tests/auth/login.test.ts"],
+      },
+    };
+
+    const validTicketFile: TicketFile = {
+      version: "1.0",
+      source: "requirements/auth.bp",
+      tickets: [validTicket],
+    };
+
+    test("validates a correct ticket file", () => {
+      const result = validateTicketFile(validTicketFile);
+      
+      expect(result.valid).toBe(true);
+      expect(result.data).not.toBeNull();
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test("validates ticket file with empty tickets array", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/empty.bp",
+        tickets: [],
+      });
+      
+      expect(result.valid).toBe(true);
+      expect(result.data?.tickets).toHaveLength(0);
+    });
+
+    test("validates ticket file with multiple tickets", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [
+          { ...validTicket, id: "TKT-001" },
+          { ...validTicket, id: "TKT-002", status: "pending" },
+          { ...validTicket, id: "TKT-003", status: "complete" },
+        ],
+      });
+      
+      expect(result.valid).toBe(true);
+      expect(result.data?.tickets).toHaveLength(3);
+    });
+
+    test("validates ticket without implementation (optional field)", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+        }],
+      });
+      
+      expect(result.valid).toBe(true);
+    });
+
+    test("validates ticket with empty implementation object", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+          implementation: {},
+        }],
+      });
+      
+      expect(result.valid).toBe(true);
+    });
+
+    test("validates all ticket statuses", () => {
+      for (const status of VALID_TICKET_STATUSES) {
+        const result = validateTicketFile({
+          version: "1.0",
+          source: "requirements/auth.bp",
+          tickets: [{
+            id: "TKT-001",
+            ref: "module.feature.req",
+            description: "Test",
+            status,
+            constraints_satisfied: [],
+          }],
+        });
+        
+        expect(result.valid).toBe(true);
+      }
+    });
+
+    // Error cases
+
+    test("rejects non-object input", () => {
+      expect(validateTicketFile(null).valid).toBe(false);
+      expect(validateTicketFile(undefined).valid).toBe(false);
+      expect(validateTicketFile("string").valid).toBe(false);
+      expect(validateTicketFile(123).valid).toBe(false);
+      expect(validateTicketFile([]).valid).toBe(false);
+    });
+
+    test("rejects missing version", () => {
+      const result = validateTicketFile({
+        source: "requirements/auth.bp",
+        tickets: [],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "version")).toBe(true);
+    });
+
+    test("rejects non-string version", () => {
+      const result = validateTicketFile({
+        version: 1.0,
+        source: "requirements/auth.bp",
+        tickets: [],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "version")).toBe(true);
+    });
+
+    test("warns about unknown version but still validates", () => {
+      const result = validateTicketFile({
+        version: "2.0",
+        source: "requirements/auth.bp",
+        tickets: [],
+      });
+      
+      // Valid because version warning is non-critical
+      expect(result.valid).toBe(true);
+      expect(result.errors.some(e => e.message.includes("unknown schema version"))).toBe(true);
+    });
+
+    test("rejects missing source", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        tickets: [],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "source")).toBe(true);
+    });
+
+    test("rejects missing tickets array", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets")).toBe(true);
+    });
+
+    test("rejects non-array tickets", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: {},
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets")).toBe(true);
+    });
+
+    test("rejects duplicate ticket IDs", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [
+          { ...validTicket, id: "TKT-001" },
+          { ...validTicket, id: "TKT-001" }, // duplicate
+        ],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.message.includes("duplicate ticket id"))).toBe(true);
+    });
+
+    test("rejects non-object ticket", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: ["not an object"],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.message === "ticket must be an object")).toBe(true);
+    });
+
+    test("rejects missing ticket.id", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].id")).toBe(true);
+    });
+
+    test("rejects missing ticket.ref", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].ref")).toBe(true);
+    });
+
+    test("rejects missing ticket.description", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          status: "pending",
+          constraints_satisfied: [],
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].description")).toBe(true);
+    });
+
+    test("rejects missing ticket.status", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          constraints_satisfied: [],
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].status")).toBe(true);
+    });
+
+    test("rejects invalid ticket.status", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "blocked", // Not a valid status per SPEC
+          constraints_satisfied: [],
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].status")).toBe(true);
+    });
+
+    test("rejects missing ticket.constraints_satisfied", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].constraints_satisfied")).toBe(true);
+    });
+
+    test("rejects non-array constraints_satisfied", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: "bcrypt-cost",
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].constraints_satisfied")).toBe(true);
+    });
+
+    test("rejects non-string in constraints_satisfied", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: ["valid", 123, "also-valid"],
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].constraints_satisfied[1]")).toBe(true);
+    });
+
+    test("rejects non-object implementation", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+          implementation: "not an object",
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].implementation")).toBe(true);
+    });
+
+    test("rejects non-array implementation.files", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+          implementation: { files: "not an array" },
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].implementation.files")).toBe(true);
+    });
+
+    test("rejects non-string in implementation.files", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+          implementation: { files: ["valid.ts", 123] },
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].implementation.files[1]")).toBe(true);
+    });
+
+    test("rejects non-array implementation.tests", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+          implementation: { tests: "not an array" },
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].implementation.tests")).toBe(true);
+    });
+
+    test("rejects non-string in implementation.tests", () => {
+      const result = validateTicketFile({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "module.feature.req",
+          description: "Test",
+          status: "pending",
+          constraints_satisfied: [],
+          implementation: { tests: [null] },
+        }],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "tickets[0].implementation.tests[0]")).toBe(true);
+    });
+
+    test("collects multiple errors", () => {
+      const result = validateTicketFile({
+        version: 1.0, // error: not a string
+        // missing source
+        tickets: [
+          {
+            // missing id
+            ref: 123, // error: not a string
+            description: "Test",
+            status: "invalid", // error: invalid status
+            constraints_satisfied: [],
+          },
+        ],
+      });
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(3);
+    });
+  });
+
+  describe("parseTicketFileContent", () => {
+    test("parses valid JSON", () => {
+      const json = JSON.stringify({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [],
+      });
+      
+      const result = parseTicketFileContent(json);
+      
+      expect(result.valid).toBe(true);
+      expect(result.data).not.toBeNull();
+    });
+
+    test("returns error for invalid JSON", () => {
+      const result = parseTicketFileContent("{ not valid json }");
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]?.message).toContain("invalid JSON");
+    });
+
+    test("returns error for empty string", () => {
+      const result = parseTicketFileContent("");
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]?.message).toContain("invalid JSON");
+    });
+
+    test("validates parsed content", () => {
+      const json = JSON.stringify({
+        version: "1.0",
+        // missing source and tickets
+      });
+      
+      const result = parseTicketFileContent(json);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.path === "source")).toBe(true);
+    });
+  });
+
+  describe("parseTicketFile (from disk)", () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+      testDir = join(tmpdir(), `blueprint-tickets-schema-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      await mkdir(testDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      await rm(testDir, { recursive: true, force: true });
+    });
+
+    test("reads and validates a valid ticket file", async () => {
+      const ticketPath = join(testDir, "auth.tickets.json");
+      await writeFile(ticketPath, JSON.stringify({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          ref: "auth.login.basic",
+          description: "Implement login",
+          status: "pending",
+          constraints_satisfied: [],
+        }],
+      }));
+      
+      const result = await parseTicketFile(ticketPath);
+      
+      expect(result.valid).toBe(true);
+      expect(result.data?.tickets).toHaveLength(1);
+    });
+
+    test("returns error for non-existent file", async () => {
+      const result = await parseTicketFile(join(testDir, "nonexistent.tickets.json"));
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]?.message).toContain("failed to read file");
+    });
+
+    test("returns error for invalid JSON in file", async () => {
+      const ticketPath = join(testDir, "invalid.tickets.json");
+      await writeFile(ticketPath, "{ not valid }");
+      
+      const result = await parseTicketFile(ticketPath);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]?.message).toContain("invalid JSON");
+    });
+
+    test("returns validation errors for invalid schema", async () => {
+      const ticketPath = join(testDir, "bad-schema.tickets.json");
+      await writeFile(ticketPath, JSON.stringify({
+        version: "1.0",
+        source: "requirements/auth.bp",
+        tickets: [{
+          id: "TKT-001",
+          // missing required fields
+        }],
+      }));
+      
+      const result = await parseTicketFile(ticketPath);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
     });
   });
 });
