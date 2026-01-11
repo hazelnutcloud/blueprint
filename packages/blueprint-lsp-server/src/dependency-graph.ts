@@ -29,6 +29,8 @@ export interface CircularDependency {
  * Result of building a dependency graph.
  */
 export interface DependencyGraphResult {
+  /** The dependency graph instance */
+  graph: DependencyGraph;
   /** All edges in the dependency graph */
   edges: DependencyEdge[];
   /** Detected circular dependencies */
@@ -129,6 +131,7 @@ export class DependencyGraph {
     const topologicalOrder = cycles.length === 0 ? this.topologicalSort() : [];
 
     return {
+      graph: this,
       edges: this.edges,
       cycles,
       topologicalOrder,

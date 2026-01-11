@@ -1,8 +1,10 @@
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
-import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
+import type { CrossFileSymbolIndex } from "./symbol-index";
 import { DependencyGraph, type CircularDependency } from "./dependency-graph";
 import type { Ticket, TicketFile } from "./tickets";
 import type { RequirementNode } from "./ast";
+import { computeAllBlockingStatus, type BlockerInfo } from "./blocking-status";
+import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
 
 /**
  * Represents diagnostics for a specific file.
@@ -398,15 +400,125 @@ export function computeConstraintMismatchDiagnostics(
 }
 
 /**
+ * Format a blocker list into a human-readable string.
+ */
+function formatBlockers(blockers: BlockerInfo[]): string {
+  return blockers
+    .map((b) => `${b.path} (${b.status === "no-ticket" ? "no ticket" : b.status})`)
+    .join(", ");
+}
+
+/**
+ * Compute diagnostics for requirements that are blocked by pending dependencies.
+ *
+ * Per SPEC.md Section 5.8:
+ * - Info | Requirement is blocked by pending dependencies
+ *
+ * @param symbolIndex The cross-file symbol index
+ * @param tickets Array of all tickets from all ticket files
+ * @returns Diagnostics grouped by file URI
+ */
+export function computeBlockingDiagnostics(
+  symbolIndex: CrossFileSymbolIndex,
+  tickets: Ticket[]
+): WorkspaceDiagnosticsResult {
+  const byFile = new Map<string, Diagnostic[]>();
+
+  // Build the dependency graph
+  const graphResult = DependencyGraph.build(symbolIndex);
+
+  // Get all requirements from the symbol index
+  const requirements = symbolIndex.getSymbolsByKind("requirement");
+
+  // Build the requirement-ticket map
+  const ticketMapResult = buildRequirementTicketMapFromSymbols(requirements, {
+    version: "1.0",
+    source: "",
+    tickets,
+  });
+
+  // Compute blocking status for all requirements
+  const blockingResult = computeAllBlockingStatus(
+    graphResult.graph,
+    ticketMapResult.map,
+    graphResult.cycles
+  );
+
+  // Generate diagnostics for blocked requirements (not in-cycle, those are errors)
+  for (const blockedPath of blockingResult.blockedRequirements) {
+    const blockingInfo = blockingResult.blockingInfo.get(blockedPath);
+    if (!blockingInfo || blockingInfo.status !== "blocked") {
+      continue;
+    }
+
+    // Find the symbol to get location and file URI
+    const symbols = symbolIndex.getSymbol(blockedPath);
+    if (!symbols || symbols.length === 0) {
+      continue;
+    }
+
+    const symbol = symbols[0]!;
+    const node = symbol.node as RequirementNode;
+
+    // Build the message with blocker information
+    const allBlockers = [
+      ...blockingInfo.directBlockers,
+      ...blockingInfo.transitiveBlockers,
+    ];
+    
+    let message: string;
+    if (blockingInfo.directBlockers.length > 0 && blockingInfo.transitiveBlockers.length > 0) {
+      message = `Requirement blocked by: ${formatBlockers(blockingInfo.directBlockers)}. Also transitively blocked by: ${formatBlockers(blockingInfo.transitiveBlockers)}`;
+    } else if (blockingInfo.directBlockers.length > 0) {
+      message = `Requirement blocked by: ${formatBlockers(blockingInfo.directBlockers)}`;
+    } else {
+      message = `Requirement transitively blocked by: ${formatBlockers(blockingInfo.transitiveBlockers)}`;
+    }
+
+    const diagnostic: Diagnostic = {
+      severity: DiagnosticSeverity.Information,
+      range: {
+        start: {
+          line: node.location.startLine,
+          character: node.location.startColumn,
+        },
+        end: {
+          line: node.location.startLine,
+          // Highlight just the @requirement keyword and identifier
+          character:
+            node.location.startColumn + "@requirement".length + 1 + node.name.length,
+        },
+      },
+      message,
+      source: "blueprint",
+      code: "blocked-requirement",
+    };
+
+    const fileDiagnostics = byFile.get(symbol.fileUri);
+    if (fileDiagnostics) {
+      fileDiagnostics.push(diagnostic);
+    } else {
+      byFile.set(symbol.fileUri, [diagnostic]);
+    }
+  }
+
+  return {
+    byFile,
+    filesWithDiagnostics: Array.from(byFile.keys()),
+  };
+}
+
+/**
  * Compute all workspace-level diagnostics.
  *
  * This combines:
  * - Circular dependency detection
  * - Unresolved reference detection
  * - Requirements without tickets (warning)
+ * - Blocked requirements (info)
  *
  * @param symbolIndex The cross-file symbol index
- * @param tickets Optional array of all tickets (for no-ticket warnings)
+ * @param tickets Optional array of all tickets (for no-ticket warnings and blocking diagnostics)
  * @returns Combined diagnostics grouped by file URI
  */
 export function computeWorkspaceDiagnostics(
@@ -418,7 +530,8 @@ export function computeWorkspaceDiagnostics(
 
   if (tickets) {
     const noTicket = computeNoTicketDiagnostics(symbolIndex, tickets);
-    return mergeDiagnosticResults(circularDeps, unresolvedRefs, noTicket);
+    const blocking = computeBlockingDiagnostics(symbolIndex, tickets);
+    return mergeDiagnosticResults(circularDeps, unresolvedRefs, noTicket, blocking);
   }
 
   return mergeDiagnosticResults(circularDeps, unresolvedRefs);

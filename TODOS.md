@@ -180,7 +180,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Warn on constraint identifier mismatch between `.bp` and ticket (Completed: Added `computeConstraintMismatchDiagnostics()` in `workspace-diagnostics.ts` that checks if ticket `constraints_satisfied` arrays contain constraint identifiers not defined in the corresponding requirement's `@constraint` list. Diagnostics are reported on `.tickets.json` files with code `constraint-mismatch`. Integrated with `publishWorkspaceDiagnostics()` in `index.ts` using `mergeDiagnosticResults()` to combine with orphaned ticket diagnostics. 12 new tests in `workspace-diagnostics.test.ts`.)
 
 ### 6.4 Informational
-- [ ] Info diagnostic when requirement is blocked by pending dependencies
+- [x] Info diagnostic when requirement is blocked by pending dependencies
 
 ### 6.5 Diagnostic Publishing
 - [ ] Implement debounced diagnostic publishing

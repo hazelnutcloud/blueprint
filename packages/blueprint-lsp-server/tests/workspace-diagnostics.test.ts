@@ -9,6 +9,7 @@ import {
   computeNoTicketDiagnostics,
   computeOrphanedTicketDiagnostics,
   computeConstraintMismatchDiagnostics,
+  computeBlockingDiagnostics,
   computeWorkspaceDiagnostics,
   mergeDiagnosticResults,
   type TicketFileInfo,
@@ -1462,6 +1463,447 @@ describe("workspace-diagnostics", () => {
       )!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.message).toContain("bcrypt");
+    });
+  });
+
+  describe("computeBlockingDiagnostics", () => {
+    /**
+     * Helper to create a ticket object.
+     */
+    function createTicket(
+      id: string,
+      ref: string,
+      status: "pending" | "in-progress" | "complete" | "obsolete" = "pending"
+    ): Ticket {
+      return {
+        id,
+        ref,
+        description: `Ticket for ${ref}`,
+        status,
+        constraints_satisfied: [],
+      };
+    }
+
+    test("returns empty result for empty index", () => {
+      const result = computeBlockingDiagnostics(index, []);
+
+      expect(result.byFile.size).toBe(0);
+      expect(result.filesWithDiagnostics).toHaveLength(0);
+    });
+
+    test("returns empty result when no requirements are blocked", () => {
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+`;
+      const authCode = `
+@module auth
+  @depends-on storage
+
+@feature login
+
+@requirement basic-auth
+  @depends-on storage.database.user-table
+  Basic authentication.
+`;
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+
+      // All dependencies are complete
+      const tickets = [
+        createTicket("TKT-001", "storage.database.user-table", "complete"),
+        createTicket("TKT-002", "auth.login.basic-auth", "in-progress"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      expect(result.byFile.size).toBe(0);
+      expect(result.filesWithDiagnostics).toHaveLength(0);
+    });
+
+    test("reports info diagnostic when requirement is blocked by pending dependency", () => {
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+`;
+      const authCode = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  @depends-on storage.database.user-table
+  Basic authentication.
+`;
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+
+      // Dependency is pending (not complete)
+      const tickets = [
+        createTicket("TKT-001", "storage.database.user-table", "pending"),
+        createTicket("TKT-002", "auth.login.basic-auth", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      expect(result.filesWithDiagnostics).toContain("file:///auth.bp");
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.severity).toBe(DiagnosticSeverity.Information);
+      expect(diags[0]!.message).toContain("storage.database.user-table");
+      expect(diags[0]!.message).toContain("pending");
+      expect(diags[0]!.code).toBe("blocked-requirement");
+      expect(diags[0]!.source).toBe("blueprint");
+    });
+
+    test("reports info diagnostic when requirement is blocked by in-progress dependency", () => {
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+`;
+      const authCode = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  @depends-on storage.database.user-table
+  Basic authentication.
+`;
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+
+      // Dependency is in-progress (not complete)
+      const tickets = [
+        createTicket("TKT-001", "storage.database.user-table", "in-progress"),
+        createTicket("TKT-002", "auth.login.basic-auth", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      expect(result.filesWithDiagnostics).toContain("file:///auth.bp");
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("in-progress");
+    });
+
+    test("reports info diagnostic when requirement is blocked by dependency with no ticket", () => {
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+`;
+      const authCode = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  @depends-on storage.database.user-table
+  Basic authentication.
+`;
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+
+      // Only auth has a ticket, storage does not
+      const tickets = [
+        createTicket("TKT-001", "auth.login.basic-auth", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      expect(result.filesWithDiagnostics).toContain("file:///auth.bp");
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("no ticket");
+    });
+
+    test("reports multiple direct blockers in message", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement database
+  Database setup.
+
+@requirement cache
+  Cache setup.
+
+@requirement api
+  @depends-on auth.login.database, auth.login.cache
+  API endpoint.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // Both dependencies are pending
+      const tickets = [
+        createTicket("TKT-001", "auth.login.database", "pending"),
+        createTicket("TKT-002", "auth.login.cache", "in-progress"),
+        createTicket("TKT-003", "auth.login.api", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      expect(result.filesWithDiagnostics).toContain("file:///auth.bp");
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+      expect(diags[0]!.message).toContain("auth.login.database");
+      expect(diags[0]!.message).toContain("auth.login.cache");
+    });
+
+    test("reports transitive blockers separately", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement step1
+  First step.
+
+@requirement step2
+  @depends-on auth.login.step1
+  Second step.
+
+@requirement step3
+  @depends-on auth.login.step2
+  Third step.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // step1 is pending, step2 is pending, step3 depends on step2 which depends on step1
+      const tickets = [
+        createTicket("TKT-001", "auth.login.step1", "pending"),
+        createTicket("TKT-002", "auth.login.step2", "pending"),
+        createTicket("TKT-003", "auth.login.step3", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      // step2 is blocked by step1 (direct)
+      // step3 is blocked by step2 (direct) and step1 (transitive)
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags.length).toBeGreaterThanOrEqual(2);
+
+      // Check that step3's diagnostic mentions transitive blockers
+      const step3Diag = diags.find((d) =>
+        d.range.start.line >= 13 // step3 is at the bottom
+      );
+      if (step3Diag) {
+        expect(step3Diag.message).toContain("transitively");
+        expect(step3Diag.message).toContain("step1");
+      }
+    });
+
+    test("does not report blocking for requirements in cycles (handled by circular dependency error)", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement a
+  @depends-on auth.login.b
+  Requirement A.
+
+@requirement b
+  @depends-on auth.login.a
+  Requirement B.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const tickets = [
+        createTicket("TKT-001", "auth.login.a", "pending"),
+        createTicket("TKT-002", "auth.login.b", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      // Should not have blocking diagnostics for cyclic requirements
+      // (they get circular-dependency errors instead)
+      const diags = result.byFile.get("file:///auth.bp") ?? [];
+      const blockingDiags = diags.filter((d) => d.code === "blocked-requirement");
+      expect(blockingDiags).toHaveLength(0);
+    });
+
+    test("does not report blocking when dependency is complete", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement database
+  Database setup.
+
+@requirement api
+  @depends-on auth.login.database
+  API endpoint.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // Dependency is complete
+      const tickets = [
+        createTicket("TKT-001", "auth.login.database", "complete"),
+        createTicket("TKT-002", "auth.login.api", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      expect(result.byFile.size).toBe(0);
+    });
+
+    test("does not report blocking when dependency is obsolete", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement database
+  Database setup.
+
+@requirement api
+  @depends-on auth.login.database
+  API endpoint.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      // Dependency is obsolete (non-blocking per SPEC)
+      const tickets = [
+        createTicket("TKT-001", "auth.login.database", "obsolete"),
+        createTicket("TKT-002", "auth.login.api", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      expect(result.byFile.size).toBe(0);
+    });
+
+    test("handles blocking across multiple files", () => {
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+`;
+      const authCode = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  @depends-on storage.database.user-table
+  Basic authentication.
+`;
+      const apiCode = `
+@module api
+
+@feature endpoints
+
+@requirement users-endpoint
+  @depends-on auth.login.basic-auth
+  Users API endpoint.
+`;
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+      index.addFile("file:///api.bp", parseToAST(apiCode));
+
+      // storage is pending, which blocks auth, which blocks api
+      const tickets = [
+        createTicket("TKT-001", "storage.database.user-table", "pending"),
+        createTicket("TKT-002", "auth.login.basic-auth", "pending"),
+        createTicket("TKT-003", "api.endpoints.users-endpoint", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      // auth.bp should have blocking diagnostic
+      expect(result.filesWithDiagnostics).toContain("file:///auth.bp");
+      // api.bp should have blocking diagnostic
+      expect(result.filesWithDiagnostics).toContain("file:///api.bp");
+    });
+
+    test("diagnostic range points to requirement declaration", () => {
+      const code = `@module auth
+
+@feature login
+
+@requirement basic-auth
+  @depends-on auth.login.database
+  Basic authentication.
+
+@requirement database
+  Database setup.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+
+      const tickets = [
+        createTicket("TKT-001", "auth.login.basic-auth", "pending"),
+        createTicket("TKT-002", "auth.login.database", "pending"),
+      ];
+
+      const result = computeBlockingDiagnostics(index, tickets);
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      expect(diags).toHaveLength(1);
+
+      // @requirement basic-auth is on line 4 (0-indexed)
+      expect(diags[0]!.range.start.line).toBe(4);
+      expect(diags[0]!.range.start.character).toBe(0);
+    });
+
+    test("integrates with computeWorkspaceDiagnostics", () => {
+      const storageCode = `
+@module storage
+
+@feature database
+
+@requirement user-table
+  User table schema.
+`;
+      const authCode = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  @depends-on storage.database.user-table
+  Basic authentication.
+`;
+      index.addFile("file:///storage.bp", parseToAST(storageCode));
+      index.addFile("file:///auth.bp", parseToAST(authCode));
+
+      // Storage is pending, which blocks auth
+      const tickets = [
+        createTicket("TKT-001", "storage.database.user-table", "pending"),
+        createTicket("TKT-002", "auth.login.basic-auth", "pending"),
+      ];
+
+      const result = computeWorkspaceDiagnostics(index, tickets);
+
+      const diags = result.byFile.get("file:///auth.bp")!;
+      const blockingDiags = diags.filter((d) => d.code === "blocked-requirement");
+      expect(blockingDiags).toHaveLength(1);
+      expect(blockingDiags[0]!.severity).toBe(DiagnosticSeverity.Information);
     });
   });
 });
