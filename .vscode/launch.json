@@ -1,0 +1,80 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/blueprint-lsp-client"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/blueprint-lsp-client/out/**/*.js",
+        "${workspaceFolder}/packages/blueprint-lsp-server/out/**/*.js"
+      ],
+      "autoAttachChildProcesses": true,
+      "preLaunchTask": "build-all"
+    },
+    {
+      "name": "Attach to LSP Server",
+      "type": "node",
+      "request": "attach",
+      "port": 6009,
+      "restart": true,
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/packages/blueprint-lsp-server/out/**/*.js"
+      ]
+    },
+    {
+      "name": "Debug LSP Server (Standalone)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--inspect=6009",
+        "${workspaceFolder}/packages/blueprint-lsp-server/src/index.ts"
+      ],
+      "sourceMaps": true,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Debug Current Test File",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "test",
+        "--inspect=6010",
+        "${file}"
+      ],
+      "sourceMaps": true,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Debug All LSP Server Tests",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "test",
+        "--inspect=6010"
+      ],
+      "cwd": "${workspaceFolder}/packages/blueprint-lsp-server",
+      "sourceMaps": true,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Extension + Server",
+      "configurations": ["Launch Extension", "Attach to LSP Server"],
+      "stopAll": true
+    }
+  ]
+}

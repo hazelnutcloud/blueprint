@@ -28,7 +28,7 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 ### 1.2 Development Environment
 - [ ] Configure ESLint and Prettier for code quality
 - [ ] Set up VS Code workspace settings for development
-- [ ] Create launch configurations for debugging the LSP server and client
+- [x] Create launch configurations for debugging the LSP server and client (Added `.vscode/launch.json` with configurations for: "Launch Extension" using extensionHost, "Attach to LSP Server" on port 6009, "Debug LSP Server (Standalone)" with Bun, "Debug Current Test File", "Debug All LSP Server Tests", and compound "Extension + Server" configuration. Also added `.vscode/tasks.json` with build, watch, and test tasks.)
 - [ ] Set up hot-reload for development iteration
 
 ---

@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-server",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "tsc", "--noEmit"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
+      },
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "build-client",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "tsc", "--noEmit"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/blueprint-lsp-client"
+      },
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "build-all",
+      "dependsOn": ["build-server", "build-client"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "watch-server",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "tsc", "--noEmit", "--watch"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
+      },
+      "isBackground": true,
+      "group": "build",
+      "problemMatcher": ["$tsc-watch"]
+    },
+    {
+      "label": "test-server",
+      "type": "shell",
+      "command": "bun",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "generate-tree-sitter",
+      "type": "shell",
+      "command": "bunx",
+      "args": ["tree-sitter", "generate"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/tree-sitter-blueprint"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "test-tree-sitter",
+      "type": "shell",
+      "command": "bunx",
+      "args": ["tree-sitter", "test"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/tree-sitter-blueprint"
+      },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}
