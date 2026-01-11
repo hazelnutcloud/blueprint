@@ -80,11 +80,11 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 3: Core LSP Server Implementation
 
 ### 3.1 Server Initialization
-- [ ] Create LSP server entry point using `vscode-languageserver/node`
-- [ ] Implement `initialize` handler with capability negotiation
-- [ ] Implement `initialized` handler for post-initialization setup
-- [ ] Implement `shutdown` and `exit` handlers
-- [ ] Set up connection and document manager
+- [x] Create LSP server entry point using `vscode-languageserver/node`
+- [x] Implement `initialize` handler with capability negotiation
+- [x] Implement `initialized` handler for post-initialization setup
+- [x] Implement `shutdown` and `exit` handlers
+- [x] Set up connection and document manager
 
 ### 3.2 Document Management
 - [ ] Implement `TextDocuments` manager for open `.bp` files
