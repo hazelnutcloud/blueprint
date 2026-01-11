@@ -90,6 +90,10 @@ connection.onInitialized(async () => {
     connection.console.log("Tree-sitter parser initialized successfully");
   } catch (error) {
     connection.console.error(`Failed to initialize parser: ${error}`);
+    // Notify the client about degraded functionality
+    connection.window.showErrorMessage(
+      "Blueprint LSP: Parser initialization failed. Syntax highlighting and diagnostics will be unavailable. Please check that the tree-sitter-blueprint WASM file is properly installed."
+    );
   }
 
   connection.console.log("Blueprint LSP server ready");
