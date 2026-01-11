@@ -2,11 +2,15 @@ import { describe, test, expect, beforeAll } from "bun:test";
 import { initializeParser, parseDocument, cleanupParser } from "./parser";
 import {
   buildSemanticTokens,
+  buildRequirementStatusMap,
   semanticTokensLegend,
   TokenTypes,
   TokenModifiers,
+  type RequirementHighlightStatus,
 } from "./semantic-tokens";
 import { SemanticTokenTypes, SemanticTokenModifiers } from "vscode-languageserver/node";
+import type { RequirementTicketMap, RequirementTicketInfo } from "./requirement-ticket-map";
+import type { BlockingStatusResult, BlockingInfo } from "./blocking-status";
 
 describe("semantic-tokens", () => {
   beforeAll(async () => {
@@ -28,6 +32,11 @@ describe("semantic-tokens", () => {
       expect(semanticTokensLegend.tokenModifiers).toEqual([
         SemanticTokenModifiers.declaration,
         SemanticTokenModifiers.definition,
+        "noTicket",
+        "blocked",
+        "inProgress",
+        "complete",
+        "obsolete",
       ]);
     });
   });
@@ -47,11 +56,22 @@ describe("semantic-tokens", () => {
       expect(TokenModifiers.none).toBe(0);
       expect(TokenModifiers.declaration).toBe(1);
       expect(TokenModifiers.definition).toBe(2);
+      expect(TokenModifiers.noTicket).toBe(4);
+      expect(TokenModifiers.blocked).toBe(8);
+      expect(TokenModifiers.inProgress).toBe(16);
+      expect(TokenModifiers.complete).toBe(32);
+      expect(TokenModifiers.obsolete).toBe(64);
     });
 
     test("can be combined", () => {
       const combined = TokenModifiers.declaration | TokenModifiers.definition;
       expect(combined).toBe(3);
+    });
+
+    test("status modifiers can be combined with declaration", () => {
+      const combined = TokenModifiers.declaration | TokenModifiers.definition | TokenModifiers.complete;
+      expect(combined).toBe(1 | 2 | 32);
+      expect(combined).toBe(35);
     });
   });
 
@@ -384,6 +404,333 @@ describe("semantic-tokens", () => {
       expect(commentCount).toBeGreaterThanOrEqual(1);
 
       tree!.delete();
+    });
+
+    describe("progress-based highlighting", () => {
+      test("applies no-ticket modifier when status map provided but requirement not found", () => {
+        const tree = parseDocument(
+          "@module m\n\n@feature f\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        // Empty status map - requirement not found means no ticket
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.noTicket);
+
+        // Find the requirement identifier
+        const reqId = decoded.find(
+          (t) => t.tokenType === TokenTypes.variable && t.length === 10 // "basic-auth"
+        );
+        expect(reqId).toBeDefined();
+        expect(reqId!.tokenModifiers).toBe(
+          TokenModifiers.declaration | TokenModifiers.definition | TokenModifiers.noTicket
+        );
+
+        tree!.delete();
+      });
+
+      test("applies complete modifier for complete requirements", () => {
+        const tree = parseDocument(
+          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        statusMap.set("auth.login.basic-auth", "complete");
+        
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.complete);
+
+        tree!.delete();
+      });
+
+      test("applies in-progress modifier for in-progress requirements", () => {
+        const tree = parseDocument(
+          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        statusMap.set("auth.login.basic-auth", "in-progress");
+        
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.inProgress);
+
+        tree!.delete();
+      });
+
+      test("applies blocked modifier for blocked requirements", () => {
+        const tree = parseDocument(
+          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        statusMap.set("auth.login.basic-auth", "blocked");
+        
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.blocked);
+
+        tree!.delete();
+      });
+
+      test("applies obsolete modifier for obsolete requirements", () => {
+        const tree = parseDocument(
+          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        statusMap.set("auth.login.basic-auth", "obsolete");
+        
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.obsolete);
+
+        tree!.delete();
+      });
+
+      test("applies no modifier for pending requirements (default)", () => {
+        const tree = parseDocument(
+          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        statusMap.set("auth.login.basic-auth", "pending");
+        
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.none);
+
+        tree!.delete();
+      });
+
+      test("without status map, no status modifiers are applied", () => {
+        const tree = parseDocument(
+          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        // No status map passed
+        const tokens = buildSemanticTokens(tree!);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.none);
+
+        tree!.delete();
+      });
+
+      test("handles multiple requirements with different statuses", () => {
+        const tree = parseDocument(`@module auth
+
+@feature login
+
+  @requirement basic-auth
+    Users can log in
+
+  @requirement oauth
+    OAuth support`);
+        expect(tree).not.toBeNull();
+        
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        statusMap.set("auth.login.basic-auth", "complete");
+        statusMap.set("auth.login.oauth", "in-progress");
+        
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find all @requirement keyword tokens
+        const reqKeywords = decoded.filter(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeywords.length).toBe(2);
+
+        // First requirement should be complete
+        expect(reqKeywords[0]!.tokenModifiers).toBe(TokenModifiers.complete);
+        
+        // Second requirement should be in-progress
+        expect(reqKeywords[1]!.tokenModifiers).toBe(TokenModifiers.inProgress);
+
+        tree!.delete();
+      });
+
+      test("handles requirement directly under module (no feature)", () => {
+        const tree = parseDocument(
+          "@module auth\n\n  @requirement basic-auth"
+        );
+        expect(tree).not.toBeNull();
+        
+        const statusMap = new Map<string, RequirementHighlightStatus>();
+        statusMap.set("auth.basic-auth", "complete");
+        
+        const tokens = buildSemanticTokens(tree!, statusMap);
+        const decoded = decodeTokens(tokens.data);
+
+        // Find the @requirement keyword token
+        const reqKeyword = decoded.find(
+          (t) => t.tokenType === TokenTypes.keyword && t.length === 12
+        );
+        expect(reqKeyword).toBeDefined();
+        expect(reqKeyword!.tokenModifiers).toBe(TokenModifiers.complete);
+
+        tree!.delete();
+      });
+    });
+  });
+
+  describe("buildRequirementStatusMap", () => {
+    // Helper to create mock RequirementTicketInfo
+    function mockTicketInfo(
+      path: string,
+      status: "no-ticket" | "pending" | "in-progress" | "complete" | "obsolete"
+    ): RequirementTicketInfo {
+      return {
+        requirementPath: path,
+        requirement: {} as any,
+        tickets: [],
+        status,
+        constraintStatuses: [],
+        constraintsSatisfied: 0,
+        constraintsTotal: 0,
+        implementationFiles: [],
+        testFiles: [],
+      };
+    }
+
+    test("converts ticket statuses to highlight statuses", () => {
+      const ticketMap: RequirementTicketMap = new Map();
+      ticketMap.set("auth.login.basic", mockTicketInfo("auth.login.basic", "complete"));
+      ticketMap.set("auth.login.oauth", mockTicketInfo("auth.login.oauth", "in-progress"));
+      ticketMap.set("auth.login.2fa", mockTicketInfo("auth.login.2fa", "pending"));
+      ticketMap.set("auth.login.old", mockTicketInfo("auth.login.old", "obsolete"));
+      ticketMap.set("auth.login.new", mockTicketInfo("auth.login.new", "no-ticket"));
+
+      const statusMap = buildRequirementStatusMap(ticketMap);
+
+      expect(statusMap.get("auth.login.basic")).toBe("complete");
+      expect(statusMap.get("auth.login.oauth")).toBe("in-progress");
+      expect(statusMap.get("auth.login.2fa")).toBe("pending");
+      expect(statusMap.get("auth.login.old")).toBe("obsolete");
+      expect(statusMap.get("auth.login.new")).toBe("no-ticket");
+    });
+
+    test("blocked status from blocking info takes precedence", () => {
+      const ticketMap: RequirementTicketMap = new Map();
+      ticketMap.set("auth.login.basic", mockTicketInfo("auth.login.basic", "pending"));
+
+      const blockingStatus: BlockingStatusResult = {
+        blockingInfo: new Map<string, BlockingInfo>([
+          ["auth.login.basic", {
+            status: "blocked",
+            directBlockers: [{ path: "storage.users", status: "pending" }],
+            transitiveBlockers: [],
+          }],
+        ]),
+        blockedRequirements: ["auth.login.basic"],
+        requirementsInCycles: [],
+        unblockedRequirements: [],
+      };
+
+      const statusMap = buildRequirementStatusMap(ticketMap, blockingStatus);
+
+      // Should be blocked, not pending
+      expect(statusMap.get("auth.login.basic")).toBe("blocked");
+    });
+
+    test("in-cycle status is treated as blocked", () => {
+      const ticketMap: RequirementTicketMap = new Map();
+      ticketMap.set("auth.a", mockTicketInfo("auth.a", "pending"));
+
+      const blockingStatus: BlockingStatusResult = {
+        blockingInfo: new Map<string, BlockingInfo>([
+          ["auth.a", {
+            status: "in-cycle",
+            directBlockers: [],
+            transitiveBlockers: [],
+            cycleInfo: {
+              cycle: { cycle: ["auth.a", "auth.b", "auth.a"], edges: [] },
+              cyclePeers: ["auth.b"],
+            },
+          }],
+        ]),
+        blockedRequirements: [],
+        requirementsInCycles: ["auth.a"],
+        unblockedRequirements: [],
+      };
+
+      const statusMap = buildRequirementStatusMap(ticketMap, blockingStatus);
+
+      expect(statusMap.get("auth.a")).toBe("blocked");
+    });
+
+    test("not-blocked status does not override ticket status", () => {
+      const ticketMap: RequirementTicketMap = new Map();
+      ticketMap.set("auth.login.basic", mockTicketInfo("auth.login.basic", "in-progress"));
+
+      const blockingStatus: BlockingStatusResult = {
+        blockingInfo: new Map<string, BlockingInfo>([
+          ["auth.login.basic", {
+            status: "not-blocked",
+            directBlockers: [],
+            transitiveBlockers: [],
+          }],
+        ]),
+        blockedRequirements: [],
+        requirementsInCycles: [],
+        unblockedRequirements: ["auth.login.basic"],
+      };
+
+      const statusMap = buildRequirementStatusMap(ticketMap, blockingStatus);
+
+      // Should keep in-progress status
+      expect(statusMap.get("auth.login.basic")).toBe("in-progress");
     });
   });
 });

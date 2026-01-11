@@ -205,13 +205,13 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Handle token encoding (delta line, delta column, length, type, modifiers) (Completed: Uses `SemanticTokensBuilder` from vscode-languageserver with proper sorting of tokens before building.)
 
 ### 7.3 Progress-Based Highlighting
-- [ ] Emit tokens with status-based modifiers for requirements:
-  - [ ] No ticket → dim styling
-  - [ ] pending → default styling
-  - [ ] blocked → error styling
-  - [ ] in-progress → warning styling
-  - [ ] complete → success styling
-  - [ ] obsolete → strikethrough styling
+- [x] Emit tokens with status-based modifiers for requirements (Completed: Added status-based token modifiers `noTicket`, `blocked`, `inProgress`, `complete`, `obsolete` to `semanticTokensLegend`. Updated `buildSemanticTokens()` to accept optional `statusMap` parameter. Added `buildRequirementStatusMap()` to combine ticket status and blocking status. Status modifiers are applied to both `@requirement` keywords and requirement identifier tokens. 13 new tests added in `semantic-tokens.test.ts`.):
+  - [x] No ticket → noTicket modifier (dim styling)
+  - [x] pending → no modifier (default styling)
+  - [x] blocked → blocked modifier (error styling)
+  - [x] in-progress → inProgress modifier (warning styling)
+  - [x] complete → complete modifier (success styling)
+  - [x] obsolete → obsolete modifier (strikethrough styling)
 
 ---
 
@@ -333,7 +333,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Test cycle detection algorithm (Covered in `dependency-graph.test.ts` and `workspace-diagnostics.test.ts`)
 - [x] Test ticket file parsing and validation (40 tests in `tickets.test.ts`)
 - [x] Test requirement-ticket correlation (40 tests in `requirement-ticket-map.test.ts`)
-- [ ] Test semantic token generation
+- [x] Test semantic token generation (32 tests in `semantic-tokens.test.ts` covering token types, modifiers, progress-based highlighting, and `buildRequirementStatusMap()`)
 
 ### 12.2 Integration Tests
 - [ ] Test LSP initialization handshake
