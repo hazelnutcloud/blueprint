@@ -245,10 +245,10 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ## Phase 9: Navigation Features
 
 ### 9.1 Go-to-Definition
-- [ ] Implement `textDocument/definition` handler
-- [ ] Requirement identifier → ticket in `.tickets.json`
-- [ ] `@depends-on` reference → referenced requirement
-- [ ] Constraint identifier → constraint definition
+- [x] Implement `textDocument/definition` handler (Completed: Added `definition.ts` module with `findDefinitionTarget()` and `buildDefinition()` functions. Integrated with LSP server in `index.ts` via `connection.onDefinition()` handler. Added `definitionProvider: true` to server capabilities. 17 tests added in `definition.test.ts`.)
+- [x] Requirement identifier → ticket in `.tickets.json` (Completed: `buildRequirementDefinition()` navigates to ticket position in JSON file when tickets exist, falls back to symbol definition otherwise. Supports multiple tickets returning `Location[]`.)
+- [x] `@depends-on` reference → referenced requirement (Completed: `buildReferenceDefinition()` resolves cross-file references via `CrossFileSymbolIndex` and returns location of the referenced symbol.)
+- [x] Constraint identifier → constraint definition (Completed: `buildSymbolDefinition()` returns the constraint's source location.)
 - [ ] File path in hover → source file
 
 ### 9.2 Find References
@@ -337,6 +337,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Test requirement-ticket correlation (40 tests in `requirement-ticket-map.test.ts`)
 - [x] Test semantic token generation (32 tests in `semantic-tokens.test.ts` covering token types, modifiers, progress-based highlighting, and `buildRequirementStatusMap()`)
 - [x] Test hover information (29 tests in `hover.test.ts` covering node finding, hover targets, requirement/feature/module/constraint/reference/keyword hovers, blocking status display, and multiple tickets per requirement)
+- [x] Test go-to-definition (17 tests in `definition.test.ts` covering node finding, definition targets for module/feature/requirement/constraint/reference/keyword, cross-file navigation, ticket file navigation, and fallback behavior)
 
 ### 12.2 Integration Tests
 - [ ] Test LSP initialization handshake

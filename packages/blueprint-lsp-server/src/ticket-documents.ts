@@ -14,8 +14,12 @@ export interface TicketDocumentState {
   uri: string;
   /** The document version (increments on each change) */
   version: number;
+  /** The raw content of the document */
+  content: string;
   /** The parsed ticket file if valid, null otherwise */
   data: TicketFile | null;
+  /** Alias for data for compatibility */
+  parsedFile: TicketFile | null;
   /** Whether the document has validation errors */
   hasErrors: boolean;
   /** Diagnostics for this document */
@@ -116,6 +120,22 @@ export class TicketDocumentManager {
   }
 
   /**
+   * Get all parsed ticket files with their raw content.
+   * Returns only valid, successfully parsed ticket files.
+   * 
+   * @returns Array of parsed ticket files with their URIs and content
+   */
+  getAllTicketFilesWithContent(): Array<{ uri: string; content: string; data: TicketFile }> {
+    const result: Array<{ uri: string; content: string; data: TicketFile }> = [];
+    for (const [uri, state] of this.states) {
+      if (state.data) {
+        result.push({ uri, content: state.content, data: state.data });
+      }
+    }
+    return result;
+  }
+
+  /**
    * Get all tickets from all tracked documents.
    * Aggregates tickets from all valid ticket files.
    * 
@@ -147,7 +167,9 @@ export class TicketDocumentManager {
     return {
       uri,
       version,
+      content,
       data: result.data,
+      parsedFile: result.data,
       hasErrors: !result.valid,
       diagnostics,
     };

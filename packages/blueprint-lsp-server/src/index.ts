@@ -14,9 +14,11 @@ import type {
   TextDocumentSyncOptions,
   SemanticTokensParams,
   HoverParams,
+  DefinitionParams,
 } from "vscode-languageserver/node";
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
+import { findDefinitionTarget, buildDefinition, type DefinitionContext } from "./definition";
 import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
 import { DependencyGraph } from "./dependency-graph";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -219,6 +221,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
     capabilities: {
       textDocumentSync,
       hoverProvider: true,
+      definitionProvider: true,
       semanticTokensProvider: {
         legend: semanticTokensLegend,
         full: true,
@@ -627,6 +630,74 @@ connection.onHover((params: HoverParams) => {
   };
 
   return buildHover(target, hoverContext);
+});
+
+// Handle definition request (go-to-definition)
+connection.onDefinition((params: DefinitionParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  const filePath = getFilePath(params.textDocument.uri);
+  if (!isBlueprintFilePath(filePath)) {
+    return null;
+  }
+
+  if (!parserInitialized) {
+    return null;
+  }
+
+  // Get the parse tree from the document manager
+  const state = documentManager.getState(params.textDocument.uri);
+  if (!state?.tree) {
+    return null;
+  }
+
+  // Find what we're requesting definition for
+  const target = findDefinitionTarget(
+    state.tree,
+    params.position,
+    symbolIndex,
+    params.textDocument.uri
+  );
+
+  if (!target) {
+    return null;
+  }
+
+  // Build the definition context with ticket information
+  const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
+  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
+  
+  // Create a mock ticket file for the map builder
+  const ticketFile = allTickets.length > 0 
+    ? { version: "1.0", source: "", tickets: allTickets }
+    : null;
+  
+  const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
+    requirementSymbols,
+    ticketFile
+  );
+
+  // Build the ticket files map for position lookup
+  const ticketFilesMap = new Map<string, { uri: string; content: string; tickets: import("./tickets").Ticket[] }>();
+  for (const ticketFileInfo of ticketDocumentManager.getAllTicketFilesWithContent()) {
+    ticketFilesMap.set(ticketFileInfo.uri, {
+      uri: ticketFileInfo.uri,
+      content: ticketFileInfo.content,
+      tickets: ticketFileInfo.data.tickets,
+    });
+  }
+
+  const definitionContext: DefinitionContext = {
+    symbolIndex,
+    ticketMap,
+    ticketFiles: ticketFilesMap,
+    fileUri: params.textDocument.uri,
+  };
+
+  return buildDefinition(target, definitionContext);
 });
 
 connection.onShutdown(() => {
