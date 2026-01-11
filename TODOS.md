@@ -69,7 +69,11 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 - [x] Write corpus tests for edge cases (empty files, minimal documents)
 - [x] Write corpus tests for error recovery scenarios
 - [x] Generate and compile the tree-sitter parser
-- [ ] Create Node.js bindings for the parser
+
+Note: The LSP server will use web-tree-sitter (WASM bindings) instead of native Node.js bindings. 
+WASM is the standard approach for tree-sitter LSP servers (e.g., bash-language-server) because it's 
+easier to distribute and works across all platforms without native compilation. The existing 
+`tree-sitter build --wasm` script generates the required `.wasm` file.
 
 ---
 
