@@ -168,8 +168,8 @@ easier to distribute and works across all platforms without native compilation. 
 - [ ] Include source location (line, column, range)
 
 ### 6.2 Semantic Errors
-- [ ] Detect circular dependencies (Error)
-- [ ] Detect references to non-existent requirements (Error)
+- [x] Detect circular dependencies (Error) (Completed: Added `workspace-diagnostics.ts` module with `computeCircularDependencyDiagnostics()` function that uses `DependencyGraph.build()` to detect cycles and generates diagnostics at each `@depends-on` location in the cycle. Diagnostics include the full cycle path in the error message. Integrated with LSP server in `index.ts` via `publishWorkspaceDiagnostics()` which is called after symbol index updates. 20 tests added in `workspace-diagnostics.test.ts`.)
+- [x] Detect references to non-existent requirements (Error) (Completed: Added `computeUnresolvedReferenceDiagnostics()` in `workspace-diagnostics.ts` that uses `CrossFileSymbolIndex.getUnresolvedReferences()` to find all unresolved `@depends-on` references and generates diagnostics with the unresolved path in the error message. Tests added in `workspace-diagnostics.test.ts`.)
 - [ ] Detect duplicate identifiers in scope (Error)
 - [x] Detect multiple `@description` blocks in one file (Error)
 - [x] Detect `@description` after `@module` (Error)
@@ -329,10 +329,10 @@ easier to distribute and works across all platforms without native compilation. 
 ### 12.1 Unit Tests
 - [x] Test tree-sitter grammar with corpus files
 - [x] Test AST transformation
-- [ ] Test dependency graph construction
-- [ ] Test cycle detection algorithm
-- [ ] Test ticket file parsing and validation
-- [ ] Test requirement-ticket correlation
+- [x] Test dependency graph construction (27 tests in `dependency-graph.test.ts`)
+- [x] Test cycle detection algorithm (Covered in `dependency-graph.test.ts` and `workspace-diagnostics.test.ts`)
+- [x] Test ticket file parsing and validation (40 tests in `tickets.test.ts`)
+- [x] Test requirement-ticket correlation (40 tests in `requirement-ticket-map.test.ts`)
 - [ ] Test semantic token generation
 
 ### 12.2 Integration Tests

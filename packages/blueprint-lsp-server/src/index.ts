@@ -21,6 +21,7 @@ import { WorkspaceManager } from "./workspace";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
 import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
+import { computeWorkspaceDiagnostics } from "./workspace-diagnostics";
 import { readFile } from "node:fs/promises";
 import { URI } from "vscode-uri";
 
@@ -50,6 +51,69 @@ let hasDidChangeWatchedFilesCapability = false;
 
 // Track parser initialization state
 let parserInitialized = false;
+
+// Track files that have workspace-level diagnostics
+// Used to clear diagnostics when they're no longer relevant
+let filesWithWorkspaceDiagnostics = new Set<string>();
+
+/**
+ * Publish workspace-level diagnostics (circular dependencies, unresolved references).
+ * 
+ * This function computes diagnostics across all indexed files and publishes them.
+ * It also clears diagnostics from files that no longer have issues.
+ */
+function publishWorkspaceDiagnostics(): void {
+  const result = computeWorkspaceDiagnostics(symbolIndex);
+  
+  // Clear diagnostics from files that no longer have workspace-level issues
+  for (const fileUri of filesWithWorkspaceDiagnostics) {
+    if (!result.byFile.has(fileUri)) {
+      // This file no longer has workspace diagnostics, but we need to preserve
+      // its document-level diagnostics. We send an empty array for workspace diagnostics
+      // which will be merged with document diagnostics by the document manager.
+      // 
+      // Actually, we need to re-publish the document's own diagnostics.
+      // For now, we'll trigger a re-validation by getting the document state.
+      const state = documentManager.getState(fileUri);
+      if (state) {
+        // Re-publish document diagnostics (this will clear workspace diagnostics)
+        connection.sendDiagnostics({
+          uri: fileUri,
+          diagnostics: state.diagnostics,
+        });
+      } else {
+        // Document not open, just clear all diagnostics
+        connection.sendDiagnostics({
+          uri: fileUri,
+          diagnostics: [],
+        });
+      }
+    }
+  }
+  
+  // Publish new workspace diagnostics, merging with document diagnostics
+  for (const [fileUri, workspaceDiagnostics] of result.byFile) {
+    const state = documentManager.getState(fileUri);
+    const documentDiagnostics = state?.diagnostics ?? [];
+    
+    // Merge document and workspace diagnostics
+    const allDiagnostics = [...documentDiagnostics, ...workspaceDiagnostics];
+    
+    connection.sendDiagnostics({
+      uri: fileUri,
+      diagnostics: allDiagnostics,
+    });
+  }
+  
+  // Update the set of files with workspace diagnostics
+  filesWithWorkspaceDiagnostics = new Set(result.filesWithDiagnostics);
+  
+  if (result.filesWithDiagnostics.length > 0) {
+    connection.console.log(
+      `Published workspace diagnostics for ${result.filesWithDiagnostics.length} files`
+    );
+  }
+}
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   const capabilities = params.capabilities;
@@ -159,6 +223,9 @@ connection.onInitialized(async () => {
     connection.console.log(
       `Symbol index updated: ${symbolIndex.getSymbolCount()} symbols from ${symbolIndex.getFileCount()} files`
     );
+    
+    // Publish workspace-level diagnostics after indexing
+    publishWorkspaceDiagnostics();
   });
 
   // Scan workspace folders for .bp files after parser is initialized
@@ -213,6 +280,7 @@ connection.onDidChangeWatchedFiles(async (params) => {
           workspaceManager.addFile(change.uri, filePath);
           if (parserInitialized) {
             await indexFile(change.uri, filePath);
+            publishWorkspaceDiagnostics();
           }
           break;
         }
@@ -221,6 +289,7 @@ connection.onDidChangeWatchedFiles(async (params) => {
           // When a file is open, document change events handle updates
           if (!documents.get(change.uri) && parserInitialized) {
             await indexFile(change.uri, filePath);
+            publishWorkspaceDiagnostics();
           }
           break;
         }
@@ -230,6 +299,8 @@ connection.onDidChangeWatchedFiles(async (params) => {
           symbolIndex.removeFile(change.uri);
           // Also clean up document manager state if it exists
           documentManager.onDocumentClose(change.uri);
+          // Re-publish workspace diagnostics after file removal
+          publishWorkspaceDiagnostics();
           break;
         }
       }
@@ -291,6 +362,8 @@ documents.onDidOpen((event) => {
     if (state.tree) {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
+      // Publish workspace diagnostics after indexing
+      publishWorkspaceDiagnostics();
     }
   }
 });
@@ -318,6 +391,8 @@ documents.onDidChangeContent((event) => {
     if (state.tree) {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
+      // Publish workspace diagnostics after indexing
+      publishWorkspaceDiagnostics();
     }
   }
 });
@@ -362,6 +437,8 @@ documents.onDidSave((event) => {
     if (state.tree) {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
+      // Publish workspace diagnostics after indexing
+      publishWorkspaceDiagnostics();
     }
   }
 });
