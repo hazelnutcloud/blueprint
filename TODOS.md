@@ -17,12 +17,12 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 ## Phase 1: Project Setup & Infrastructure
 
 ### 1.1 Project Initialization
-- [ ] Initialize monorepo structure with packages for `server`, `client`, and `tree-sitter-blueprint`
-- [ ] Configure `package.json` with workspaces for monorepo management
-- [ ] Set up TypeScript configuration (`tsconfig.json`) for each package
-- [ ] Configure Bun as the package manager and test runner
+- [x] Initialize monorepo structure with packages for `server`, `client`, and `tree-sitter-blueprint`
+- [x] Configure `package.json` with workspaces for monorepo management
+- [x] Set up TypeScript configuration (`tsconfig.json`) for each package
+- [x] Configure Bun as the package manager and test runner
 - [ ] Set up zshy bundler configuration for production builds
-- [ ] Create `.gitignore` with appropriate exclusions
+- [x] Create `.gitignore` with appropriate exclusions
 
 ### 1.2 Development Environment
 - [ ] Configure ESLint and Prettier for code quality
@@ -35,40 +35,40 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 ## Phase 2: Tree-sitter Grammar Definition
 
 ### 2.1 Grammar Specification
-- [ ] Create `tree-sitter-blueprint` package directory structure
-- [ ] Define `grammar.js` with lexical rules:
-  - [ ] UTF-8 character set handling
-  - [ ] Line ending normalization (LF/CRLF)
-  - [ ] Single-line comments (`// ...`)
-  - [ ] Multi-line comments (`/* ... */`)
-  - [ ] Identifier pattern: `[a-zA-Z_][a-zA-Z0-9_-]*`
-  - [ ] Whitespace and indentation handling
+- [x] Create `tree-sitter-blueprint` package directory structure
+- [x] Define `grammar.js` with lexical rules:
+  - [x] UTF-8 character set handling
+  - [x] Line ending normalization (LF/CRLF)
+  - [x] Single-line comments (`// ...`)
+  - [x] Multi-line comments (`/* ... */`)
+  - [x] Identifier pattern: `[a-zA-Z_][a-zA-Z0-9_-]*`
+  - [x] Whitespace and indentation handling
 
 ### 2.2 Document-Level Rules
-- [ ] Define `@description` keyword and block parsing
-- [ ] Implement description-text capture (free-form prose until next keyword)
+- [x] Define `@description` keyword and block parsing
+- [x] Implement description-text capture (free-form prose until next keyword)
 
 ### 2.3 Hierarchy Keywords
-- [ ] Define `@module` rule with identifier and description-text
-- [ ] Define `@feature` rule with identifier and description-text
-- [ ] Define `@requirement` rule with identifier and description-text
-- [ ] Implement proper nesting validation (features in modules, requirements in features)
+- [x] Define `@module` rule with identifier and description-text
+- [x] Define `@feature` rule with identifier and description-text
+- [x] Define `@requirement` rule with identifier and description-text
+- [x] Implement proper nesting validation (features in modules, requirements in features)
 
 ### 2.4 Annotation Keywords
-- [ ] Define `@depends-on` rule with comma-separated reference list
-- [ ] Implement reference parsing (dot-notation: `module.feature.requirement`)
-- [ ] Define `@constraint` rule with identifier and description-text
+- [x] Define `@depends-on` rule with comma-separated reference list
+- [x] Implement reference parsing (dot-notation: `module.feature.requirement`)
+- [x] Define `@constraint` rule with identifier and description-text
 
 ### 2.5 Description Block Handling
-- [ ] Parse free-form prose text
-- [ ] Handle fenced code blocks (``` ... ```)
-- [ ] Preserve paragraph separation (blank lines)
+- [x] Parse free-form prose text
+- [x] Handle fenced code blocks (``` ... ```)
+- [x] Preserve paragraph separation (blank lines)
 
 ### 2.6 Grammar Testing
-- [ ] Write corpus tests for valid syntax cases
-- [ ] Write corpus tests for edge cases (empty files, minimal documents)
+- [x] Write corpus tests for valid syntax cases
+- [x] Write corpus tests for edge cases (empty files, minimal documents)
 - [ ] Write corpus tests for error recovery scenarios
-- [ ] Generate and compile the tree-sitter parser
+- [x] Generate and compile the tree-sitter parser
 - [ ] Create Node.js bindings for the parser
 
 ---

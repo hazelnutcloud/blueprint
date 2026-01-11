@@ -1,0 +1,189 @@
+================================================================================
+Empty file
+================================================================================
+
+================================================================================
+
+(source_file)
+
+================================================================================
+Description only
+================================================================================
+
+@description
+  This is a test document.
+
+================================================================================
+
+(source_file
+  (description_block
+    (description_text)))
+
+================================================================================
+Simple module
+================================================================================
+
+@module authentication
+  Handles user authentication.
+
+================================================================================
+
+(source_file
+  (module_block
+    name: (identifier)
+    (description_text)))
+
+================================================================================
+Module with feature
+================================================================================
+
+@module authentication
+
+@feature login
+  User login functionality.
+
+================================================================================
+
+(source_file
+  (module_block
+    name: (identifier)
+    (feature_block
+      name: (identifier)
+      (description_text))))
+
+================================================================================
+Feature with requirement
+================================================================================
+
+@module authentication
+
+@feature login
+
+@requirement basic-auth
+  Users can log in with email and password.
+
+================================================================================
+
+(source_file
+  (module_block
+    name: (identifier)
+    (feature_block
+      name: (identifier)
+      (requirement_block
+        name: (identifier)
+        (description_text)))))
+
+================================================================================
+Requirement with constraint
+================================================================================
+
+@module authentication
+
+@feature login
+
+@requirement basic-auth
+  Users can log in with email and password.
+
+  @constraint bcrypt-hashing
+    Passwords must use bcrypt with cost >= 12.
+
+================================================================================
+
+(source_file
+  (module_block
+    name: (identifier)
+    (feature_block
+      name: (identifier)
+      (requirement_block
+        name: (identifier)
+        (description_text)
+        (constraint
+          name: (identifier)
+          (description_text))))))
+
+================================================================================
+Depends-on annotation
+================================================================================
+
+@module payments
+  @depends-on authentication
+
+@feature checkout
+  @depends-on payments.cart, inventory.stock
+
+================================================================================
+
+(source_file
+  (module_block
+    name: (identifier)
+    (depends_on
+      (reference
+        (identifier)))
+    (feature_block
+      name: (identifier)
+      (depends_on
+        (reference
+          (identifier)
+          (identifier))
+        (reference
+          (identifier)
+          (identifier))))))
+
+================================================================================
+Single-line comment
+================================================================================
+
+// This is a comment
+@module test
+
+================================================================================
+
+(source_file
+  (comment)
+  (module_block
+    name: (identifier)))
+
+================================================================================
+Multi-line comment
+================================================================================
+
+/* This is a
+   multi-line comment */
+@module test
+
+================================================================================
+
+(source_file
+  (comment)
+  (module_block
+    name: (identifier)))
+
+================================================================================
+Description after depends-on
+================================================================================
+
+@module auth
+
+@feature login
+  @depends-on storage.users
+
+  Provides login functionality for users.
+
+  @requirement basic-auth
+    Email and password login.
+
+================================================================================
+
+(source_file
+  (module_block
+    name: (identifier)
+    (feature_block
+      name: (identifier)
+      (depends_on
+        (reference
+          (identifier)
+          (identifier)))
+      (description_text)
+      (requirement_block
+        name: (identifier)
+        (description_text)))))

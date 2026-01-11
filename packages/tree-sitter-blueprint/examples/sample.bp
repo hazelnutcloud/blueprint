@@ -1,0 +1,43 @@
+// sample.bp - Example Blueprint file
+
+@description
+  CloudVault Authentication System
+
+  This document specifies the authentication and session management
+  requirements for CloudVault.
+
+@module authentication
+  Handles user identity verification, session management, and access control.
+
+@feature login
+  @depends-on storage.user-accounts
+
+  Provides mechanisms for users to prove their identity.
+
+  @requirement credentials-login
+    Users can authenticate using email and password.
+
+    @constraint bcrypt-verification
+      Passwords must be verified using bcrypt with cost factor >= 12.
+
+    @constraint rate-limiting
+      Failed login attempts must be rate-limited.
+
+  @requirement oauth-login
+    @depends-on authentication.login.credentials-login
+
+    Users can authenticate using third-party OAuth providers.
+
+    @constraint csrf-protection
+      OAuth state parameter must be validated.
+
+@feature session
+  @depends-on authentication.login
+
+  Manages authenticated user sessions.
+
+  @requirement create-token
+    Generate secure session tokens upon successful authentication.
+
+    @constraint rs256-signing
+      Tokens must be signed using RS256.

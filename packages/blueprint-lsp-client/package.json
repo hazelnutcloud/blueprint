@@ -1,0 +1,13 @@
+{
+  "name": "blueprint-lsp-client",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "zshy": "^0.7.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
