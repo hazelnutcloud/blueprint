@@ -3,10 +3,24 @@ import type { Tree, Node } from "./parser";
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import type { SourceLocation } from "./ast";
 import type { DependencyGraph, DependencyEdge } from "./dependency-graph";
+import type { RequirementTicketMap } from "./requirement-ticket-map";
+import type { Ticket } from "./tickets";
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/**
+ * Information about a ticket file and its contents.
+ */
+export interface TicketFileInfo {
+  /** The URI of the ticket file */
+  uri: string;
+  /** The raw content of the ticket file */
+  content: string;
+  /** The tickets in this file */
+  tickets: Ticket[];
+}
 
 /**
  * Context for finding references.
@@ -22,6 +36,10 @@ export interface ReferencesContext {
   fileUri: string;
   /** Whether to include the declaration itself in results */
   includeDeclaration: boolean;
+  /** The requirement-ticket mapping (optional, for finding ticket references) */
+  ticketMap?: RequirementTicketMap;
+  /** All ticket files indexed by their URI (optional, for finding ticket references) */
+  ticketFiles?: Map<string, TicketFileInfo>;
 }
 
 /**
@@ -405,14 +423,126 @@ function sourceLocationToRange(location: SourceLocation): Range {
 }
 
 /**
+ * Escape special regex characters in a string.
+ */
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Find the position of a ticket in the ticket file content.
+ * Returns the range of the ticket object in the JSON file.
+ */
+function findTicketPositionInContent(
+  content: string,
+  ticketId: string
+): Range | null {
+  // Find the ticket by searching for its ID in the JSON
+  // Look for: "id": "TKT-001"
+  const idPattern = `"id"\\s*:\\s*"${escapeRegExp(ticketId)}"`;
+  const regex = new RegExp(idPattern);
+  const match = regex.exec(content);
+
+  if (!match) {
+    return null;
+  }
+
+  // Find the opening brace of this ticket object by searching backwards
+  let braceCount = 0;
+  let ticketStart = match.index;
+  for (let i = match.index; i >= 0; i--) {
+    if (content[i] === "}") {
+      braceCount++;
+    } else if (content[i] === "{") {
+      if (braceCount === 0) {
+        ticketStart = i;
+        break;
+      }
+      braceCount--;
+    }
+  }
+
+  // Convert offset to line/column
+  const lines = content.substring(0, ticketStart).split("\n");
+  const startLine = lines.length - 1;
+  const startColumn = lines[lines.length - 1]?.length ?? 0;
+
+  // Find the closing brace of this ticket object
+  braceCount = 0;
+  let ticketEnd = ticketStart;
+  for (let i = ticketStart; i < content.length; i++) {
+    if (content[i] === "{") {
+      braceCount++;
+    } else if (content[i] === "}") {
+      braceCount--;
+      if (braceCount === 0) {
+        ticketEnd = i + 1;
+        break;
+      }
+    }
+  }
+
+  // Convert end offset to line/column
+  const endLines = content.substring(0, ticketEnd).split("\n");
+  const endLine = endLines.length - 1;
+  const endColumn = endLines[endLines.length - 1]?.length ?? 0;
+
+  return {
+    start: { line: startLine, character: startColumn },
+    end: { line: endLine, character: endColumn },
+  };
+}
+
+/**
+ * Find all ticket locations that track a requirement.
+ * 
+ * Per SPEC.md Section 5.7: Find references should include tickets tracking a requirement.
+ */
+function findTicketReferences(
+  requirementPath: string,
+  context: ReferencesContext
+): Location[] {
+  const locations: Location[] = [];
+
+  // Need ticket context to find ticket references
+  if (!context.ticketMap || !context.ticketFiles) {
+    return locations;
+  }
+
+  // Get tickets for this requirement
+  const ticketInfo = context.ticketMap.get(requirementPath);
+  if (!ticketInfo || ticketInfo.tickets.length === 0) {
+    return locations;
+  }
+
+  // Find the location of each ticket in its file
+  for (const ticket of ticketInfo.tickets) {
+    // Search through all ticket files to find where this ticket is defined
+    for (const [uri, ticketFile] of context.ticketFiles) {
+      const hasTicket = ticketFile.tickets.some((t) => t.id === ticket.id);
+      if (hasTicket) {
+        const range = findTicketPositionInContent(ticketFile.content, ticket.id);
+        if (range) {
+          locations.push({ uri, range });
+        }
+        break;
+      }
+    }
+  }
+
+  return locations;
+}
+
+/**
  * Find all references to a target symbol.
  * 
- * References in Blueprint are @depends-on declarations that reference a symbol.
- * This function finds all places where the target symbol is referenced.
+ * References in Blueprint are:
+ * - @depends-on declarations that reference a symbol
+ * - Tickets that track a requirement
  * 
  * Per SPEC.md Section 5.7:
  * - Find all @depends-on declarations referencing an element
- * - Find tickets tracking a requirement (handled separately via tickets)
+ * - Find tickets tracking a requirement
  * - Find source files implementing a requirement (via ticket data - future)
  */
 export function buildReferences(
@@ -439,7 +569,7 @@ export function buildReferences(
     });
   }
 
-  // Find all references using the dependency graph edges
+  // Find all @depends-on references using the dependency graph edges
   // Each edge's "to" field points to a symbol that is depended on
   // We want edges where "to" matches our target path (or is a child of it)
   const referencingEdges = findReferencingEdges(target.path, context.edges);
@@ -450,6 +580,12 @@ export function buildReferences(
       uri: edge.fileUri,
       range: sourceLocationToRange(edge.reference.location),
     });
+  }
+
+  // Find ticket references for requirements
+  if (target.kind === "requirement") {
+    const ticketLocations = findTicketReferences(target.path, context);
+    locations.push(...ticketLocations);
   }
 
   return locations.length > 0 ? locations : null;

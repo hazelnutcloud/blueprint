@@ -254,7 +254,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ### 9.2 Find References
 - [x] Implement `textDocument/references` handler (Completed: Added `references.ts` module with `findReferencesTarget()` and `buildReferences()` functions. Uses `DependencyGraph.edges` to find all `@depends-on` declarations that reference a symbol. Integrated with LSP server in `index.ts` via `connection.onReferences()` handler. Added `referencesProvider: true` to server capabilities. 21 tests added in `references.test.ts`.)
 - [x] Find all `@depends-on` declarations referencing an element (Completed: `findReferencingEdges()` searches dependency graph edges for exact matches and parent references that implicitly include children.)
-- [ ] Find tickets tracking a requirement
+- [x] Find tickets tracking a requirement (Completed: Extended `ReferencesContext` to include optional `ticketMap` and `ticketFiles` fields. Added `findTicketReferences()` function in `references.ts` that finds all tickets tracking a requirement and returns their locations in `.tickets.json` files. Updated `buildReferences()` to include ticket locations for requirement targets. Updated `index.ts` to pass ticket context to references handler. 7 new tests added in `references.test.ts` covering single ticket, multiple tickets, combined @depends-on and ticket references, includeDeclaration behavior, and backward compatibility.)
 - [ ] Find source files implementing a requirement (via ticket data)
 
 ### 9.3 Document Symbols

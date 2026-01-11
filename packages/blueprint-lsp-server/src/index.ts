@@ -22,7 +22,7 @@ import type {
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
 import { findDefinitionTarget, buildDefinition, type DefinitionContext } from "./definition";
-import { findReferencesTarget, buildReferences, type ReferencesContext } from "./references";
+import { findReferencesTarget, buildReferences, type ReferencesContext, type TicketFileInfo } from "./references";
 import { buildDocumentSymbols } from "./document-symbol";
 import { buildWorkspaceSymbols } from "./workspace-symbol";
 import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
@@ -750,12 +750,38 @@ connection.onReferences((params: ReferenceParams) => {
   // Build the dependency graph for reference lookup
   const { graph: dependencyGraph, edges } = DependencyGraph.build(symbolIndex);
 
+  // Build the requirement-ticket map for finding ticket references
+  const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
+  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
+  
+  // Create a mock ticket file for the map builder
+  const ticketFile = allTickets.length > 0 
+    ? { version: "1.0", source: "", tickets: allTickets }
+    : null;
+  
+  const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
+    requirementSymbols,
+    ticketFile
+  );
+
+  // Build the ticket files map for position lookup
+  const ticketFilesMap = new Map<string, TicketFileInfo>();
+  for (const ticketFileInfo of ticketDocumentManager.getAllTicketFilesWithContent()) {
+    ticketFilesMap.set(ticketFileInfo.uri, {
+      uri: ticketFileInfo.uri,
+      content: ticketFileInfo.content,
+      tickets: ticketFileInfo.data.tickets,
+    });
+  }
+
   const referencesContext: ReferencesContext = {
     symbolIndex,
     dependencyGraph,
     edges,
     fileUri: params.textDocument.uri,
     includeDeclaration: params.context.includeDeclaration,
+    ticketMap,
+    ticketFiles: ticketFilesMap,
   };
 
   return buildReferences(target, referencesContext);

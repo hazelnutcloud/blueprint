@@ -6,10 +6,13 @@ import {
   buildReferences,
   getReferencesStats,
   type ReferencesContext,
+  type TicketFileInfo,
 } from "./references";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { DependencyGraph } from "./dependency-graph";
 import { transformToAST } from "./ast";
+import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
+import type { Ticket, TicketFile } from "./tickets";
 
 describe("references", () => {
   beforeAll(async () => {
@@ -614,6 +617,465 @@ describe("references", () => {
 
       const stats = getReferencesStats({ kind: "module" }, context);
       expect(stats).toBeNull();
+    });
+  });
+
+  describe("ticket references", () => {
+    /**
+     * Helper to create a context with ticket information.
+     */
+    function createContextWithTickets(
+      symbolIndex: CrossFileSymbolIndex,
+      tickets: Ticket[],
+      ticketFileContent: string,
+      ticketFileUri: string = "file:///.blueprint/tickets/test.tickets.json",
+      includeDeclaration: boolean = false
+    ): ReferencesContext {
+      const { graph, edges } = DependencyGraph.build(symbolIndex);
+      
+      // Build ticket map
+      const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
+      const ticketFile: TicketFile = {
+        version: "1.0",
+        source: "test.bp",
+        tickets,
+      };
+      const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
+        requirementSymbols,
+        ticketFile
+      );
+      
+      // Build ticket files map
+      const ticketFiles = new Map<string, TicketFileInfo>();
+      ticketFiles.set(ticketFileUri, {
+        uri: ticketFileUri,
+        content: ticketFileContent,
+        tickets,
+      });
+      
+      return {
+        symbolIndex,
+        dependencyGraph: graph,
+        edges,
+        fileUri: "file:///test.bp",
+        includeDeclaration,
+        ticketMap,
+        ticketFiles,
+      };
+    }
+
+    test("finds ticket tracking a requirement", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in.`;
+      const tree = parseDocument(source);
+      const ast = transformToAST(tree!);
+
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile("file:///test.bp", ast);
+
+      const tickets: Ticket[] = [
+        {
+          id: "TKT-001",
+          ref: "auth.login.basic-auth",
+          description: "Implement login",
+          status: "in-progress",
+          constraints_satisfied: [],
+        },
+      ];
+
+      const ticketFileContent = `{
+  "version": "1.0",
+  "source": "test.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.basic-auth",
+      "description": "Implement login",
+      "status": "in-progress",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+      // Find references to basic-auth
+      const target = findReferencesTarget(
+        tree!,
+        { line: 2, character: 18 },
+        symbolIndex,
+        "file:///test.bp"
+      );
+
+      const context = createContextWithTickets(symbolIndex, tickets, ticketFileContent);
+      const result = buildReferences(target!, context);
+
+      expect(result).not.toBeNull();
+      expect(result!.length).toBe(1);
+      expect(result![0]!.uri).toBe("file:///.blueprint/tickets/test.tickets.json");
+      // Should point to the ticket object in the JSON
+      expect(result![0]!.range.start.line).toBe(4); // Line with opening brace of ticket
+    });
+
+    test("finds multiple tickets tracking same requirement", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in.`;
+      const tree = parseDocument(source);
+      const ast = transformToAST(tree!);
+
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile("file:///test.bp", ast);
+
+      const tickets: Ticket[] = [
+        {
+          id: "TKT-001",
+          ref: "auth.login.basic-auth",
+          description: "Implement core login",
+          status: "complete",
+          constraints_satisfied: ["bcrypt-cost"],
+        },
+        {
+          id: "TKT-002",
+          ref: "auth.login.basic-auth",
+          description: "Add rate limiting",
+          status: "in-progress",
+          constraints_satisfied: [],
+        },
+      ];
+
+      const ticketFileContent = `{
+  "version": "1.0",
+  "source": "test.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.basic-auth",
+      "description": "Implement core login",
+      "status": "complete",
+      "constraints_satisfied": ["bcrypt-cost"]
+    },
+    {
+      "id": "TKT-002",
+      "ref": "auth.login.basic-auth",
+      "description": "Add rate limiting",
+      "status": "in-progress",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+      // Find references to basic-auth
+      const target = findReferencesTarget(
+        tree!,
+        { line: 2, character: 18 },
+        symbolIndex,
+        "file:///test.bp"
+      );
+
+      const context = createContextWithTickets(symbolIndex, tickets, ticketFileContent);
+      const result = buildReferences(target!, context);
+
+      expect(result).not.toBeNull();
+      expect(result!.length).toBe(2);
+      // Both should be in the ticket file
+      expect(result![0]!.uri).toBe("file:///.blueprint/tickets/test.tickets.json");
+      expect(result![1]!.uri).toBe("file:///.blueprint/tickets/test.tickets.json");
+    });
+
+    test("finds both @depends-on references and tickets", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in.
+
+  @feature session
+    @depends-on auth.login.basic-auth
+
+    @requirement create-token
+      Create session tokens.`;
+      const tree = parseDocument(source);
+      const ast = transformToAST(tree!);
+
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile("file:///test.bp", ast);
+
+      const tickets: Ticket[] = [
+        {
+          id: "TKT-001",
+          ref: "auth.login.basic-auth",
+          description: "Implement login",
+          status: "complete",
+          constraints_satisfied: [],
+        },
+      ];
+
+      const ticketFileContent = `{
+  "version": "1.0",
+  "source": "test.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.basic-auth",
+      "description": "Implement login",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+      // Find references to basic-auth
+      const target = findReferencesTarget(
+        tree!,
+        { line: 2, character: 18 },
+        symbolIndex,
+        "file:///test.bp"
+      );
+
+      const context = createContextWithTickets(symbolIndex, tickets, ticketFileContent);
+      const result = buildReferences(target!, context);
+
+      expect(result).not.toBeNull();
+      expect(result!.length).toBe(2);
+      
+      // One should be the @depends-on reference in the .bp file
+      const bpReference = result!.find((loc) => loc.uri === "file:///test.bp");
+      expect(bpReference).toBeDefined();
+      expect(bpReference!.range.start.line).toBe(6);
+      
+      // One should be the ticket in the .tickets.json file
+      const ticketReference = result!.find((loc) => 
+        loc.uri === "file:///.blueprint/tickets/test.tickets.json"
+      );
+      expect(ticketReference).toBeDefined();
+    });
+
+    test("includes declaration, @depends-on, and tickets when includeDeclaration is true", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in.
+
+  @feature session
+    @depends-on auth.login.basic-auth
+
+    @requirement create-token
+      Create session tokens.`;
+      const tree = parseDocument(source);
+      const ast = transformToAST(tree!);
+
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile("file:///test.bp", ast);
+
+      const tickets: Ticket[] = [
+        {
+          id: "TKT-001",
+          ref: "auth.login.basic-auth",
+          description: "Implement login",
+          status: "complete",
+          constraints_satisfied: [],
+        },
+      ];
+
+      const ticketFileContent = `{
+  "version": "1.0",
+  "source": "test.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.basic-auth",
+      "description": "Implement login",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+      // Find references to basic-auth
+      const target = findReferencesTarget(
+        tree!,
+        { line: 2, character: 18 },
+        symbolIndex,
+        "file:///test.bp"
+      );
+
+      const context = createContextWithTickets(
+        symbolIndex, 
+        tickets, 
+        ticketFileContent,
+        "file:///.blueprint/tickets/test.tickets.json",
+        true  // includeDeclaration
+      );
+      const result = buildReferences(target!, context);
+
+      expect(result).not.toBeNull();
+      expect(result!.length).toBe(3);
+      
+      // Should include:
+      // 1. The declaration itself (line 2)
+      const declaration = result!.find((loc) => 
+        loc.uri === "file:///test.bp" && loc.range.start.line === 2
+      );
+      expect(declaration).toBeDefined();
+      
+      // 2. The @depends-on reference (line 6)
+      const dependsOnRef = result!.find((loc) => 
+        loc.uri === "file:///test.bp" && loc.range.start.line === 6
+      );
+      expect(dependsOnRef).toBeDefined();
+      
+      // 3. The ticket reference
+      const ticketRef = result!.find((loc) => 
+        loc.uri === "file:///.blueprint/tickets/test.tickets.json"
+      );
+      expect(ticketRef).toBeDefined();
+    });
+
+    test("does not find ticket references for modules", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in.`;
+      const tree = parseDocument(source);
+      const ast = transformToAST(tree!);
+
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile("file:///test.bp", ast);
+
+      // Tickets only track requirements, not modules
+      const tickets: Ticket[] = [
+        {
+          id: "TKT-001",
+          ref: "auth.login.basic-auth",
+          description: "Implement login",
+          status: "complete",
+          constraints_satisfied: [],
+        },
+      ];
+
+      const ticketFileContent = `{
+  "version": "1.0",
+  "source": "test.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.basic-auth",
+      "description": "Implement login",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+      // Find references to module "auth"
+      const target = findReferencesTarget(
+        tree!,
+        { line: 0, character: 8 },
+        symbolIndex,
+        "file:///test.bp"
+      );
+
+      const context = createContextWithTickets(symbolIndex, tickets, ticketFileContent);
+      const result = buildReferences(target!, context);
+
+      // No references to the module (no @depends-on, and tickets don't reference modules)
+      expect(result).toBeNull();
+    });
+
+    test("does not find ticket references for features", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in.`;
+      const tree = parseDocument(source);
+      const ast = transformToAST(tree!);
+
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile("file:///test.bp", ast);
+
+      const tickets: Ticket[] = [
+        {
+          id: "TKT-001",
+          ref: "auth.login.basic-auth",
+          description: "Implement login",
+          status: "complete",
+          constraints_satisfied: [],
+        },
+      ];
+
+      const ticketFileContent = `{
+  "version": "1.0",
+  "source": "test.bp",
+  "tickets": [
+    {
+      "id": "TKT-001",
+      "ref": "auth.login.basic-auth",
+      "description": "Implement login",
+      "status": "complete",
+      "constraints_satisfied": []
+    }
+  ]
+}`;
+
+      // Find references to feature "login"
+      const target = findReferencesTarget(
+        tree!,
+        { line: 1, character: 12 },
+        symbolIndex,
+        "file:///test.bp"
+      );
+
+      const context = createContextWithTickets(symbolIndex, tickets, ticketFileContent);
+      const result = buildReferences(target!, context);
+
+      // No references to the feature (no @depends-on, and tickets reference requirements not features)
+      expect(result).toBeNull();
+    });
+
+    test("works without ticket context (backward compatibility)", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in.
+
+  @feature session
+    @depends-on auth.login.basic-auth
+
+    @requirement create-token
+      Create session tokens.`;
+      const tree = parseDocument(source);
+      const ast = transformToAST(tree!);
+
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile("file:///test.bp", ast);
+
+      // Find references to basic-auth
+      const target = findReferencesTarget(
+        tree!,
+        { line: 2, character: 18 },
+        symbolIndex,
+        "file:///test.bp"
+      );
+
+      // Create context WITHOUT ticket information
+      const { graph, edges } = DependencyGraph.build(symbolIndex);
+      const context: ReferencesContext = {
+        symbolIndex,
+        dependencyGraph: graph,
+        edges,
+        fileUri: "file:///test.bp",
+        includeDeclaration: false,
+        // No ticketMap or ticketFiles
+      };
+
+      const result = buildReferences(target!, context);
+
+      // Should still find the @depends-on reference
+      expect(result).not.toBeNull();
+      expect(result!.length).toBe(1);
+      expect(result![0]!.uri).toBe("file:///test.bp");
+      expect(result![0]!.range.start.line).toBe(6);
     });
   });
 });
