@@ -142,16 +142,16 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 5: Dependency Resolution
 
 ### 5.1 Reference Resolution
-- [ ] Parse dot-notation references (`module.feature.requirement`)
-- [ ] Resolve references to target nodes (same file)
-- [ ] Resolve cross-file references
-- [ ] Handle partial references (module-only, module.feature)
+- [x] Parse dot-notation references (`module.feature.requirement`) (Completed: `ReferenceNode` in `ast.ts` stores `parts` array and `path` string. `transformReference()` extracts parts from tree-sitter nodes.)
+- [x] Resolve references to target nodes (same file) (Completed: `CrossFileSymbolIndex.resolveReference()` in `symbol-index.ts` resolves references to `IndexedSymbol` objects.)
+- [x] Resolve cross-file references (Completed: `CrossFileSymbolIndex` maintains global symbol registry across all indexed files, enabling cross-file resolution.)
+- [x] Handle partial references (module-only, module.feature) (Completed: `resolveReference()` supports both exact and partial matching via prefix search in `globalSymbols`.)
 
 ### 5.2 Dependency Graph
-- [ ] Build directed dependency graph from `@depends-on` declarations
-- [ ] Implement topological sort for dependency ordering
-- [ ] Detect circular dependencies using cycle detection algorithm
-- [ ] Compute transitive dependencies
+- [x] Build directed dependency graph from `@depends-on` declarations (Completed: Added `DependencyGraph` class in `dependency-graph.ts` with `build()` static method that constructs graph from `CrossFileSymbolIndex`. 27 tests in `dependency-graph.test.ts`.)
+- [x] Implement topological sort for dependency ordering (Completed: `topologicalSort()` uses Kahn's algorithm to produce ordering where dependencies come before dependents.)
+- [x] Detect circular dependencies using cycle detection algorithm (Completed: `detectCycles()` uses DFS-based cycle detection, returns `CircularDependency[]` with cycle paths and edges.)
+- [x] Compute transitive dependencies (Completed: `getTransitiveDependencies()` and `getTransitiveDependents()` methods compute transitive closures.)
 
 ### 5.3 Blocking Status Computation
 - [ ] Determine if a requirement is blocked by incomplete dependencies
