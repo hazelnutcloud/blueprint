@@ -752,6 +752,186 @@ describe("AST Transformation", () => {
       // This pattern can be used by diagnostics to detect misplaced @description
       expect(errorIndex).toBeLessThan(descriptionIndex);
     });
+
+    describe("empty/missing identifier handling", () => {
+      test("@module without identifier - parser uses next token as name", () => {
+        // When @module has no identifier, the parser aggressively recovers by
+        // wrapping the next keyword (@feature) in an ERROR node and using
+        // its identifier as the module name
+        const code = `
+@module
+
+@feature login
+  Login feature.
+`;
+        const tree = parseDocument(code);
+        expect(tree).not.toBeNull();
+
+        // The parse tree has an error due to missing identifier
+        expect(tree!.rootNode.hasError).toBe(true);
+
+        const ast = transformToAST(tree!);
+        expect(ast.type).toBe("document");
+
+        // Parser recovery: @feature gets wrapped in ERROR, "login" becomes module name
+        expect(ast.modules).toHaveLength(1);
+        expect(ast.modules[0]!.name).toBe("login");
+        // The feature_block is inside an ERROR node, so no features are extracted
+        expect(ast.modules[0]!.features).toHaveLength(0);
+      });
+
+      test("@feature without identifier - requirement becomes module-level", () => {
+        const code = `
+@module auth
+  Authentication module.
+
+@feature
+
+@requirement basic-auth
+  Basic auth.
+`;
+        const tree = parseDocument(code);
+        expect(tree).not.toBeNull();
+
+        // Parse error expected
+        expect(tree!.rootNode.hasError).toBe(true);
+
+        const ast = transformToAST(tree!);
+        expect(ast.type).toBe("document");
+
+        // The module should still be extracted
+        expect(ast.modules).toHaveLength(1);
+        expect(ast.modules[0]!.name).toBe("auth");
+
+        // Parser recovery: @feature keyword becomes an ERROR node,
+        // and requirement_block becomes a sibling at module level
+        expect(ast.modules[0]!.features).toHaveLength(0);
+        expect(ast.modules[0]!.requirements).toHaveLength(1);
+        expect(ast.modules[0]!.requirements[0]!.name).toBe("basic-auth");
+      });
+
+      test("@requirement without identifier - parser uses next token as name", () => {
+        const code = `
+@module auth
+
+@feature login
+  Login feature.
+
+@requirement
+
+  @constraint bcrypt
+    Use bcrypt.
+`;
+        const tree = parseDocument(code);
+        expect(tree).not.toBeNull();
+
+        expect(tree!.rootNode.hasError).toBe(true);
+
+        const ast = transformToAST(tree!);
+        expect(ast.type).toBe("document");
+        expect(ast.modules).toHaveLength(1);
+        expect(ast.modules[0]!.features).toHaveLength(1);
+        expect(ast.modules[0]!.features[0]!.name).toBe("login");
+
+        // Parser recovery: @constraint gets wrapped in ERROR, "bcrypt" becomes requirement name
+        expect(ast.modules[0]!.features[0]!.requirements).toHaveLength(1);
+        expect(ast.modules[0]!.features[0]!.requirements[0]!.name).toBe("bcrypt");
+        // The constraint is inside an ERROR node, so no constraints are extracted
+        expect(ast.modules[0]!.features[0]!.requirements[0]!.constraints).toHaveLength(0);
+      });
+
+      test("@constraint without identifier - parser uses next line text as name", () => {
+        // Unlike other keywords, @constraint without identifier does NOT produce
+        // an error because the parser treats the next line's first word as the name
+        const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+
+  @constraint
+    This constraint has no name.
+`;
+        const tree = parseDocument(code);
+        expect(tree).not.toBeNull();
+
+        // No parse error! The parser uses "This" as the constraint name
+        expect(tree!.rootNode.hasError).toBe(false);
+
+        const ast = transformToAST(tree!);
+        expect(ast.type).toBe("document");
+        expect(ast.modules).toHaveLength(1);
+
+        const req = ast.modules[0]!.features[0]!.requirements[0];
+        expect(req).toBeDefined();
+        expect(req!.name).toBe("basic-auth");
+
+        // The parser uses "This" from the next line as the constraint name
+        expect(req!.constraints).toHaveLength(1);
+        expect(req!.constraints[0]!.name).toBe("This");
+        expect(req!.constraints[0]!.description).toContain("constraint has no name");
+      });
+
+      test("symbol table handles module-level requirements after feature error", () => {
+        // When @feature has no identifier, the subsequent requirement
+        // becomes a module-level requirement instead
+        const code = `
+@module auth
+
+@feature
+
+@requirement test-req
+  A requirement that becomes module-level.
+`;
+        const tree = parseDocument(code);
+        expect(tree!.rootNode.hasError).toBe(true);
+
+        const ast = transformToAST(tree!);
+        const symbols = buildSymbolTable(ast);
+
+        // The module should be in the symbol table
+        expect(symbols.modules.has("auth")).toBe(true);
+
+        // Parser recovery: @feature becomes ERROR, requirement is at module level
+        expect(ast.modules[0]!.features).toHaveLength(0);
+        expect(ast.modules[0]!.requirements).toHaveLength(1);
+        expect(ast.modules[0]!.requirements[0]!.name).toBe("test-req");
+
+        // The requirement should be in the symbol table at module level
+        expect(symbols.requirements.has("auth.test-req")).toBe(true);
+      });
+
+      test("subsequent valid elements are still parsed after missing identifier", () => {
+        const code = `
+@module
+
+@module valid-module
+  This is a valid module after an invalid one.
+
+@feature valid-feature
+  This is a valid feature.
+`;
+        const tree = parseDocument(code);
+        expect(tree).not.toBeNull();
+
+        // There should be an error from the first module
+        expect(tree!.rootNode.hasError).toBe(true);
+
+        const ast = transformToAST(tree!);
+
+        // Due to parser recovery, the first @module uses "valid-module" as its name
+        // (the second @module keyword gets wrapped in ERROR)
+        // Then "valid-feature" becomes part of the first module
+        expect(ast.modules.length).toBeGreaterThanOrEqual(1);
+
+        // Check that valid-feature is parsed somewhere in the AST
+        const allFeatures = ast.modules.flatMap((m) => m.features);
+        const validFeature = allFeatures.find((f) => f.name === "valid-feature");
+        expect(validFeature).toBeDefined();
+      });
+    });
   });
 
   describe("complex document", () => {
