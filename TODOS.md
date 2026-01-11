@@ -464,6 +464,54 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ---
 
+## Code Review: Phase 8 Hover Implementation (Commit 53001cb)
+
+### SPEC Compliance Issues
+
+- [ ] **Hover format does not match SPEC.md Section 5.5 exactly** - The SPEC.md Section 5.5 shows a specific box-style hover format with horizontal separators (`├──────────────────────────────────────────────────────────────────┤`), but the implementation uses standard Markdown headers and bullet lists. While the content is equivalent, the visual presentation differs. Consider whether the SPEC should be updated to reflect Markdown format, or if the implementation should attempt to match the boxed format more closely.
+
+- [ ] **Module-level requirements path construction issue** - In `hover.ts:260-263` (`buildRequirementTarget`), when a requirement has no parent feature (module-level requirement), the path is constructed as `${moduleName}.${nameNode.text}`. However, per SPEC.md Section 3.3.3, "A requirement must be declared within a feature" - module-level requirements should not exist. The grammar and AST allow this, creating an inconsistency. Either:
+  1. Update SPEC.md to explicitly allow module-level requirements, OR
+  2. Add diagnostic errors for module-level requirements and remove this path handling
+
+- [ ] **Hover for @description block not implemented** - The `findHoverTarget` function (`hover.ts:108-158`) handles modules, features, requirements, constraints, references, and keywords, but does not handle hovering over `@description` blocks. SPEC.md Section 3.2.1 defines `@description` as a document-level keyword. Should show document-level context when hovering over description.
+
+- [ ] **Missing file location in requirement hover** - SPEC.md Section 5.5 hover example shows ticket info with a "Files:" section listing implementation files like `src/auth/login.ts`. The implementation does include this (`hover.ts:470-476`), but the SPEC shows file paths without bullets in a clean format. Minor formatting difference.
+
+### Implementation Issues
+
+- [ ] **Potential memory leak with tree cleanup** - In `index.ts:425-430` (semantic tokens handler), when parsing a document that isn't in the document manager, the code creates a tree with `parseDocument()` and calls `tree.delete()` after building tokens. However, if `buildSemanticTokens()` throws an exception, the tree won't be deleted. Should wrap in try/finally.
+
+- [ ] **Inefficient re-computation of dependency graph and ticket map on each hover** - In `index.ts:448-464`, each hover request rebuilds the entire `RequirementTicketMap` and `DependencyGraph` from scratch. For large workspaces, this could cause noticeable latency. Consider caching these structures and invalidating on document/ticket changes.
+
+- [ ] **No null check for ticketMap.get() result in reference hover** - In `hover.ts:641-647` (`buildReferenceHover`), when the resolved symbol is a requirement, `context.ticketMap.get(target.path)` is called and the result is used without null check. The code does check `if (ticketInfo)` but the `target.path` could be undefined at this point since `target.path` is optional.
+
+- [ ] **Inconsistent status formatting** - The `formatStatus` function (`hover.ts:705-718`) handles "in-progress" → "in progress" but the `getStatusIcon` function uses the raw status values. When displaying "Status: in progress", the icon and text are consistent, but in other places raw status values may appear.
+
+### Test Coverage Gaps
+
+- [ ] **No test for circular dependency display in hover** - While `hover.ts:488-492` handles `blockingInfo.status === "in-cycle"` and displays cycle information, there's no test case in `hover.test.ts` that creates an actual circular dependency and verifies the hover output shows the cycle.
+
+- [ ] **No test for transitive blockers truncation** - `hover.ts:499-501` shows "... and N more" when there are more than 3 transitive blockers, but no test verifies this truncation behavior.
+
+- [ ] **No test for feature list in module hover** - `hover.ts:564-573` shows a "Features:" list in module hover, but only when `target.node` is available and has features. No test verifies this feature list is displayed correctly.
+
+- [ ] **No test for module-level requirements in hover** - The code handles requirements that may exist directly under modules (no parent feature), but no test covers this edge case.
+
+- [ ] **No test for hover on @depends-on keyword itself** - Tests cover hovering on references within `@depends-on`, but not on the `@depends-on` keyword itself. Should verify it shows the generic keyword documentation.
+
+- [ ] **No test for empty constraint description** - `hover.ts:610-615` shows constraint description if available, but no test verifies behavior when description is empty or missing.
+
+### Code Quality
+
+- [ ] **Unused import in hover.ts** - `ReferenceNode` is imported in the type imports (`hover.ts:9`) but the `HoverTarget` interface uses `reference?: ReferenceNode` which is never actually populated - `buildReferenceTarget` doesn't set it. Either remove the field or populate it.
+
+- [ ] **Magic number for transitive blocker limit** - `hover.ts:499` uses `3` as the limit for showing transitive blockers before truncating. This should be a named constant for clarity.
+
+- [ ] **Inconsistent ticket file creation for hover context** - In `index.ts:456-459`, a mock ticket file is created with `{ version: "1.0", source: "", tickets: allTickets }`. The empty `source` string is technically invalid per SPEC.md Section 4.5 which requires `source` to be "Path to the source `.bp` file". While this is internal, it could cause issues if validation is added later.
+
+---
+
 ## Code Review: Phase 3.3 AST Implementation (Commit 8899d29)
 
 ### SPEC Compliance Issues
