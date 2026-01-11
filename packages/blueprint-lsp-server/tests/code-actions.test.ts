@@ -5,12 +5,16 @@ import {
   buildCodeActions,
   extractRequirementPathFromMessage,
   extractOrphanedTicketInfo,
+  extractUnresolvedReferenceFromMessage,
   generateTicketId,
   createTicket,
   findWorkspaceFolder,
   createAddTicketEdit,
   createNewTicketFileEdit,
   createRemoveTicketEdit,
+  levenshteinDistance,
+  stringSimilarity,
+  findSimilarSymbols,
   type CodeActionsContext,
 } from "../src/code-actions";
 import { CrossFileSymbolIndex } from "../src/symbol-index";
@@ -1124,5 +1128,570 @@ describe("buildCodeActions", () => {
 
     expect(actions).toHaveLength(1);
     expect(actions[0]!.diagnostics).toEqual([diagnostic]);
+  });
+
+  // Tests for did-you-mean (unresolved-reference) code actions
+  function createUnresolvedReferenceDiagnostic(referencePath: string): Diagnostic {
+    return {
+      severity: DiagnosticSeverity.Error,
+      range: {
+        start: { line: 5, character: 14 },
+        end: { line: 5, character: 14 + referencePath.length },
+      },
+      message: `Reference to non-existent element: '${referencePath}'`,
+      source: "blueprint",
+      code: "unresolved-reference",
+    };
+  }
+
+  test("creates did-you-mean code action for typo in reference", () => {
+    // Create a symbol index with some symbols
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify user credentials.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/requirements/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    // Typo: "verrify" instead of "verify"
+    const params = createMockParams(
+      "file:///workspace/requirements/other.bp",
+      [createUnresolvedReferenceDiagnostic("auth.login.verrify")]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions[0]!.title).toBe("Did you mean 'auth.login.verify'?");
+    expect(actions[0]!.kind).toBe(CodeActionKind.QuickFix);
+    expect(actions[0]!.isPreferred).toBe(true);
+  });
+
+  test("creates multiple did-you-mean suggestions sorted by similarity", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+
+  @requirement verify-token
+    Verify token.
+
+  @requirement validate
+    Validate.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/requirements/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    // Typo that could match multiple requirements
+    const params = createMockParams(
+      "file:///workspace/requirements/other.bp",
+      [createUnresolvedReferenceDiagnostic("auth.login.verifiy")]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    // Should get multiple suggestions
+    expect(actions.length).toBeGreaterThanOrEqual(1);
+    // First suggestion should be the closest match
+    expect(actions[0]!.isPreferred).toBe(true);
+    // Other suggestions should not be preferred
+    if (actions.length > 1) {
+      expect(actions[1]!.isPreferred).toBe(false);
+    }
+  });
+
+  test("returns no suggestions when no similar symbols exist", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/requirements/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    // Completely different path
+    const params = createMockParams(
+      "file:///workspace/requirements/other.bp",
+      [createUnresolvedReferenceDiagnostic("payments.checkout.process")]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    // No similar symbols, so no suggestions
+    expect(actions).toHaveLength(0);
+  });
+
+  test("did-you-mean edit replaces the reference text", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/requirements/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    const diagnostic = createUnresolvedReferenceDiagnostic("auth.login.verrify");
+    const params = createMockParams(
+      "file:///workspace/requirements/other.bp",
+      [diagnostic]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions.length).toBeGreaterThan(0);
+    const edit = actions[0]!.edit!;
+    expect(edit.changes).toBeDefined();
+    
+    const changes = edit.changes!["file:///workspace/requirements/other.bp"];
+    expect(changes).toBeDefined();
+    expect(changes!.length).toBe(1);
+    expect(changes![0]!.newText).toBe("auth.login.verify");
+    expect(changes![0]!.range).toEqual(diagnostic.range);
+  });
+
+  test("associates unresolved-reference diagnostic with code action", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/requirements/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    const diagnostic = createUnresolvedReferenceDiagnostic("auth.login.verrify");
+    const params = createMockParams(
+      "file:///workspace/requirements/other.bp",
+      [diagnostic]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions[0]!.diagnostics).toEqual([diagnostic]);
+  });
+
+  test("suggests module when module name has typo", () => {
+    const code = `
+@module authentication
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/requirements/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    // Typo in module name
+    const params = createMockParams(
+      "file:///workspace/requirements/other.bp",
+      [createUnresolvedReferenceDiagnostic("authentcation")]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions[0]!.title).toBe("Did you mean 'authentication'?");
+  });
+
+  test("suggests feature when feature name has typo", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+
+@feature registration
+
+  @requirement signup
+    Sign up.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/requirements/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+    };
+
+    // Typo in feature name
+    const params = createMockParams(
+      "file:///workspace/requirements/other.bp",
+      [createUnresolvedReferenceDiagnostic("auth.registraion")]
+    );
+
+    const actions = buildCodeActions(params, context);
+
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions[0]!.title).toBe("Did you mean 'auth.registration'?");
+  });
+});
+
+// ============================================================================
+// Tests for string similarity functions
+// ============================================================================
+
+describe("levenshteinDistance", () => {
+  test("returns 0 for identical strings", () => {
+    expect(levenshteinDistance("hello", "hello")).toBe(0);
+  });
+
+  test("returns string length for empty comparison", () => {
+    expect(levenshteinDistance("hello", "")).toBe(5);
+    expect(levenshteinDistance("", "world")).toBe(5);
+  });
+
+  test("returns 0 for two empty strings", () => {
+    expect(levenshteinDistance("", "")).toBe(0);
+  });
+
+  test("calculates single character insertion", () => {
+    expect(levenshteinDistance("helo", "hello")).toBe(1);
+  });
+
+  test("calculates single character deletion", () => {
+    expect(levenshteinDistance("hello", "helo")).toBe(1);
+  });
+
+  test("calculates single character substitution", () => {
+    expect(levenshteinDistance("hello", "hallo")).toBe(1);
+  });
+
+  test("calculates multiple edits", () => {
+    expect(levenshteinDistance("kitten", "sitting")).toBe(3);
+  });
+
+  test("handles completely different strings", () => {
+    expect(levenshteinDistance("abc", "xyz")).toBe(3);
+  });
+
+  test("handles case-sensitive comparison", () => {
+    expect(levenshteinDistance("Hello", "hello")).toBe(1);
+  });
+});
+
+describe("stringSimilarity", () => {
+  test("returns 1 for identical strings", () => {
+    expect(stringSimilarity("hello", "hello")).toBe(1);
+  });
+
+  test("returns 0 for empty string comparison", () => {
+    expect(stringSimilarity("hello", "")).toBe(0);
+    expect(stringSimilarity("", "world")).toBe(0);
+  });
+
+  test("returns value between 0 and 1 for similar strings", () => {
+    const similarity = stringSimilarity("hello", "helo");
+    expect(similarity).toBeGreaterThan(0);
+    expect(similarity).toBeLessThan(1);
+  });
+
+  test("is case-insensitive", () => {
+    expect(stringSimilarity("Hello", "hello")).toBe(1);
+    expect(stringSimilarity("VERIFY", "verify")).toBe(1);
+  });
+
+  test("higher similarity for more similar strings", () => {
+    const sim1 = stringSimilarity("verify", "verrify"); // 1 char difference
+    const sim2 = stringSimilarity("verify", "verrrify"); // 2 char difference
+    expect(sim1).toBeGreaterThan(sim2);
+  });
+});
+
+describe("extractUnresolvedReferenceFromMessage", () => {
+  test("extracts path from standard unresolved-reference message", () => {
+    const message = "Reference to non-existent element: 'auth.login.verify'";
+    expect(extractUnresolvedReferenceFromMessage(message)).toBe("auth.login.verify");
+  });
+
+  test("extracts single-part path", () => {
+    const message = "Reference to non-existent element: 'authentication'";
+    expect(extractUnresolvedReferenceFromMessage(message)).toBe("authentication");
+  });
+
+  test("extracts path with hyphens", () => {
+    const message = "Reference to non-existent element: 'auth.user-login.verify-token'";
+    expect(extractUnresolvedReferenceFromMessage(message)).toBe("auth.user-login.verify-token");
+  });
+
+  test("returns null for non-matching message", () => {
+    const message = "Some other error message";
+    expect(extractUnresolvedReferenceFromMessage(message)).toBeNull();
+  });
+
+  test("returns null for empty message", () => {
+    expect(extractUnresolvedReferenceFromMessage("")).toBeNull();
+  });
+});
+
+describe("findSimilarSymbols", () => {
+  test("finds similar symbols for typo", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const results = findSimilarSymbols("auth.login.verrify", symbolIndex);
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.symbol.path).toBe("auth.login.verify");
+    expect(results[0]!.similarity).toBeGreaterThan(0.5);
+  });
+
+  test("returns empty array when no similar symbols", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const results = findSimilarSymbols("completely.different.path", symbolIndex);
+
+    expect(results).toHaveLength(0);
+  });
+
+  test("respects maxSuggestions limit", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify1
+    Verify 1.
+
+  @requirement verify2
+    Verify 2.
+
+  @requirement verify3
+    Verify 3.
+
+  @requirement verify4
+    Verify 4.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const results = findSimilarSymbols("auth.login.verify", symbolIndex, 2);
+
+    expect(results.length).toBeLessThanOrEqual(2);
+  });
+
+  test("respects minSimilarity threshold", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    // With high threshold, should find fewer matches
+    const highThreshold = findSimilarSymbols("auth.login.v", symbolIndex, 10, 0.9);
+    const lowThreshold = findSimilarSymbols("auth.login.v", symbolIndex, 10, 0.3);
+
+    expect(lowThreshold.length).toBeGreaterThanOrEqual(highThreshold.length);
+  });
+
+  test("sorts results by similarity descending", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+
+  @requirement verify-token
+    Verify token.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const results = findSimilarSymbols("auth.login.verrify", symbolIndex);
+
+    // Results should be sorted by similarity
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1]!.similarity).toBeGreaterThanOrEqual(results[i]!.similarity);
+    }
+  });
+
+  test("finds module with typo", () => {
+    const code = `
+@module authentication
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const results = findSimilarSymbols("authentcation", symbolIndex);
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.symbol.path).toBe("authentication");
+  });
+
+  test("finds feature with typo", () => {
+    const code = `
+@module auth
+
+@feature registration
+
+  @requirement signup
+    Sign up.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const results = findSimilarSymbols("auth.registraion", symbolIndex);
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.symbol.path).toBe("auth.registration");
+  });
+
+  test("handles cross-file symbols", () => {
+    const code1 = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify.
+`;
+    const code2 = `
+@module payments
+
+@feature checkout
+
+  @requirement process
+    Process.
+`;
+    const tree1 = parseDocument(code1);
+    const tree2 = parseDocument(code2);
+    const ast1 = transformToAST(tree1!);
+    const ast2 = transformToAST(tree2!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast1);
+    symbolIndex.addFile("file:///workspace/payments.bp", ast2);
+
+    const results = findSimilarSymbols("payments.checkoout.process", symbolIndex);
+
+    expect(results.length).toBeGreaterThan(0);
+    // Should find the checkout feature or process requirement
+    const foundPaths = results.map(r => r.symbol.path);
+    expect(foundPaths.some(p => p.includes("payments.checkout"))).toBe(true);
   });
 });

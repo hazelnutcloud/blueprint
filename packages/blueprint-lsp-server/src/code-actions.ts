@@ -1,11 +1,12 @@
 import type {
   CodeAction,
   CodeActionParams,
+  Diagnostic,
   TextEdit,
   WorkspaceEdit,
 } from "vscode-languageserver/node";
 import { CodeActionKind, DiagnosticSeverity } from "vscode-languageserver/node";
-import type { CrossFileSymbolIndex } from "./symbol-index";
+import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import type { TicketDocumentManager } from "./ticket-documents";
 import type { RequirementNode } from "./ast";
 import type { Ticket, TicketFile } from "./tickets";
@@ -23,6 +24,171 @@ export interface CodeActionsContext {
   /** Workspace folder URIs for resolving ticket file paths */
   workspaceFolderUris?: string[];
 }
+
+// ============================================================================
+// String Similarity Functions (for did-you-mean suggestions)
+// ============================================================================
+
+/**
+ * Compute the Levenshtein distance between two strings.
+ * This measures the minimum number of single-character edits (insertions,
+ * deletions, or substitutions) required to change one string into the other.
+ *
+ * @param a First string
+ * @param b Second string
+ * @returns The edit distance between the two strings
+ */
+export function levenshteinDistance(a: string, b: string): number {
+  const aLen = a.length;
+  const bLen = b.length;
+
+  // Early termination for empty strings
+  if (aLen === 0) return bLen;
+  if (bLen === 0) return aLen;
+
+  // Create a 2D array for dynamic programming
+  // We only need two rows at a time to save memory
+  let prevRow = new Array<number>(bLen + 1);
+  let currRow = new Array<number>(bLen + 1);
+
+  // Initialize the first row
+  for (let j = 0; j <= bLen; j++) {
+    prevRow[j] = j;
+  }
+
+  // Fill in the rest of the matrix
+  for (let i = 1; i <= aLen; i++) {
+    currRow[0] = i;
+
+    for (let j = 1; j <= bLen; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      currRow[j] = Math.min(
+        prevRow[j]! + 1,      // deletion
+        currRow[j - 1]! + 1,  // insertion
+        prevRow[j - 1]! + cost // substitution
+      );
+    }
+
+    // Swap rows
+    [prevRow, currRow] = [currRow, prevRow];
+  }
+
+  return prevRow[bLen]!;
+}
+
+/**
+ * Calculate a normalized similarity score between two strings.
+ * Returns a value between 0 and 1, where 1 means identical strings.
+ *
+ * @param a First string
+ * @param b Second string
+ * @returns Similarity score between 0 and 1
+ */
+export function stringSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length === 0 || b.length === 0) return 0;
+
+  const distance = levenshteinDistance(a.toLowerCase(), b.toLowerCase());
+  const maxLen = Math.max(a.length, b.length);
+  return 1 - distance / maxLen;
+}
+
+/**
+ * Information about a similar symbol suggestion.
+ */
+export interface SimilarSymbol {
+  /** The symbol that is similar to the query */
+  symbol: IndexedSymbol;
+  /** Similarity score between 0 and 1 */
+  similarity: number;
+}
+
+/**
+ * Find symbols that are similar to the given path.
+ * Uses Levenshtein distance to find potential typo corrections.
+ *
+ * @param query The unresolved reference path to find suggestions for
+ * @param symbolIndex The cross-file symbol index
+ * @param maxSuggestions Maximum number of suggestions to return (default: 3)
+ * @param minSimilarity Minimum similarity threshold (default: 0.5)
+ * @returns Array of similar symbols sorted by similarity (highest first)
+ */
+export function findSimilarSymbols(
+  query: string,
+  symbolIndex: CrossFileSymbolIndex,
+  maxSuggestions: number = 3,
+  minSimilarity: number = 0.5
+): SimilarSymbol[] {
+  const results: SimilarSymbol[] = [];
+  const queryLower = query.toLowerCase();
+  const queryParts = queryLower.split(".");
+
+  // Get all symbols from the index
+  const allSymbols: IndexedSymbol[] = [
+    ...symbolIndex.getSymbolsByKind("module"),
+    ...symbolIndex.getSymbolsByKind("feature"),
+    ...symbolIndex.getSymbolsByKind("requirement"),
+  ];
+
+  for (const symbol of allSymbols) {
+    const symbolPath = symbol.path.toLowerCase();
+    const symbolParts = symbolPath.split(".");
+
+    // Calculate similarity in multiple ways and take the best score
+    let similarity = 0;
+
+    // 1. Full path similarity
+    similarity = Math.max(similarity, stringSimilarity(queryLower, symbolPath));
+
+    // 2. If query has same number of parts, compare each part
+    if (queryParts.length === symbolParts.length) {
+      let partSimilaritySum = 0;
+      for (let i = 0; i < queryParts.length; i++) {
+        partSimilaritySum += stringSimilarity(queryParts[i]!, symbolParts[i]!);
+      }
+      const avgPartSimilarity = partSimilaritySum / queryParts.length;
+      similarity = Math.max(similarity, avgPartSimilarity);
+    }
+
+    // 3. If the query is shorter, check if any suffix of symbol matches
+    if (queryParts.length < symbolParts.length) {
+      // Check if query matches the end of the symbol path
+      const suffix = symbolParts.slice(-queryParts.length).join(".");
+      similarity = Math.max(similarity, stringSimilarity(queryLower, suffix));
+    }
+
+    // 4. Check if just the last part (identifier) is similar
+    const queryLastPart = queryParts[queryParts.length - 1]!;
+    const symbolLastPart = symbolParts[symbolParts.length - 1]!;
+    const lastPartSimilarity = stringSimilarity(queryLastPart, symbolLastPart);
+    // Weight last-part similarity less since the full path matters
+    similarity = Math.max(similarity, lastPartSimilarity * 0.8);
+
+    if (similarity >= minSimilarity) {
+      results.push({ symbol, similarity });
+    }
+  }
+
+  // Sort by similarity (highest first) and limit results
+  results.sort((a, b) => b.similarity - a.similarity);
+  return results.slice(0, maxSuggestions);
+}
+
+/**
+ * Extract the unresolved reference path from an "unresolved-reference" diagnostic message.
+ * The message format is: "Reference to non-existent element: 'path.to.element'"
+ *
+ * @param message The diagnostic message
+ * @returns The reference path, or null if not found
+ */
+export function extractUnresolvedReferenceFromMessage(message: string): string | null {
+  const match = message.match(/Reference to non-existent element: '([^']+)'/);
+  return match ? match[1]! : null;
+}
+
+// ============================================================================
+// Message Extraction Functions
+// ============================================================================
 
 /**
  * Extracts the requirement path from a "no-ticket" diagnostic message.
@@ -658,6 +824,49 @@ export function buildCodeActions(
       };
 
       actions.push(action);
+    }
+
+    // Handle "unresolved-reference" diagnostics (did-you-mean suggestions)
+    if (
+      diagnostic.code === "unresolved-reference" &&
+      diagnostic.severity === DiagnosticSeverity.Error
+    ) {
+      const unresolvedPath = extractUnresolvedReferenceFromMessage(diagnostic.message);
+      if (!unresolvedPath) {
+        continue;
+      }
+
+      // Find similar symbols that might be what the user meant
+      const suggestions = findSimilarSymbols(unresolvedPath, context.symbolIndex);
+
+      // Create a code action for each suggestion
+      for (let i = 0; i < suggestions.length; i++) {
+        const suggestion = suggestions[i]!;
+        const suggestedPath = suggestion.symbol.path;
+
+        // Create an edit that replaces the unresolved reference with the suggested one
+        const edit: WorkspaceEdit = {
+          changes: {
+            [params.textDocument.uri]: [
+              {
+                range: diagnostic.range,
+                newText: suggestedPath,
+              },
+            ],
+          },
+        };
+
+        const action: CodeAction = {
+          title: `Did you mean '${suggestedPath}'?`,
+          kind: CodeActionKind.QuickFix,
+          diagnostics: [diagnostic],
+          // First suggestion is preferred
+          isPreferred: i === 0,
+          edit,
+        };
+
+        actions.push(action);
+      }
     }
   }
 
