@@ -129,7 +129,7 @@ easier to distribute and works across all platforms without native compilation. 
   - [x] `TicketImplementationSchema` / `TicketImplementation` (files, tests)
   - [x] `TicketStatusSchema` / `TicketStatus` (pending, in-progress, complete, obsolete)
 - [x] Implement JSON schema validation for ticket files (Completed: Using valibot's `v.safeParse()` with custom error formatting. Added `validateTicketFile()`, `parseTicketFileContent()`, and `parseTicketFile()` functions. Includes duplicate ticket ID detection. 40 new tests in `tickets.test.ts`.)
-- [ ] Report schema validation errors as diagnostics
+- [x] Report schema validation errors as diagnostics (Completed: Added `TicketDocumentManager` class in `ticket-documents.ts` that validates `.tickets.json` files and publishes diagnostics. Integrated with LSP server document lifecycle events in `index.ts`. Reports errors for invalid JSON, schema violations, and duplicate ticket IDs. Version mismatches are reported as warnings. 24 tests added in `ticket-documents.test.ts`.)
 
 ### 4.3 Requirement-Ticket Correlation
 - [x] Build mapping from requirement refs to tickets (Completed: Added `requirement-ticket-map.ts` module with `buildRequirementTicketMap()` and `buildRequirementTicketMapFromSymbols()` functions. 40 tests added in `requirement-ticket-map.test.ts`.)

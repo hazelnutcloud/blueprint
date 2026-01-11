@@ -13,9 +13,11 @@ import type {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initializeParser, cleanupParser, parseDocument } from "./parser";
 import { DocumentManager } from "./documents";
+import { TicketDocumentManager } from "./ticket-documents";
 import { WorkspaceManager } from "./workspace";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
+import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
 import { readFile } from "node:fs/promises";
 import { URI } from "vscode-uri";
 
@@ -26,8 +28,11 @@ const connection = createConnection(ProposedFeatures.all);
 // Create a simple text document manager.
 const documents = new TextDocuments(TextDocument);
 
-// Create the document manager for tracking parsed state
+// Create the document manager for tracking parsed state of .bp files
 const documentManager = new DocumentManager(connection);
+
+// Create the ticket document manager for tracking parsed state of .tickets.json files
+const ticketDocumentManager = new TicketDocumentManager(connection);
 
 // Create the workspace manager for scanning workspace folders
 const workspaceManager = new WorkspaceManager(connection);
@@ -156,47 +161,110 @@ async function indexFile(fileUri: string, filePath: string): Promise<void> {
   }
 }
 
+/**
+ * Get the file path from a document URI.
+ */
+function getFilePath(uri: string): string {
+  return URI.parse(uri).fsPath;
+}
+
 // Document lifecycle events
 documents.onDidOpen((event) => {
-  if (!parserInitialized) {
-    connection.console.warn("Parser not initialized, skipping document parsing");
+  const filePath = getFilePath(event.document.uri);
+  
+  // Handle .tickets.json files
+  if (isTicketFilePath(filePath)) {
+    ticketDocumentManager.onDocumentOpen(
+      event.document.uri,
+      event.document.version,
+      event.document.getText()
+    );
     return;
   }
-  const state = documentManager.onDocumentOpen(event.document);
-  // Update symbol index with the parsed document
-  if (state.tree) {
-    const ast = transformToAST(state.tree);
-    symbolIndex.addFile(event.document.uri, ast);
+  
+  // Handle .bp files
+  if (isBlueprintFilePath(filePath)) {
+    if (!parserInitialized) {
+      connection.console.warn("Parser not initialized, skipping document parsing");
+      return;
+    }
+    const state = documentManager.onDocumentOpen(event.document);
+    // Update symbol index with the parsed document
+    if (state.tree) {
+      const ast = transformToAST(state.tree);
+      symbolIndex.addFile(event.document.uri, ast);
+    }
   }
 });
 
 documents.onDidChangeContent((event) => {
-  if (!parserInitialized) {
+  const filePath = getFilePath(event.document.uri);
+  
+  // Handle .tickets.json files
+  if (isTicketFilePath(filePath)) {
+    ticketDocumentManager.onDocumentChange(
+      event.document.uri,
+      event.document.version,
+      event.document.getText()
+    );
     return;
   }
-  const state = documentManager.onDocumentChange(event.document);
-  // Update symbol index with the changed document
-  if (state.tree) {
-    const ast = transformToAST(state.tree);
-    symbolIndex.addFile(event.document.uri, ast);
+  
+  // Handle .bp files
+  if (isBlueprintFilePath(filePath)) {
+    if (!parserInitialized) {
+      return;
+    }
+    const state = documentManager.onDocumentChange(event.document);
+    // Update symbol index with the changed document
+    if (state.tree) {
+      const ast = transformToAST(state.tree);
+      symbolIndex.addFile(event.document.uri, ast);
+    }
   }
 });
 
 documents.onDidClose((event) => {
-  documentManager.onDocumentClose(event.document.uri);
-  // Note: We don't remove from symbol index on close because the file still exists
-  // The index should reflect the workspace state, not just open documents
+  const filePath = getFilePath(event.document.uri);
+  
+  // Handle .tickets.json files
+  if (isTicketFilePath(filePath)) {
+    ticketDocumentManager.onDocumentClose(event.document.uri);
+    return;
+  }
+  
+  // Handle .bp files
+  if (isBlueprintFilePath(filePath)) {
+    documentManager.onDocumentClose(event.document.uri);
+    // Note: We don't remove from symbol index on close because the file still exists
+    // The index should reflect the workspace state, not just open documents
+  }
 });
 
 documents.onDidSave((event) => {
-  if (!parserInitialized) {
+  const filePath = getFilePath(event.document.uri);
+  
+  // Handle .tickets.json files
+  if (isTicketFilePath(filePath)) {
+    ticketDocumentManager.onDocumentSave(
+      event.document.uri,
+      event.document.version,
+      event.document.getText()
+    );
     return;
   }
-  const state = documentManager.onDocumentSave(event.document);
-  // Update symbol index with the saved document
-  if (state.tree) {
-    const ast = transformToAST(state.tree);
-    symbolIndex.addFile(event.document.uri, ast);
+  
+  // Handle .bp files
+  if (isBlueprintFilePath(filePath)) {
+    if (!parserInitialized) {
+      return;
+    }
+    const state = documentManager.onDocumentSave(event.document);
+    // Update symbol index with the saved document
+    if (state.tree) {
+      const ast = transformToAST(state.tree);
+      symbolIndex.addFile(event.document.uri, ast);
+    }
   }
 });
 
@@ -205,6 +273,9 @@ connection.onShutdown(() => {
   
   // Clean up document manager resources (syntax trees)
   documentManager.cleanup();
+  
+  // Clean up ticket document manager resources
+  ticketDocumentManager.cleanup();
   
   // Clean up workspace manager resources
   workspaceManager.cleanup();
