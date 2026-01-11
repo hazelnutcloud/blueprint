@@ -17,12 +17,14 @@ import type {
   DefinitionParams,
   ReferenceParams,
   DocumentSymbolParams,
+  WorkspaceSymbolParams,
 } from "vscode-languageserver/node";
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
 import { findDefinitionTarget, buildDefinition, type DefinitionContext } from "./definition";
 import { findReferencesTarget, buildReferences, type ReferencesContext } from "./references";
 import { buildDocumentSymbols } from "./document-symbol";
+import { buildWorkspaceSymbols } from "./workspace-symbol";
 import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
 import { DependencyGraph } from "./dependency-graph";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -228,6 +230,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       definitionProvider: true,
       referencesProvider: true,
       documentSymbolProvider: true,
+      workspaceSymbolProvider: true,
       semanticTokensProvider: {
         legend: semanticTokensLegend,
         full: true,
@@ -784,6 +787,21 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) => {
   }
 
   return buildDocumentSymbols(state.tree);
+});
+
+// Handle workspace symbol request (search across all .bp files)
+connection.onWorkspaceSymbol((params: WorkspaceSymbolParams) => {
+  // Workspace symbols work even when no document is open
+  // They search across all indexed .bp files in the workspace
+  
+  if (!parserInitialized) {
+    connection.console.warn("Parser not initialized, cannot provide workspace symbols");
+    return null;
+  }
+
+  // Build workspace symbols from the cross-file symbol index
+  // The query parameter filters results (empty query returns all symbols)
+  return buildWorkspaceSymbols(symbolIndex, params.query);
 });
 
 connection.onShutdown(() => {

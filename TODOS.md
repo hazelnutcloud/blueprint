@@ -263,8 +263,8 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Include constraints as children of requirements (Completed: `buildConstraintSymbol()` creates `DocumentSymbol` for constraints, included as children at module, feature, and requirement levels.)
 
 ### 9.4 Workspace Symbols
-- [ ] Implement `workspace/symbol` handler
-- [ ] Enable searching across all `.bp` files in workspace
+- [x] Implement `workspace/symbol` handler (Completed: Added `workspace-symbol.ts` module with `buildWorkspaceSymbols()` function. Integrated with LSP server in `index.ts` via `connection.onWorkspaceSymbol()` handler. Added `workspaceSymbolProvider: true` to server capabilities. 26 tests added in `workspace-symbol.test.ts`.)
+- [x] Enable searching across all `.bp` files in workspace (Completed: Uses `CrossFileSymbolIndex` to search across all indexed files. Supports prefix matching, substring matching, and fuzzy matching. Results are sorted by relevance with configurable max results.)
 
 ---
 
@@ -340,6 +340,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Test go-to-definition (17 tests in `definition.test.ts` covering node finding, definition targets for module/feature/requirement/constraint/reference/keyword, cross-file navigation, ticket file navigation, and fallback behavior)
 - [x] Test find-references (21 tests in `references.test.ts` covering node finding, references targets for module/feature/requirement/constraint/reference/keyword, cross-file references, multiple references, includeDeclaration option, and parent reference matching)
 - [x] Test document symbols (26 tests in `document-symbol.test.ts` covering empty documents, single/multiple modules, features, requirements, constraints at all levels, module-level requirements, symbol ranges, hierarchy building, and complex SPEC.md example structure)
+- [x] Test workspace symbols (26 tests in `workspace-symbol.test.ts` covering empty index, single/multi-file index, query matching with prefix/substring/fuzzy, case-insensitive search, result sorting by relevance, result limiting, symbol kind mapping, container names, and edge cases)
 
 ### 12.2 Integration Tests
 - [ ] Test LSP initialization handshake
