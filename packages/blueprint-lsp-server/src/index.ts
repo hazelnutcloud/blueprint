@@ -5,8 +5,14 @@ import {
   TextDocumentSyncKind,
   DidChangeConfigurationNotification,
 } from "vscode-languageserver/node";
-import type { InitializeParams, InitializeResult } from "vscode-languageserver/node";
+import type {
+  InitializeParams,
+  InitializeResult,
+  TextDocumentSyncOptions,
+} from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { initializeParser } from "./parser";
+import { DocumentManager } from "./documents";
 
 // Create a connection for the server using Node's IPC as transport.
 // Also includes all proposed protocol features.
@@ -15,9 +21,15 @@ const connection = createConnection(ProposedFeatures.all);
 // Create a simple text document manager.
 const documents = new TextDocuments(TextDocument);
 
+// Create the document manager for tracking parsed state
+const documentManager = new DocumentManager(connection);
+
 // Track whether the client supports dynamic registration for configuration changes
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
+
+// Track parser initialization state
+let parserInitialized = false;
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   const capabilities = params.capabilities;
@@ -30,10 +42,18 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
     capabilities.workspace && !!capabilities.workspace.workspaceFolders
   );
 
+  // Configure text document sync with save notifications
+  const textDocumentSync: TextDocumentSyncOptions = {
+    openClose: true,
+    change: TextDocumentSyncKind.Full,
+    save: {
+      includeText: true,
+    },
+  };
+
   const result: InitializeResult = {
     capabilities: {
-      // Full document sync - send the full document content on each change
-      textDocumentSync: TextDocumentSyncKind.Full,
+      textDocumentSync,
     },
   };
 
@@ -49,7 +69,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   return result;
 });
 
-connection.onInitialized(() => {
+connection.onInitialized(async () => {
   if (hasConfigurationCapability) {
     // Register for configuration changes
     connection.client.register(
@@ -62,7 +82,44 @@ connection.onInitialized(() => {
       connection.console.log("Workspace folder change event received.");
     });
   }
+
+  // Initialize the tree-sitter parser
+  try {
+    await initializeParser();
+    parserInitialized = true;
+    connection.console.log("Tree-sitter parser initialized successfully");
+  } catch (error) {
+    connection.console.error(`Failed to initialize parser: ${error}`);
+  }
+
   connection.console.log("Blueprint LSP server ready");
+});
+
+// Document lifecycle events
+documents.onDidOpen((event) => {
+  if (!parserInitialized) {
+    connection.console.warn("Parser not initialized, skipping document parsing");
+    return;
+  }
+  documentManager.onDocumentOpen(event.document);
+});
+
+documents.onDidChangeContent((event) => {
+  if (!parserInitialized) {
+    return;
+  }
+  documentManager.onDocumentChange(event.document);
+});
+
+documents.onDidClose((event) => {
+  documentManager.onDocumentClose(event.document.uri);
+});
+
+documents.onDidSave((event) => {
+  if (!parserInitialized) {
+    return;
+  }
+  documentManager.onDocumentSave(event.document);
 });
 
 connection.onShutdown(() => {

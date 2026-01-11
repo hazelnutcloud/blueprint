@@ -87,14 +87,14 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Set up connection and document manager
 
 ### 3.2 Document Management
-- [ ] Implement `TextDocuments` manager for open `.bp` files
-- [ ] Handle `textDocument/didOpen` - parse and index document
-- [ ] Handle `textDocument/didChange` - incremental re-parsing
-- [ ] Handle `textDocument/didClose` - cleanup document state
-- [ ] Handle `textDocument/didSave` - trigger full validation
+- [x] Implement `TextDocuments` manager for open `.bp` files
+- [x] Handle `textDocument/didOpen` - parse and index document
+- [x] Handle `textDocument/didChange` - re-parsing (full sync mode)
+- [x] Handle `textDocument/didClose` - cleanup document state
+- [x] Handle `textDocument/didSave` - trigger full validation
 
 ### 3.3 Document Parsing & AST
-- [ ] Integrate tree-sitter parser into server
+- [x] Integrate tree-sitter parser into server (via web-tree-sitter WASM)
 - [ ] Create AST node types mirroring Blueprint hierarchy:
   - [ ] `DescriptionNode`
   - [ ] `ModuleNode`
@@ -424,3 +424,36 @@ easier to distribute and works across all platforms without native compilation. 
 - Cross-file operations require workspace-wide indexing
 - Debounce expensive operations (parsing, diagnostics) for performance
 - Consider WASM tree-sitter for browser-based editors in future
+
+---
+
+## Known Issues (Phase 3.2/3.3 Implementation)
+
+### Blockers
+
+- [ ] **Fix `Node` type import in parser.ts** - `Node` is not a named export from `web-tree-sitter`. Should use `Parser.SyntaxNode` or access via the `Tree` type. This will cause TypeScript/runtime errors.
+- [ ] **Fix `Node` type import in documents.ts** - Same issue, imports non-existent `Node` type from `./parser`.
+
+### Code Quality
+
+- [ ] **Add parser cleanup in shutdown handler** - The parser and document manager resources are not cleaned up when the server shuts down. Add cleanup logic in `connection.onShutdown()`.
+- [ ] **Use `DiagnosticSeverity` constant** - In `documents.ts:133`, use `DiagnosticSeverity.Error` from `vscode-languageserver` instead of hardcoded `severity: 1`.
+- [ ] **Remove unused `document` parameter** - In `documents.ts:120`, the `document` parameter in `collectDiagnostics()` is not used.
+
+### Error Handling
+
+- [ ] **Send client notification on parser failure** - If parser initialization fails, the server continues but all document operations are no-ops. Should notify the client about degraded functionality.
+- [ ] **Add warning in `parseDocument` when parser not initialized** - Currently returns `null` silently; consider logging a warning for debugging.
+
+### Test Coverage
+
+- [ ] **Complete "detects parse errors" test** - Test at `documents.test.ts:83-91` has no assertions. Should verify `tree.rootNode.hasError` is `true` or that error nodes exist.
+- [ ] **Add edge case tests**:
+  - [ ] Empty document parsing
+  - [ ] Document with only comments
+  - [ ] Very large documents
+  - [ ] Invalid UTF-8 sequences
+
+### Performance (Future)
+
+- [ ] **Consider incremental parsing** - Current implementation uses `TextDocumentSyncKind.Full` which re-parses the entire document on every change. Tree-sitter supports incremental parsing via `tree.edit()` which would improve performance for large files.
