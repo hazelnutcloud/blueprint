@@ -11,9 +11,13 @@ import type {
   TextDocumentSyncOptions,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { initializeParser, cleanupParser } from "./parser";
+import { initializeParser, cleanupParser, parseDocument } from "./parser";
 import { DocumentManager } from "./documents";
 import { WorkspaceManager } from "./workspace";
+import { CrossFileSymbolIndex } from "./symbol-index";
+import { transformToAST } from "./ast";
+import { readFile } from "node:fs/promises";
+import { URI } from "vscode-uri";
 
 // Create a connection for the server using Node's IPC as transport.
 // Also includes all proposed protocol features.
@@ -27,6 +31,9 @@ const documentManager = new DocumentManager(connection);
 
 // Create the workspace manager for scanning workspace folders
 const workspaceManager = new WorkspaceManager(connection);
+
+// Create the cross-file symbol index for workspace-wide symbol resolution
+const symbolIndex = new CrossFileSymbolIndex();
 
 // Track whether the client supports dynamic registration for configuration changes
 let hasConfigurationCapability = false;
@@ -106,6 +113,22 @@ connection.onInitialized(async () => {
     );
   }
 
+  // Register callback to index files when discovered
+  workspaceManager.onFilesChanged(async (files) => {
+    if (!parserInitialized) {
+      return;
+    }
+    
+    // Index all discovered files
+    for (const file of files) {
+      await indexFile(file.uri, file.path);
+    }
+    
+    connection.console.log(
+      `Symbol index updated: ${symbolIndex.getSymbolCount()} symbols from ${symbolIndex.getFileCount()} files`
+    );
+  });
+
   // Scan workspace folders for .bp files after parser is initialized
   if (hasWorkspaceFolderCapability) {
     workspaceManager.scanAllFolders().catch((error) => {
@@ -116,31 +139,65 @@ connection.onInitialized(async () => {
   connection.console.log("Blueprint LSP server ready");
 });
 
+/**
+ * Index a Blueprint file into the cross-file symbol index.
+ */
+async function indexFile(fileUri: string, filePath: string): Promise<void> {
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const tree = parseDocument(content);
+    if (tree) {
+      const ast = transformToAST(tree);
+      symbolIndex.addFile(fileUri, ast);
+      tree.delete(); // Clean up the tree after indexing
+    }
+  } catch (error) {
+    connection.console.error(`Error indexing file ${filePath}: ${error}`);
+  }
+}
+
 // Document lifecycle events
 documents.onDidOpen((event) => {
   if (!parserInitialized) {
     connection.console.warn("Parser not initialized, skipping document parsing");
     return;
   }
-  documentManager.onDocumentOpen(event.document);
+  const state = documentManager.onDocumentOpen(event.document);
+  // Update symbol index with the parsed document
+  if (state.tree) {
+    const ast = transformToAST(state.tree);
+    symbolIndex.addFile(event.document.uri, ast);
+  }
 });
 
 documents.onDidChangeContent((event) => {
   if (!parserInitialized) {
     return;
   }
-  documentManager.onDocumentChange(event.document);
+  const state = documentManager.onDocumentChange(event.document);
+  // Update symbol index with the changed document
+  if (state.tree) {
+    const ast = transformToAST(state.tree);
+    symbolIndex.addFile(event.document.uri, ast);
+  }
 });
 
 documents.onDidClose((event) => {
   documentManager.onDocumentClose(event.document.uri);
+  // Note: We don't remove from symbol index on close because the file still exists
+  // The index should reflect the workspace state, not just open documents
 });
 
 documents.onDidSave((event) => {
   if (!parserInitialized) {
     return;
   }
-  documentManager.onDocumentSave(event.document);
+  const state = documentManager.onDocumentSave(event.document);
+  // Update symbol index with the saved document
+  if (state.tree) {
+    const ast = transformToAST(state.tree);
+    symbolIndex.addFile(event.document.uri, ast);
+  }
 });
 
 connection.onShutdown(() => {
@@ -151,6 +208,9 @@ connection.onShutdown(() => {
   
   // Clean up workspace manager resources
   workspaceManager.cleanup();
+  
+  // Clean up symbol index
+  symbolIndex.clear();
   
   // Clean up parser resources
   cleanupParser();

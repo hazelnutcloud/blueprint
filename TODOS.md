@@ -108,7 +108,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### 3.4 Workspace Indexing
 - [x] Implement workspace folder scanning for `.bp` files (Added `WorkspaceManager` class in `workspace.ts` with recursive directory scanning, hidden directory filtering, and workspace folder change handling. 26 tests added in `workspace.test.ts`.)
-- [ ] Build cross-file symbol index
+- [x] Build cross-file symbol index (Added `CrossFileSymbolIndex` class in `symbol-index.ts` with global symbol registry, cross-file reference resolution, dependency tracking, and conflict detection. Integrated with `WorkspaceManager` file discovery and document lifecycle events in `index.ts`. 37 tests added in `symbol-index.test.ts`.)
 - [ ] Implement file watcher for `.bp` file changes
 - [x] Handle workspace folder additions/removals (Implemented in `WorkspaceManager.handleWorkspaceFoldersChange()`)
 
