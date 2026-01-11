@@ -67,7 +67,7 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 ### 2.6 Grammar Testing
 - [x] Write corpus tests for valid syntax cases
 - [x] Write corpus tests for edge cases (empty files, minimal documents)
-- [ ] Write corpus tests for error recovery scenarios
+- [x] Write corpus tests for error recovery scenarios
 - [x] Generate and compile the tree-sitter parser
 - [ ] Create Node.js bindings for the parser
 
