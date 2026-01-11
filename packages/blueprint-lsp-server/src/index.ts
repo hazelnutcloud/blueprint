@@ -15,10 +15,12 @@ import type {
   SemanticTokensParams,
   HoverParams,
   DefinitionParams,
+  ReferenceParams,
 } from "vscode-languageserver/node";
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
 import { findDefinitionTarget, buildDefinition, type DefinitionContext } from "./definition";
+import { findReferencesTarget, buildReferences, type ReferencesContext } from "./references";
 import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
 import { DependencyGraph } from "./dependency-graph";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -222,6 +224,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       textDocumentSync,
       hoverProvider: true,
       definitionProvider: true,
+      referencesProvider: true,
       semanticTokensProvider: {
         legend: semanticTokensLegend,
         full: true,
@@ -698,6 +701,54 @@ connection.onDefinition((params: DefinitionParams) => {
   };
 
   return buildDefinition(target, definitionContext);
+});
+
+// Handle references request (find all references)
+connection.onReferences((params: ReferenceParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  const filePath = getFilePath(params.textDocument.uri);
+  if (!isBlueprintFilePath(filePath)) {
+    return null;
+  }
+
+  if (!parserInitialized) {
+    return null;
+  }
+
+  // Get the parse tree from the document manager
+  const state = documentManager.getState(params.textDocument.uri);
+  if (!state?.tree) {
+    return null;
+  }
+
+  // Find what we're requesting references for
+  const target = findReferencesTarget(
+    state.tree,
+    params.position,
+    symbolIndex,
+    params.textDocument.uri
+  );
+
+  if (!target) {
+    return null;
+  }
+
+  // Build the dependency graph for reference lookup
+  const { graph: dependencyGraph, edges } = DependencyGraph.build(symbolIndex);
+
+  const referencesContext: ReferencesContext = {
+    symbolIndex,
+    dependencyGraph,
+    edges,
+    fileUri: params.textDocument.uri,
+    includeDeclaration: params.context.includeDeclaration,
+  };
+
+  return buildReferences(target, referencesContext);
 });
 
 connection.onShutdown(() => {

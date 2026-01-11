@@ -252,8 +252,8 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] File path in hover → source file
 
 ### 9.2 Find References
-- [ ] Implement `textDocument/references` handler
-- [ ] Find all `@depends-on` declarations referencing an element
+- [x] Implement `textDocument/references` handler (Completed: Added `references.ts` module with `findReferencesTarget()` and `buildReferences()` functions. Uses `DependencyGraph.edges` to find all `@depends-on` declarations that reference a symbol. Integrated with LSP server in `index.ts` via `connection.onReferences()` handler. Added `referencesProvider: true` to server capabilities. 21 tests added in `references.test.ts`.)
+- [x] Find all `@depends-on` declarations referencing an element (Completed: `findReferencingEdges()` searches dependency graph edges for exact matches and parent references that implicitly include children.)
 - [ ] Find tickets tracking a requirement
 - [ ] Find source files implementing a requirement (via ticket data)
 
@@ -338,6 +338,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Test semantic token generation (32 tests in `semantic-tokens.test.ts` covering token types, modifiers, progress-based highlighting, and `buildRequirementStatusMap()`)
 - [x] Test hover information (29 tests in `hover.test.ts` covering node finding, hover targets, requirement/feature/module/constraint/reference/keyword hovers, blocking status display, and multiple tickets per requirement)
 - [x] Test go-to-definition (17 tests in `definition.test.ts` covering node finding, definition targets for module/feature/requirement/constraint/reference/keyword, cross-file navigation, ticket file navigation, and fallback behavior)
+- [x] Test find-references (21 tests in `references.test.ts` covering node finding, references targets for module/feature/requirement/constraint/reference/keyword, cross-file references, multiple references, includeDeclaration option, and parent reference matching)
 
 ### 12.2 Integration Tests
 - [ ] Test LSP initialization handshake
