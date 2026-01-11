@@ -490,7 +490,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 - [x] **Add test for empty identifier** - Test behavior when identifier is missing (e.g., `@module` without a name). (Completed: Added 6 tests in `ast.test.ts` under "empty/missing identifier handling" describe block. Tests document the parser's aggressive recovery behavior: when an identifier is missing, the parser uses subsequent tokens as the name or demotes elements to parent scope. For `@constraint`, no error occurs as the next line's first word becomes the name.)
 
-- [ ] **Add test for deeply nested references** - Test references with more than 3 parts (even if invalid per spec, should handle gracefully).
+- [x] **Add test for deeply nested references** - Test references with more than 3 parts (even if invalid per spec, should handle gracefully). (Completed: Added two tests in `ast.test.ts` - one testing 4-part and 6-part references, another testing mixed-depth references in a single @depends-on. Verified grammar parses arbitrarily deep references without error and AST correctly captures all parts.)
 
 ### Minor Code Quality
 

@@ -188,6 +188,83 @@ describe("AST Transformation", () => {
       ]);
     });
 
+    test("transforms depends-on with deeply nested reference (more than 3 parts)", () => {
+      // Per SPEC Section 3.4.1, references are defined with up to 3 parts:
+      // module, module.feature, or module.feature.requirement
+      // However, the grammar allows arbitrary depth. This test verifies that
+      // deeply nested references (4+ parts) are parsed gracefully without errors,
+      // even though they may not be semantically valid per the spec.
+      const code = `
+@module payments
+
+@feature checkout
+
+@requirement process-refund
+  @depends-on a.b.c.d
+  @depends-on one.two.three.four.five.six
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      // The grammar should parse this without error
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      const ast = transformToAST(tree!);
+
+      const req = ast.modules[0]!.features[0]!.requirements[0]!;
+      expect(req.dependencies).toHaveLength(2);
+
+      // 4-part reference
+      const ref1 = req.dependencies[0]!.references[0]!;
+      expect(ref1.path).toBe("a.b.c.d");
+      expect(ref1.parts).toEqual(["a", "b", "c", "d"]);
+      expect(ref1.parts).toHaveLength(4);
+
+      // 6-part reference
+      const ref2 = req.dependencies[1]!.references[0]!;
+      expect(ref2.path).toBe("one.two.three.four.five.six");
+      expect(ref2.parts).toEqual(["one", "two", "three", "four", "five", "six"]);
+      expect(ref2.parts).toHaveLength(6);
+    });
+
+    test("transforms depends-on with mixed depth references", () => {
+      // Test that a single @depends-on with multiple comma-separated references
+      // of varying depths (including deeply nested) works correctly
+      const code = `
+@module test
+
+@feature example
+
+@requirement mixed-refs
+  @depends-on single, two.parts, three.part.ref, deep.nested.ref.path
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      const ast = transformToAST(tree!);
+      const req = ast.modules[0]!.features[0]!.requirements[0]!;
+      expect(req.dependencies).toHaveLength(1);
+      
+      const refs = req.dependencies[0]!.references;
+      expect(refs).toHaveLength(4);
+      
+      // 1-part reference
+      expect(refs[0]!.parts).toEqual(["single"]);
+      expect(refs[0]!.path).toBe("single");
+      
+      // 2-part reference
+      expect(refs[1]!.parts).toEqual(["two", "parts"]);
+      expect(refs[1]!.path).toBe("two.parts");
+      
+      // 3-part reference (valid per spec)
+      expect(refs[2]!.parts).toEqual(["three", "part", "ref"]);
+      expect(refs[2]!.path).toBe("three.part.ref");
+      
+      // 4-part reference (beyond spec, but parsed gracefully)
+      expect(refs[3]!.parts).toEqual(["deep", "nested", "ref", "path"]);
+      expect(refs[3]!.path).toBe("deep.nested.ref.path");
+    });
+
     test("transforms multiple modules", () => {
       const code = `
 @module authentication
