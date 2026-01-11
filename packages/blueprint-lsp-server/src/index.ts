@@ -630,12 +630,16 @@ connection.onHover((params: HoverParams) => {
   // Build the dependency graph
   const { graph: dependencyGraph, cycles } = DependencyGraph.build(symbolIndex);
 
+  // Get workspace folder URIs for resolving relative file paths
+  const workspaceFolderUris = workspaceManager.getWorkspaceFolderUris();
+
   const hoverContext: HoverContext = {
     symbolIndex,
     ticketMap,
     dependencyGraph,
     cycles,
     fileUri: params.textDocument.uri,
+    workspaceFolderUris,
   };
 
   return buildHover(target, hoverContext);

@@ -383,4 +383,46 @@ describe("WorkspaceManager", () => {
       expect(workspaceManager.getDiscoveredFiles()).toEqual([]);
     });
   });
+
+  describe("getWorkspaceFolderUris", () => {
+    test("returns empty array when no workspace folders set", () => {
+      const uris = workspaceManager.getWorkspaceFolderUris();
+      expect(uris).toEqual([]);
+    });
+
+    test("returns empty array when workspace folders is null", () => {
+      workspaceManager.setWorkspaceFolders(null);
+      const uris = workspaceManager.getWorkspaceFolderUris();
+      expect(uris).toEqual([]);
+    });
+
+    test("returns URIs for all workspace folders", () => {
+      const folder1Uri = URI.file(testDir).toString();
+      const folder2Uri = URI.file(join(testDir, "subdir")).toString();
+      
+      workspaceManager.setWorkspaceFolders([
+        { uri: folder1Uri, name: "test1" },
+        { uri: folder2Uri, name: "test2" },
+      ]);
+      
+      const uris = workspaceManager.getWorkspaceFolderUris();
+      expect(uris.length).toBe(2);
+      expect(uris).toContain(folder1Uri);
+      expect(uris).toContain(folder2Uri);
+    });
+
+    test("preserves order of workspace folders", () => {
+      const folder1Uri = URI.file(join(testDir, "first")).toString();
+      const folder2Uri = URI.file(join(testDir, "second")).toString();
+      
+      workspaceManager.setWorkspaceFolders([
+        { uri: folder1Uri, name: "first" },
+        { uri: folder2Uri, name: "second" },
+      ]);
+      
+      const uris = workspaceManager.getWorkspaceFolderUris();
+      expect(uris[0]).toBe(folder1Uri);
+      expect(uris[1]).toBe(folder2Uri);
+    });
+  });
 });

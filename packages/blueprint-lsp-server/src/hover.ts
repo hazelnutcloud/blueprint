@@ -1,5 +1,6 @@
 import type { Hover, Position, MarkupContent } from "vscode-languageserver/node";
 import { MarkupKind } from "vscode-languageserver/node";
+import { URI } from "vscode-uri";
 import type { Tree, Node } from "./parser";
 import type {
   ModuleNode,
@@ -23,6 +24,7 @@ import type { BlockingInfo } from "./blocking-status";
 import { computeBlockingInfo } from "./blocking-status";
 import type { DependencyGraph, CircularDependency } from "./dependency-graph";
 import type { Ticket } from "./tickets";
+import { join, isAbsolute } from "node:path";
 
 // ============================================================================
 // Types
@@ -42,6 +44,8 @@ export interface HoverContext {
   cycles: CircularDependency[];
   /** The file URI of the document being hovered */
   fileUri: string;
+  /** Workspace folder URIs for resolving relative file paths */
+  workspaceFolderUris?: string[];
 }
 
 /**
@@ -552,7 +556,8 @@ function buildRequirementHover(
     if (ticketInfo.implementationFiles.length > 0) {
       lines.push("**Files:**");
       for (const file of ticketInfo.implementationFiles) {
-        lines.push(`- ${file}`);
+        const fileLink = formatFileLink(file, context.workspaceFolderUris);
+        lines.push(`- ${fileLink}`);
       }
       lines.push("");
     }
@@ -561,7 +566,8 @@ function buildRequirementHover(
     if (ticketInfo.testFiles.length > 0) {
       lines.push("**Tests:**");
       for (const file of ticketInfo.testFiles) {
-        lines.push(`- ${file}`);
+        const fileLink = formatFileLink(file, context.workspaceFolderUris);
+        lines.push(`- ${fileLink}`);
       }
       lines.push("");
     }
@@ -935,6 +941,40 @@ function buildProgressBar(percent: number): string {
   const filled = Math.round(percent / 5); // 20 chars total
   const empty = 20 - filled;
   return "\u2588".repeat(filled) + "\u2591".repeat(empty);
+}
+
+/**
+ * Format a file path as a clickable Markdown link.
+ * If workspace folders are available, resolves relative paths to file:// URIs.
+ * Falls back to plain text if the path cannot be resolved.
+ */
+export function formatFileLink(
+  filePath: string,
+  workspaceFolderUris?: string[]
+): string {
+  // If no workspace folders, return plain text
+  if (!workspaceFolderUris || workspaceFolderUris.length === 0) {
+    return filePath;
+  }
+
+  // If the path is already absolute, convert directly to URI
+  if (isAbsolute(filePath)) {
+    const fileUri = URI.file(filePath).toString();
+    return `[${filePath}](${fileUri})`;
+  }
+
+  // Resolve relative path against the first workspace folder
+  // In multi-root workspaces, the first folder is typically the primary one
+  const firstWorkspaceUri = workspaceFolderUris[0];
+  if (!firstWorkspaceUri) {
+    return filePath;
+  }
+
+  const workspaceUri = URI.parse(firstWorkspaceUri);
+  const absolutePath = join(workspaceUri.fsPath, filePath);
+  const fileUri = URI.file(absolutePath).toString();
+
+  return `[${filePath}](${fileUri})`;
 }
 
 /**

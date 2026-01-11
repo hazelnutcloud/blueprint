@@ -249,7 +249,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Requirement identifier → ticket in `.tickets.json` (Completed: `buildRequirementDefinition()` navigates to ticket position in JSON file when tickets exist, falls back to symbol definition otherwise. Supports multiple tickets returning `Location[]`.)
 - [x] `@depends-on` reference → referenced requirement (Completed: `buildReferenceDefinition()` resolves cross-file references via `CrossFileSymbolIndex` and returns location of the referenced symbol.)
 - [x] Constraint identifier → constraint definition (Completed: `buildSymbolDefinition()` returns the constraint's source location.)
-- [ ] File path in hover → source file
+- [x] File path in hover → source file (Completed: Added `formatFileLink()` helper in `hover.ts` that converts relative file paths to clickable Markdown links with `file://` URIs. Updated `buildRequirementHover()` to render implementation files and test files as clickable links when workspace folders are available. Added `getWorkspaceFolderUris()` method to `WorkspaceManager`. Hover context now includes `workspaceFolderUris` for path resolution. 11 new tests in `hover.test.ts`, 4 new tests in `workspace.test.ts`.)
 
 ### 9.2 Find References
 - [x] Implement `textDocument/references` handler (Completed: Added `references.ts` module with `findReferencesTarget()` and `buildReferences()` functions. Uses `DependencyGraph.edges` to find all `@depends-on` declarations that reference a symbol. Integrated with LSP server in `index.ts` via `connection.onReferences()` handler. Added `referencesProvider: true` to server capabilities. 21 tests added in `references.test.ts`.)

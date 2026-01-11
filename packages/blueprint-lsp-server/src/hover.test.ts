@@ -10,6 +10,7 @@ import {
   findHoverTarget,
   buildHoverContent,
   buildHover,
+  formatFileLink,
   type HoverContext,
 } from "./hover";
 import type { Position } from "vscode-languageserver/node";
@@ -815,6 +816,250 @@ describe("hover", () => {
       expect(content!.value).toContain("2/2 satisfied");
       expect(content!.value).toContain("\u2713 bcrypt-cost");
       expect(content!.value).toContain("\u2713 rate-limit");
+    });
+  });
+
+  describe("formatFileLink", () => {
+    test("returns plain text when no workspace folders provided", () => {
+      const result = formatFileLink("src/auth/login.ts");
+      expect(result).toBe("src/auth/login.ts");
+    });
+
+    test("returns plain text when workspace folders array is empty", () => {
+      const result = formatFileLink("src/auth/login.ts", []);
+      expect(result).toBe("src/auth/login.ts");
+    });
+
+    test("creates markdown link with file URI for relative path", () => {
+      const result = formatFileLink("src/auth/login.ts", ["file:///workspace"]);
+      expect(result).toContain("[src/auth/login.ts]");
+      expect(result).toContain("file:///workspace/src/auth/login.ts");
+    });
+
+    test("creates markdown link for absolute path", () => {
+      const result = formatFileLink("/absolute/path/file.ts", ["file:///workspace"]);
+      expect(result).toContain("[/absolute/path/file.ts]");
+      expect(result).toContain("file:///absolute/path/file.ts");
+    });
+
+    test("uses first workspace folder for resolution", () => {
+      const result = formatFileLink("src/file.ts", [
+        "file:///first-workspace",
+        "file:///second-workspace",
+      ]);
+      expect(result).toContain("file:///first-workspace/src/file.ts");
+      expect(result).not.toContain("second-workspace");
+    });
+
+    test("handles paths with special characters", () => {
+      const result = formatFileLink("src/my file.ts", ["file:///workspace"]);
+      expect(result).toContain("[src/my file.ts]");
+      // URI should be properly encoded
+      expect(result).toContain("file:///workspace/src/my%20file.ts");
+    });
+
+    test("handles nested relative paths", () => {
+      const result = formatFileLink("src/auth/handlers/login.ts", ["file:///workspace"]);
+      expect(result).toContain("[src/auth/handlers/login.ts]");
+      expect(result).toContain("file:///workspace/src/auth/handlers/login.ts");
+    });
+  });
+
+  describe("file links in hover", () => {
+    /**
+     * Helper to create a hover context with workspace folders.
+     */
+    function createHoverContextWithWorkspace(
+      source: string,
+      fileUri: string = "file:///test.bp",
+      tickets: TicketFile | null = null,
+      workspaceFolderUris: string[] = []
+    ): { tree: ReturnType<typeof parseDocument>; context: HoverContext } {
+      const tree = parseDocument(source);
+      if (!tree) {
+        throw new Error("Failed to parse source");
+      }
+
+      const ast = transformToAST(tree);
+      const symbolIndex = new CrossFileSymbolIndex();
+      symbolIndex.addFile(fileUri, ast);
+
+      const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
+      const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
+        requirementSymbols,
+        tickets
+      );
+
+      const { graph: dependencyGraph, cycles } = DependencyGraph.build(symbolIndex);
+
+      return {
+        tree,
+        context: {
+          symbolIndex,
+          ticketMap,
+          dependencyGraph,
+          cycles,
+          fileUri,
+          workspaceFolderUris,
+        },
+      };
+    }
+
+    test("renders implementation files as clickable links when workspace is available", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic authentication.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.login.basic-auth",
+            description: "Implement basic auth",
+            status: "complete",
+            constraints_satisfied: [],
+            implementation: {
+              files: ["src/auth/login.ts"],
+              tests: [],
+            },
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContextWithWorkspace(
+        source,
+        "file:///workspace/test.bp",
+        tickets,
+        ["file:///workspace"]
+      );
+
+      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const content = buildHoverContent(target!, context);
+
+      expect(content!.value).toContain("[src/auth/login.ts]");
+      expect(content!.value).toContain("file:///workspace/src/auth/login.ts");
+    });
+
+    test("renders test files as clickable links when workspace is available", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic authentication.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.login.basic-auth",
+            description: "Implement basic auth",
+            status: "complete",
+            constraints_satisfied: [],
+            implementation: {
+              files: [],
+              tests: ["tests/auth/login.test.ts"],
+            },
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContextWithWorkspace(
+        source,
+        "file:///workspace/test.bp",
+        tickets,
+        ["file:///workspace"]
+      );
+
+      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const content = buildHoverContent(target!, context);
+
+      expect(content!.value).toContain("[tests/auth/login.test.ts]");
+      expect(content!.value).toContain("file:///workspace/tests/auth/login.test.ts");
+    });
+
+    test("renders files as plain text when no workspace available", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic authentication.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.login.basic-auth",
+            description: "Implement basic auth",
+            status: "complete",
+            constraints_satisfied: [],
+            implementation: {
+              files: ["src/auth/login.ts"],
+              tests: ["tests/auth/login.test.ts"],
+            },
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContextWithWorkspace(
+        source,
+        "file:///test.bp",
+        tickets,
+        [] // No workspace folders
+      );
+
+      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const content = buildHoverContent(target!, context);
+
+      // Should contain file paths but NOT as markdown links
+      expect(content!.value).toContain("src/auth/login.ts");
+      expect(content!.value).toContain("tests/auth/login.test.ts");
+      expect(content!.value).not.toContain("[src/auth/login.ts]");
+    });
+
+    test("renders multiple files as clickable links", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic authentication.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.login.basic-auth",
+            description: "Implement basic auth",
+            status: "complete",
+            constraints_satisfied: [],
+            implementation: {
+              files: ["src/auth/login.ts", "src/auth/password.ts"],
+              tests: ["tests/auth/login.test.ts", "tests/auth/password.test.ts"],
+            },
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContextWithWorkspace(
+        source,
+        "file:///workspace/test.bp",
+        tickets,
+        ["file:///workspace"]
+      );
+
+      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const content = buildHoverContent(target!, context);
+
+      // All files should be rendered as links
+      expect(content!.value).toContain("[src/auth/login.ts]");
+      expect(content!.value).toContain("[src/auth/password.ts]");
+      expect(content!.value).toContain("[tests/auth/login.test.ts]");
+      expect(content!.value).toContain("[tests/auth/password.test.ts]");
     });
   });
 });

@@ -229,6 +229,13 @@ export class WorkspaceManager {
   }
 
   /**
+   * Get the URIs of all workspace folders.
+   */
+  getWorkspaceFolderUris(): string[] {
+    return this.workspaceFolders.map((folder) => folder.uri);
+  }
+
+  /**
    * Clean up resources.
    */
   cleanup(): void {
