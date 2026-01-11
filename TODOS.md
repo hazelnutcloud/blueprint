@@ -484,7 +484,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 - [x] **Add test for multiple @description blocks** - Should verify behavior when a document contains multiple `@description` blocks. (Completed: Added test in `ast.test.ts` that verifies the grammar produces an ERROR node for multiple descriptions, and that `transformToAST` uses the last description block.)
 
-- [ ] **Add test for @description after @module** - Should verify the AST still parses (for error recovery) but diagnostics can detect the invalid ordering.
+- [x] **Add test for @description after @module** - Should verify the AST still parses (for error recovery) but diagnostics can detect the invalid ordering. (Completed: Added two tests in `ast.test.ts` - one verifying error recovery extracts the description block, another verifying the ERROR node pattern that diagnostics can use to detect misplaced @description.)
 
 - [ ] **Add test for duplicate identifiers** - Test that `buildSymbolTable()` handles duplicate module names, feature names, requirement names, and constraint names appropriately.
 
@@ -504,8 +504,4 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### Multi-line Comment Parsing
 
-- [ ] **Multi-line comments parsed as `description_block`** - The multi-line comment regex in `grammar.js` does not correctly match `/* ... */` comments. Instead of being recognized as `comment` tokens (which are in `extras`), they are incorrectly parsed as `description_block` nodes. This causes issues when documents contain multiple multi-line comments, resulting in parse errors. The problematic regex is:
-  ```javascript
-  token(seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/"))
-  ```
-  This regex fails to match simpler cases like `/* block */`. The regex should be fixed or replaced with a simpler pattern that correctly handles all multi-line comment cases.
+- [x] **Multi-line comments parsed as `description_block`** - Fixed. The issue was that the `comment` rule used separate `token()` wrappers for single-line and multi-line comments inside a `choice()`. The fix wrapped the entire `choice()` in a single `token()`, which gives proper precedence to the comment rule. The regex `[^*]*\*+([^/*][^*]*\*+)*/` was correct all along. Added additional corpus tests for block comment edge cases (single-line block, JSDoc style, asterisks inside).

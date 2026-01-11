@@ -24,11 +24,14 @@ module.exports = grammar({
     // ============================================
 
     comment: ($) =>
-      choice(
-        // Single-line comment: // ...
-        token(seq("//", /[^\n]*/)),
-        // Multi-line comment: /* ... */
-        token(seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/"))
+      token(
+        choice(
+          // Single-line comment: // ...
+          seq("//", /[^\n]*/),
+          // Multi-line comment: /* ... */
+          // Matches /* followed by any characters (including newlines) until */
+          seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/")
+        )
       ),
 
     // ============================================

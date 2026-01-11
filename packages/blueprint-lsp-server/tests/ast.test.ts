@@ -458,6 +458,77 @@ describe("AST Transformation", () => {
       expect(ast.modules).toHaveLength(1);
       expect(ast.modules[0]!.name).toBe("test");
     });
+
+    test("handles @description after @module (invalid ordering)", () => {
+      const code = `
+@module authentication
+  Handles user authentication.
+
+@description
+  This description appears after the module, which is invalid.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      // The parse tree should have an error because @description must come before @module
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      // Verify an ERROR node exists in the parse tree
+      const hasErrorNode = tree!.rootNode.children.some(
+        (child) => child.type === "ERROR"
+      );
+      expect(hasErrorNode).toBe(true);
+
+      // transformToAST should still work for error recovery
+      const ast = transformToAST(tree!);
+      expect(ast.type).toBe("document");
+
+      // The description block should still be extracted (error recovery)
+      // Note: The grammar wraps the module in an ERROR node, but the description_block
+      // is parsed as a top-level node. The AST transformation finds description_block nodes.
+      expect(ast.description).not.toBeNull();
+      expect(ast.description!.text).toContain("This description appears after");
+
+      // The module should still be recoverable from within the ERROR node
+      // Current behavior: modules inside ERROR nodes are not extracted
+      // This is acceptable for error recovery - diagnostics will flag the issue
+    });
+
+    test("detects @description placement for diagnostics", () => {
+      const code = `
+@module first
+  First module.
+
+@description
+  Misplaced description.
+
+@module second
+  Second module.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      // Parse tree has error due to invalid @description placement
+      expect(tree!.rootNode.hasError).toBe(true);
+
+      // For diagnostic purposes, we can detect this by checking if:
+      // 1. There's a description_block in the tree
+      // 2. There's an ERROR node before it (indicating a module was wrapped in error)
+      const children = tree!.rootNode.children;
+      const descriptionIndex = children.findIndex(
+        (child) => child.type === "description_block"
+      );
+      const errorIndex = children.findIndex((child) => child.type === "ERROR");
+
+      // When @description comes after @module, the module gets wrapped in ERROR
+      // and description_block appears as a sibling
+      expect(descriptionIndex).toBeGreaterThan(-1);
+      expect(errorIndex).toBeGreaterThan(-1);
+
+      // The ERROR node appears before the description_block in the tree
+      // This pattern can be used by diagnostics to detect misplaced @description
+      expect(errorIndex).toBeLessThan(descriptionIndex);
+    });
   });
 
   describe("complex document", () => {
