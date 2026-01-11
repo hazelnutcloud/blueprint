@@ -113,10 +113,15 @@ connection.onInitialized(async () => {
     });
   }
 
-  // Register file watcher for .tickets.json files
+  // Register file watchers for .bp and .tickets.json files
   if (hasDidChangeWatchedFilesCapability) {
     connection.client.register(DidChangeWatchedFilesNotification.type, {
       watchers: [
+        {
+          // Watch all .bp files in the workspace
+          globPattern: "**/*.bp",
+          kind: WatchKind.Create | WatchKind.Change | WatchKind.Delete,
+        },
         {
           // Watch all .tickets.json files in the .blueprint/tickets directory
           globPattern: "**/.blueprint/tickets/*.tickets.json",
@@ -124,7 +129,7 @@ connection.onInitialized(async () => {
         },
       ],
     });
-    connection.console.log("Registered file watcher for .tickets.json files");
+    connection.console.log("Registered file watchers for .bp and .tickets.json files");
   }
 
   // Initialize the tree-sitter parser
@@ -190,40 +195,72 @@ function getFilePath(uri: string): string {
   return URI.parse(uri).fsPath;
 }
 
-// Handle file system changes for watched files (.tickets.json)
+// Handle file system changes for watched files (.bp and .tickets.json)
 connection.onDidChangeWatchedFiles(async (params) => {
   for (const change of params.changes) {
     const filePath = getFilePath(change.uri);
+    const changeTypeStr = 
+      change.type === FileChangeType.Created ? "created" : 
+      change.type === FileChangeType.Changed ? "changed" : "deleted";
 
-    // Only process .tickets.json files
-    if (!isTicketFilePath(filePath)) {
+    // Process .bp files
+    if (isBlueprintFilePath(filePath)) {
+      connection.console.log(`Blueprint file ${changeTypeStr}: ${filePath}`);
+
+      switch (change.type) {
+        case FileChangeType.Created: {
+          // Add to workspace manager and index the file
+          workspaceManager.addFile(change.uri, filePath);
+          if (parserInitialized) {
+            await indexFile(change.uri, filePath);
+          }
+          break;
+        }
+        case FileChangeType.Changed: {
+          // Re-index the file (only if not currently open in editor)
+          // When a file is open, document change events handle updates
+          if (!documents.get(change.uri) && parserInitialized) {
+            await indexFile(change.uri, filePath);
+          }
+          break;
+        }
+        case FileChangeType.Deleted: {
+          // Remove from workspace manager and symbol index
+          workspaceManager.removeFile(change.uri);
+          symbolIndex.removeFile(change.uri);
+          // Also clean up document manager state if it exists
+          documentManager.onDocumentClose(change.uri);
+          break;
+        }
+      }
       continue;
     }
 
-    connection.console.log(
-      `Ticket file ${change.type === FileChangeType.Created ? "created" : change.type === FileChangeType.Changed ? "changed" : "deleted"}: ${filePath}`
-    );
+    // Process .tickets.json files
+    if (isTicketFilePath(filePath)) {
+      connection.console.log(`Ticket file ${changeTypeStr}: ${filePath}`);
 
-    switch (change.type) {
-      case FileChangeType.Created:
-      case FileChangeType.Changed: {
-        // Read the file and update the ticket document manager
-        try {
-          const content = await readFile(filePath, "utf-8");
-          // Use onDocumentChange to validate and update state
-          // We use version 0 for external file changes since we don't have a real version
-          ticketDocumentManager.onDocumentChange(change.uri, 0, content);
-        } catch (error) {
-          connection.console.error(
-            `Error reading ticket file ${filePath}: ${error}`
-          );
+      switch (change.type) {
+        case FileChangeType.Created:
+        case FileChangeType.Changed: {
+          // Read the file and update the ticket document manager
+          try {
+            const content = await readFile(filePath, "utf-8");
+            // Use onDocumentChange to validate and update state
+            // We use version 0 for external file changes since we don't have a real version
+            ticketDocumentManager.onDocumentChange(change.uri, 0, content);
+          } catch (error) {
+            connection.console.error(
+              `Error reading ticket file ${filePath}: ${error}`
+            );
+          }
+          break;
         }
-        break;
-      }
-      case FileChangeType.Deleted: {
-        // Clean up the ticket document state
-        ticketDocumentManager.onDocumentClose(change.uri);
-        break;
+        case FileChangeType.Deleted: {
+          // Clean up the ticket document state
+          ticketDocumentManager.onDocumentClose(change.uri);
+          break;
+        }
       }
     }
   }
