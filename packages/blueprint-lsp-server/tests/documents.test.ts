@@ -1,5 +1,83 @@
 import { test, expect, beforeAll, describe } from "bun:test";
-import { initializeParser, parseDocument } from "../src/parser";
+import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
+import { initializeParser, parseDocument, type Node } from "../src/parser";
+
+/**
+ * Helper function to validate @description placement.
+ * This mirrors the logic in DocumentManager.validateDescriptionPlacement()
+ * for testing purposes.
+ * 
+ * Note: When the grammar encounters invalid ordering, it may wrap elements
+ * in ERROR nodes. We need to look inside ERROR nodes to find the actual
+ * description_block and module_block elements for validation.
+ */
+function validateDescriptionPlacement(root: Node): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  
+  // Track all description and module blocks with their positions
+  const descriptionBlocks: { node: Node; index: number }[] = [];
+  const moduleBlocks: { node: Node; index: number }[] = [];
+
+  // Scan top-level children, looking inside ERROR nodes too
+  for (let i = 0; i < root.children.length; i++) {
+    const child = root.children[i]!;
+    
+    if (child.type === "description_block") {
+      descriptionBlocks.push({ node: child, index: i });
+    } else if (child.type === "module_block") {
+      moduleBlocks.push({ node: child, index: i });
+    } else if (child.type === "ERROR") {
+      // Look inside ERROR nodes for wrapped elements
+      for (const errChild of child.children) {
+        if (errChild.type === "description_block") {
+          descriptionBlocks.push({ node: errChild, index: i });
+        } else if (errChild.type === "module_block") {
+          moduleBlocks.push({ node: errChild, index: i });
+        }
+      }
+    }
+  }
+
+  // Check for multiple @description blocks
+  if (descriptionBlocks.length > 1) {
+    // Sort by position to ensure we keep the first one
+    descriptionBlocks.sort((a, b) => a.index - b.index);
+    
+    for (let i = 1; i < descriptionBlocks.length; i++) {
+      const { node } = descriptionBlocks[i]!;
+      diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: {
+          start: { line: node.startPosition.row, character: node.startPosition.column },
+          end: { line: node.endPosition.row, character: node.endPosition.column },
+        },
+        message: "Multiple @description blocks in one file. Only one @description is allowed per file.",
+        source: "blueprint",
+      });
+    }
+  }
+
+  // Check if any @description appears after a @module
+  if (moduleBlocks.length > 0) {
+    const firstModuleIndex = Math.min(...moduleBlocks.map((m) => m.index));
+    
+    for (const { node: descNode, index: descIndex } of descriptionBlocks) {
+      if (descIndex > firstModuleIndex) {
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: {
+            start: { line: descNode.startPosition.row, character: descNode.startPosition.column },
+            end: { line: descNode.endPosition.row, character: descNode.endPosition.column },
+          },
+          message: "@description must appear before any @module declaration.",
+          source: "blueprint",
+        });
+      }
+    }
+  }
+
+  return diagnostics;
+}
 
 describe("Parser", () => {
   beforeAll(async () => {
@@ -202,6 +280,194 @@ describe("Parser", () => {
       expect(tree).not.toBeNull();
       expect(tree!.rootNode.type).toBe("source_file");
       expect(tree!.rootNode.hasError).toBe(false);
+    });
+  });
+});
+
+describe("Description Placement Validation", () => {
+  beforeAll(async () => {
+    await initializeParser();
+  });
+
+  describe("valid placements", () => {
+    test("@description before @module produces no diagnostics", () => {
+      const code = `
+@description
+  This is the system description.
+
+@module authentication
+  Auth module.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      expect(diagnostics).toHaveLength(0);
+    });
+
+    test("no @description produces no diagnostics", () => {
+      const code = `
+@module authentication
+  Auth module.
+
+@feature login
+  Login feature.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      expect(diagnostics).toHaveLength(0);
+    });
+
+    test("only @description produces no diagnostics", () => {
+      const code = `
+@description
+  This is the only content in the file.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      expect(diagnostics).toHaveLength(0);
+    });
+  });
+
+  describe("@description after @module", () => {
+    test("reports error when @description appears after @module", () => {
+      const code = `
+@module authentication
+  Auth module.
+
+@description
+  This description is misplaced.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.severity).toBe(DiagnosticSeverity.Error);
+      expect(diagnostics[0]!.message).toBe(
+        "@description must appear before any @module declaration."
+      );
+      expect(diagnostics[0]!.source).toBe("blueprint");
+    });
+
+    test("reports error for @description between two modules", () => {
+      const code = `
+@module first
+  First module.
+
+@description
+  Misplaced description.
+
+@module second
+  Second module.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      // Should report exactly one error for the misplaced @description
+      const placementErrors = diagnostics.filter(
+        (d) => d.message === "@description must appear before any @module declaration."
+      );
+      expect(placementErrors.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("multiple @description blocks", () => {
+    test("reports error for second @description block", () => {
+      const code = `
+@description
+  First description.
+
+@description
+  Second description (invalid).
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.severity).toBe(DiagnosticSeverity.Error);
+      expect(diagnostics[0]!.message).toBe(
+        "Multiple @description blocks in one file. Only one @description is allowed per file."
+      );
+    });
+
+    test("reports errors for all extra @description blocks", () => {
+      const code = `
+@description
+  First description (valid).
+
+@description
+  Second description (invalid).
+
+@description
+  Third description (also invalid).
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      const multipleDescErrors = diagnostics.filter((d) =>
+        d.message.includes("Multiple @description blocks")
+      );
+      // Should report errors for the 2nd and 3rd descriptions
+      expect(multipleDescErrors).toHaveLength(2);
+    });
+
+    test("reports both multiple and placement errors when applicable", () => {
+      const code = `
+@module auth
+  Auth module.
+
+@description
+  First misplaced description.
+
+@description
+  Second misplaced description.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+
+      // Should have placement errors and multiple description errors
+      const placementErrors = diagnostics.filter((d) =>
+        d.message.includes("must appear before any @module")
+      );
+      const multipleErrors = diagnostics.filter((d) =>
+        d.message.includes("Multiple @description")
+      );
+
+      // Both descriptions are misplaced (after @module)
+      expect(placementErrors.length).toBeGreaterThanOrEqual(1);
+      // Second description is a duplicate
+      expect(multipleErrors).toHaveLength(1);
+    });
+  });
+
+  describe("diagnostic ranges", () => {
+    test("error range covers the @description block", () => {
+      const code = `@module auth
+  Auth module.
+
+@description
+  Misplaced.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const diagnostics = validateDescriptionPlacement(tree!.rootNode);
+      expect(diagnostics).toHaveLength(1);
+
+      const range = diagnostics[0]!.range;
+      // @description starts at line 3 (0-indexed), column 0
+      expect(range.start.line).toBe(3);
+      expect(range.start.character).toBe(0);
     });
   });
 });

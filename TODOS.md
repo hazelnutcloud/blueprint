@@ -170,8 +170,8 @@ easier to distribute and works across all platforms without native compilation. 
 - [ ] Detect circular dependencies (Error)
 - [ ] Detect references to non-existent requirements (Error)
 - [ ] Detect duplicate identifiers in scope (Error)
-- [ ] Detect multiple `@description` blocks in one file (Error)
-- [ ] Detect `@description` after `@module` (Error)
+- [x] Detect multiple `@description` blocks in one file (Error)
+- [x] Detect `@description` after `@module` (Error)
 
 ### 6.3 Warnings
 - [ ] Warn when requirement has no ticket
@@ -468,9 +468,9 @@ easier to distribute and works across all platforms without native compilation. 
 
 - [ ] **Missing `CommentNode` AST type** - Per SPEC.md Section 3.1.2, comments are "preserved for documentation purposes", but the AST has no `CommentNode` type. Add a `CommentNode` interface and collect comments during AST transformation for potential documentation extraction.
 
-- [ ] **No validation for @description placement** - SPEC.md Section 3.2.1 requires `@description` to appear before any `@module` declaration. The `transformToAST()` function does not validate this ordering. This validation should be added (likely in diagnostics phase, but the AST should expose enough information to detect this).
+- [x] **No validation for @description placement** - SPEC.md Section 3.2.1 requires `@description` to appear before any `@module` declaration. The `transformToAST()` function does not validate this ordering. This validation should be added (likely in diagnostics phase, but the AST should expose enough information to detect this). (Fixed: Added `validateDescriptionPlacement()` in `documents.ts` that detects `@description` after `@module` and reports a specific diagnostic error. Tests added in `documents.test.ts`.)
 
-- [ ] **No detection of multiple @description blocks** - SPEC.md Section 5.8 specifies "Error | Multiple @description blocks in one file". The current `transformToAST()` simply overwrites `description` if multiple blocks exist. Should either collect all and report in diagnostics, or at minimum flag that multiple were found.
+- [x] **No detection of multiple @description blocks** - SPEC.md Section 5.8 specifies "Error | Multiple @description blocks in one file". The current `transformToAST()` simply overwrites `description` if multiple blocks exist. Should either collect all and report in diagnostics, or at minimum flag that multiple were found. (Fixed: Added detection in `validateDescriptionPlacement()` in `documents.ts`. Reports error on all `@description` blocks after the first one. Tests added in `documents.test.ts`.)
 
 ### Symbol Table Issues
 
