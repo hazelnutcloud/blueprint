@@ -21,7 +21,7 @@ import { WorkspaceManager } from "./workspace";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
 import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
-import { computeWorkspaceDiagnostics } from "./workspace-diagnostics";
+import { computeWorkspaceDiagnostics, computeOrphanedTicketDiagnostics } from "./workspace-diagnostics";
 import { readFile } from "node:fs/promises";
 import { URI } from "vscode-uri";
 
@@ -57,7 +57,7 @@ let parserInitialized = false;
 let filesWithWorkspaceDiagnostics = new Set<string>();
 
 /**
- * Publish workspace-level diagnostics (circular dependencies, unresolved references, no-ticket warnings).
+ * Publish workspace-level diagnostics (circular dependencies, unresolved references, no-ticket warnings, orphaned tickets).
  * 
  * This function computes diagnostics across all indexed files and publishes them.
  * It also clears diagnostics from files that no longer have issues.
@@ -67,9 +67,13 @@ function publishWorkspaceDiagnostics(): void {
   const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
   const result = computeWorkspaceDiagnostics(symbolIndex, allTickets);
   
+  // Compute orphaned ticket diagnostics (tickets referencing removed requirements)
+  const ticketFiles = ticketDocumentManager.getAllTicketFiles();
+  const orphanedResult = computeOrphanedTicketDiagnostics(symbolIndex, ticketFiles);
+  
   // Clear diagnostics from files that no longer have workspace-level issues
   for (const fileUri of filesWithWorkspaceDiagnostics) {
-    if (!result.byFile.has(fileUri)) {
+    if (!result.byFile.has(fileUri) && !orphanedResult.byFile.has(fileUri)) {
       // This file no longer has workspace diagnostics, but we need to preserve
       // its document-level diagnostics. We send an empty array for workspace diagnostics
       // which will be merged with document diagnostics by the document manager.
@@ -84,16 +88,25 @@ function publishWorkspaceDiagnostics(): void {
           diagnostics: state.diagnostics,
         });
       } else {
-        // Document not open, just clear all diagnostics
-        connection.sendDiagnostics({
-          uri: fileUri,
-          diagnostics: [],
-        });
+        // Check if it's a ticket file
+        const ticketState = ticketDocumentManager.getState(fileUri);
+        if (ticketState) {
+          connection.sendDiagnostics({
+            uri: fileUri,
+            diagnostics: ticketState.diagnostics,
+          });
+        } else {
+          // Document not open, just clear all diagnostics
+          connection.sendDiagnostics({
+            uri: fileUri,
+            diagnostics: [],
+          });
+        }
       }
     }
   }
   
-  // Publish new workspace diagnostics, merging with document diagnostics
+  // Publish new workspace diagnostics for .bp files, merging with document diagnostics
   for (const [fileUri, workspaceDiagnostics] of result.byFile) {
     const state = documentManager.getState(fileUri);
     const documentDiagnostics = state?.diagnostics ?? [];
@@ -107,12 +120,30 @@ function publishWorkspaceDiagnostics(): void {
     });
   }
   
-  // Update the set of files with workspace diagnostics
-  filesWithWorkspaceDiagnostics = new Set(result.filesWithDiagnostics);
+  // Publish orphaned ticket diagnostics for .tickets.json files, merging with ticket document diagnostics
+  for (const [fileUri, orphanedDiagnostics] of orphanedResult.byFile) {
+    const ticketState = ticketDocumentManager.getState(fileUri);
+    const ticketDocumentDiagnostics = ticketState?.diagnostics ?? [];
+    
+    // Merge ticket document diagnostics with orphaned ticket diagnostics
+    const allDiagnostics = [...ticketDocumentDiagnostics, ...orphanedDiagnostics];
+    
+    connection.sendDiagnostics({
+      uri: fileUri,
+      diagnostics: allDiagnostics,
+    });
+  }
   
-  if (result.filesWithDiagnostics.length > 0) {
+  // Update the set of files with workspace diagnostics
+  filesWithWorkspaceDiagnostics = new Set([
+    ...result.filesWithDiagnostics,
+    ...orphanedResult.filesWithDiagnostics,
+  ]);
+  
+  const totalFiles = result.filesWithDiagnostics.length + orphanedResult.filesWithDiagnostics.length;
+  if (totalFiles > 0) {
     connection.console.log(
-      `Published workspace diagnostics for ${result.filesWithDiagnostics.length} files`
+      `Published workspace diagnostics for ${totalFiles} files`
     );
   }
 }

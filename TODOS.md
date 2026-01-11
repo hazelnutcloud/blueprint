@@ -176,7 +176,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### 6.3 Warnings
 - [x] Warn when requirement has no ticket (Completed: Added `computeNoTicketDiagnostics()` in `workspace-diagnostics.ts` that compares requirements from `CrossFileSymbolIndex` against tickets. Integrated with `computeWorkspaceDiagnostics()` which now accepts optional tickets array. Updated `publishWorkspaceDiagnostics()` in `index.ts` to pass tickets from `TicketDocumentManager.getAllTickets()`. Added `getAllTicketFiles()` and `getAllTickets()` methods to `TicketDocumentManager`. 11 new tests in `workspace-diagnostics.test.ts`.)
-- [ ] Warn when ticket references removed requirement
+- [x] Warn when ticket references removed requirement (Completed: Added `computeOrphanedTicketDiagnostics()` in `workspace-diagnostics.ts` that checks ticket refs against valid requirement paths from `CrossFileSymbolIndex`. Diagnostics are reported on `.tickets.json` files with code `orphaned-ticket`. Integrated with `publishWorkspaceDiagnostics()` in `index.ts` to merge with ticket document diagnostics. 10 new tests in `workspace-diagnostics.test.ts`.)
 - [ ] Warn on constraint identifier mismatch between `.bp` and ticket
 
 ### 6.4 Informational

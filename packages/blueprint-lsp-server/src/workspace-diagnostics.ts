@@ -1,7 +1,7 @@
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import { DependencyGraph, type CircularDependency } from "./dependency-graph";
-import type { Ticket } from "./tickets";
+import type { Ticket, TicketFile } from "./tickets";
 
 /**
  * Represents diagnostics for a specific file.
@@ -233,6 +233,80 @@ export function computeNoTicketDiagnostics(
       } else {
         byFile.set(req.fileUri, [diagnostic]);
       }
+    }
+  }
+
+  return {
+    byFile,
+    filesWithDiagnostics: Array.from(byFile.keys()),
+  };
+}
+
+/**
+ * Information about a ticket file and its tickets for orphaned ticket detection.
+ */
+export interface TicketFileInfo {
+  /** The URI of the .tickets.json file */
+  uri: string;
+  /** The parsed ticket file data */
+  data: TicketFile;
+}
+
+/**
+ * Compute diagnostics for tickets that reference removed/non-existent requirements.
+ *
+ * Per SPEC.md Section 5.8:
+ * - Warning | Ticket references removed requirement
+ *
+ * These diagnostics are reported on the .tickets.json files, not the .bp files.
+ *
+ * @param symbolIndex The cross-file symbol index
+ * @param ticketFiles Array of ticket files with their URIs
+ * @returns Diagnostics grouped by file URI (ticket file URIs)
+ */
+export function computeOrphanedTicketDiagnostics(
+  symbolIndex: CrossFileSymbolIndex,
+  ticketFiles: TicketFileInfo[]
+): WorkspaceDiagnosticsResult {
+  const byFile = new Map<string, Diagnostic[]>();
+
+  // Build a set of all valid requirement paths from the symbol index
+  const validRequirementPaths = new Set<string>();
+  const requirements = symbolIndex.getSymbolsByKind("requirement");
+  for (const req of requirements) {
+    validRequirementPaths.add(req.path);
+  }
+
+  // Check each ticket file for orphaned tickets
+  for (const ticketFileInfo of ticketFiles) {
+    const orphanedTicketDiagnostics: Diagnostic[] = [];
+
+    for (let i = 0; i < ticketFileInfo.data.tickets.length; i++) {
+      const ticket = ticketFileInfo.data.tickets[i]!;
+
+      // Check if the ticket's ref points to an existing requirement
+      if (!validRequirementPaths.has(ticket.ref)) {
+        // This ticket references a removed/non-existent requirement
+        const diagnostic: Diagnostic = {
+          severity: DiagnosticSeverity.Warning,
+          range: {
+            // We point to line 0 since we don't have precise location info
+            // The ticket-documents.ts has logic to find JSON paths, but for simplicity
+            // we use a placeholder range. A future enhancement could locate the exact position.
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          message: `Ticket '${ticket.id}' references removed requirement '${ticket.ref}'`,
+          source: "blueprint",
+          code: "orphaned-ticket",
+        };
+
+        orphanedTicketDiagnostics.push(diagnostic);
+      }
+    }
+
+    if (orphanedTicketDiagnostics.length > 0) {
+      byFile.set(ticketFileInfo.uri, orphanedTicketDiagnostics);
     }
   }
 
