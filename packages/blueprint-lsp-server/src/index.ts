@@ -838,7 +838,7 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams) => {
   return buildWorkspaceSymbols(symbolIndex, params.query);
 });
 
-// Handle code action request (quick fixes)
+// Handle code action request (quick fixes and source actions)
 connection.onCodeAction((params: CodeActionParams) => {
   const document = documents.get(params.textDocument.uri);
   if (!document) {
@@ -850,11 +850,19 @@ connection.onCodeAction((params: CodeActionParams) => {
     return [];
   }
 
+  // Get the parse tree for dependency code actions
+  const state = documentManager.getState(params.textDocument.uri);
+  
+  // Build the dependency graph for dependency-related actions
+  const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+
   // Build the code actions context
   const codeActionsContext: CodeActionsContext = {
     symbolIndex,
     ticketDocumentManager,
     workspaceFolderUris: workspaceManager.getWorkspaceFolderUris(),
+    dependencyGraph,
+    tree: state?.tree ?? undefined,
   };
 
   return buildCodeActions(params, codeActionsContext);

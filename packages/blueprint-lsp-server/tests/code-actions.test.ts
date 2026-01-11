@@ -1695,3 +1695,465 @@ describe("findSimilarSymbols", () => {
     expect(foundPaths.some(p => p.includes("payments.checkout"))).toBe(true);
   });
 });
+
+// ============================================================================
+// Tests for findSymbolAtPosition
+// ============================================================================
+
+import { findSymbolAtPosition } from "../src/code-actions";
+
+describe("findSymbolAtPosition", () => {
+  test("finds module at position", () => {
+    const code = `
+@module auth
+  Authentication module.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    // Position on the @module line
+    const result = findSymbolAtPosition(
+      tree!,
+      { line: 1, character: 5 },
+      symbolIndex,
+      "file:///workspace/auth.bp"
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.path).toBe("auth");
+    expect(result!.kind).toBe("module");
+  });
+
+  test("finds feature at position", () => {
+    const code = `
+@module auth
+
+@feature login
+  Login feature.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    // Position on the @feature line
+    const result = findSymbolAtPosition(
+      tree!,
+      { line: 3, character: 5 },
+      symbolIndex,
+      "file:///workspace/auth.bp"
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.path).toBe("auth.login");
+    expect(result!.kind).toBe("feature");
+  });
+
+  test("finds requirement at position", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify user credentials.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    // Position on the @requirement line
+    const result = findSymbolAtPosition(
+      tree!,
+      { line: 5, character: 10 },
+      symbolIndex,
+      "file:///workspace/auth.bp"
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.path).toBe("auth.login.verify");
+    expect(result!.kind).toBe("requirement");
+  });
+
+  test("returns null for position outside any block", () => {
+    const code = `
+// Just a comment
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const result = findSymbolAtPosition(
+      tree!,
+      { line: 1, character: 0 },
+      symbolIndex,
+      "file:///workspace/auth.bp"
+    );
+
+    expect(result).toBeNull();
+  });
+
+  test("finds enclosing module when in description", () => {
+    const code = `
+@module auth
+  This is the authentication module.
+  It handles all auth-related features.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    // Position in the description text
+    const result = findSymbolAtPosition(
+      tree!,
+      { line: 2, character: 10 },
+      symbolIndex,
+      "file:///workspace/auth.bp"
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.path).toBe("auth");
+    expect(result!.kind).toBe("module");
+  });
+});
+
+// ============================================================================
+// Tests for dependency code actions (Show all dependencies / Show all dependents)
+// ============================================================================
+
+import { DependencyGraph } from "../src/dependency-graph";
+
+describe("buildCodeActions - dependency actions", () => {
+  function createMockParams(
+    uri: string,
+    line: number,
+    character: number,
+    diagnostics: Diagnostic[] = []
+  ): CodeActionParams {
+    return {
+      textDocument: { uri },
+      range: {
+        start: { line, character },
+        end: { line, character },
+      },
+      context: { diagnostics },
+    };
+  }
+
+  test("returns 'Show dependencies' action for requirement with dependencies", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify user credentials.
+
+@module storage
+
+@feature data
+
+  @requirement user-table
+    @depends-on auth.login.verify
+    User table depends on verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+      dependencyGraph,
+      tree: tree!,
+    };
+
+    // Position on the user-table requirement (which has a dependency)
+    const params = createMockParams("file:///workspace/auth.bp", 13, 15);
+
+    const actions = buildCodeActions(params, context);
+
+    // Should have a "Show dependencies" action
+    const dependencyAction = actions.find(a => a.title.includes("dependenc"));
+    expect(dependencyAction).toBeDefined();
+    expect(dependencyAction!.title).toContain("1 dependency");
+    expect(dependencyAction!.title).toContain("storage.data.user-table");
+    expect(dependencyAction!.command).toBeDefined();
+    expect(dependencyAction!.command!.command).toBe("blueprint.showLocations");
+  });
+
+  test("returns 'Show dependents' action for requirement with dependents", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify user credentials.
+
+@module storage
+
+@feature data
+
+  @requirement user-table
+    @depends-on auth.login.verify
+    User table depends on verify.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+      dependencyGraph,
+      tree: tree!,
+    };
+
+    // Position on the verify requirement (which has a dependent)
+    const params = createMockParams("file:///workspace/auth.bp", 5, 15);
+
+    const actions = buildCodeActions(params, context);
+
+    // Should have a "Show dependents" action
+    const dependentAction = actions.find(a => a.title.includes("dependent"));
+    expect(dependentAction).toBeDefined();
+    expect(dependentAction!.title).toContain("1 dependent");
+    expect(dependentAction!.title).toContain("auth.login.verify");
+    expect(dependentAction!.command).toBeDefined();
+    expect(dependentAction!.command!.command).toBe("blueprint.showLocations");
+  });
+
+  test("returns no dependency actions for requirement without dependencies", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    Verify user credentials.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+      dependencyGraph,
+      tree: tree!,
+    };
+
+    // Position on the verify requirement (which has no dependencies or dependents)
+    const params = createMockParams("file:///workspace/auth.bp", 5, 15);
+
+    const actions = buildCodeActions(params, context);
+
+    // Should have no dependency-related actions
+    const dependencyActions = actions.filter(a => 
+      a.title.includes("dependenc") || a.title.includes("dependent")
+    );
+    expect(dependencyActions).toHaveLength(0);
+  });
+
+  test("returns no dependency actions when context lacks dependency graph", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement verify
+    @depends-on storage.data
+    Verify user credentials.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+      // No dependencyGraph or tree provided
+    };
+
+    const params = createMockParams("file:///workspace/auth.bp", 5, 15);
+
+    const actions = buildCodeActions(params, context);
+
+    // Should have no dependency-related actions
+    const dependencyActions = actions.filter(a => 
+      a.title.includes("dependenc") || a.title.includes("dependent")
+    );
+    expect(dependencyActions).toHaveLength(0);
+  });
+
+  test("returns both dependency and dependent actions when both exist", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement basic
+    Basic auth.
+
+  @requirement verify
+    @depends-on auth.login.basic
+    Verify user credentials.
+
+  @requirement advanced
+    @depends-on auth.login.verify
+    Advanced auth.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+      dependencyGraph,
+      tree: tree!,
+    };
+
+    // Position on the verify requirement (has both dependency and dependent)
+    const params = createMockParams("file:///workspace/auth.bp", 9, 15);
+
+    const actions = buildCodeActions(params, context);
+
+    // Should have both dependency and dependent actions
+    const dependencyAction = actions.find(a => a.title.includes("dependenc") && !a.title.includes("dependent"));
+    const dependentAction = actions.find(a => a.title.includes("dependent"));
+    
+    expect(dependencyAction).toBeDefined();
+    expect(dependentAction).toBeDefined();
+  });
+
+  test("pluralizes correctly for multiple dependencies", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement basic
+    Basic auth.
+
+  @requirement oauth
+    OAuth auth.
+
+  @requirement verify
+    @depends-on auth.login.basic, auth.login.oauth
+    Verify user credentials.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+      dependencyGraph,
+      tree: tree!,
+    };
+
+    // Position on the verify requirement (which has 2 dependencies)
+    const params = createMockParams("file:///workspace/auth.bp", 12, 15);
+
+    const actions = buildCodeActions(params, context);
+
+    // Should have "2 dependencies" (plural)
+    const dependencyAction = actions.find(a => a.title.includes("dependenc"));
+    expect(dependencyAction).toBeDefined();
+    expect(dependencyAction!.title).toContain("2 dependencies");
+  });
+
+  test("code action command includes locations as arguments", () => {
+    const code = `
+@module auth
+
+@feature login
+
+  @requirement basic
+    Basic auth.
+
+  @requirement verify
+    @depends-on auth.login.basic
+    Verify user credentials.
+`;
+    const tree = parseDocument(code);
+    const ast = transformToAST(tree!);
+    const symbolIndex = new CrossFileSymbolIndex();
+    symbolIndex.addFile("file:///workspace/auth.bp", ast);
+
+    const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+
+    const mockTicketManager = new MockTicketDocumentManager();
+
+    const context: CodeActionsContext = {
+      symbolIndex,
+      ticketDocumentManager: mockTicketManager as any,
+      workspaceFolderUris: ["file:///workspace"],
+      dependencyGraph,
+      tree: tree!,
+    };
+
+    // Position on the verify requirement
+    const params = createMockParams("file:///workspace/auth.bp", 9, 15);
+
+    const actions = buildCodeActions(params, context);
+
+    const dependencyAction = actions.find(a => a.title.includes("dependenc"));
+    expect(dependencyAction).toBeDefined();
+    expect(dependencyAction!.command).toBeDefined();
+    expect(dependencyAction!.command!.arguments).toBeDefined();
+    expect(dependencyAction!.command!.arguments!.length).toBe(2);
+    
+    // First argument should be locations array
+    const locations = dependencyAction!.command!.arguments![0] as any[];
+    expect(locations).toBeInstanceOf(Array);
+    expect(locations.length).toBe(1);
+    expect(locations[0].uri).toBe("file:///workspace/auth.bp");
+    expect(locations[0].range).toBeDefined();
+    
+    // Second argument should be the title
+    expect(dependencyAction!.command!.arguments![1]).toContain("Dependencies of");
+  });
+});

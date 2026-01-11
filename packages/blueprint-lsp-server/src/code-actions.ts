@@ -4,14 +4,18 @@ import type {
   Diagnostic,
   TextEdit,
   WorkspaceEdit,
+  Location,
+  Command,
 } from "vscode-languageserver/node";
 import { CodeActionKind, DiagnosticSeverity } from "vscode-languageserver/node";
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import type { TicketDocumentManager } from "./ticket-documents";
-import type { RequirementNode } from "./ast";
+import type { RequirementNode, SourceLocation } from "./ast";
 import type { Ticket, TicketFile } from "./tickets";
 import { resolveTicketFileUri, DEFAULT_TICKETS_PATH, TICKET_SCHEMA_VERSION } from "./tickets";
 import { URI } from "vscode-uri";
+import type { DependencyGraph } from "./dependency-graph";
+import type { Tree } from "./parser";
 
 /**
  * Context needed to build code actions.
@@ -23,6 +27,10 @@ export interface CodeActionsContext {
   ticketDocumentManager: TicketDocumentManager;
   /** Workspace folder URIs for resolving ticket file paths */
   workspaceFolderUris?: string[];
+  /** The dependency graph for dependency-related actions */
+  dependencyGraph?: DependencyGraph;
+  /** The parse tree for the current document */
+  tree?: Tree;
 }
 
 // ============================================================================
@@ -870,5 +878,230 @@ export function buildCodeActions(
     }
   }
 
+  // Add source code actions for showing dependencies/dependents
+  // These are available on modules, features, and requirements
+  const dependencyActions = buildDependencyCodeActions(params, context);
+  actions.push(...dependencyActions);
+
   return actions;
+}
+
+// ============================================================================
+// Dependency Code Actions (Show all dependencies / Show all dependents)
+// ============================================================================
+
+/**
+ * Information about a symbol at a position.
+ */
+export interface SymbolAtPosition {
+  /** The symbol path */
+  path: string;
+  /** The kind of symbol */
+  kind: "module" | "feature" | "requirement";
+}
+
+/**
+ * Find the symbol at a given position in the parse tree.
+ * Returns the module, feature, or requirement that contains the position.
+ */
+export function findSymbolAtPosition(
+  tree: Tree,
+  position: { line: number; character: number },
+  symbolIndex: CrossFileSymbolIndex,
+  fileUri: string
+): SymbolAtPosition | null {
+  const root = tree.rootNode;
+  
+  // Find the deepest node at the position
+  const node = findDeepestNodeAt(root, position.line, position.character);
+  if (!node) {
+    return null;
+  }
+
+  // Walk up to find a module, feature, or requirement block
+  let current = node;
+  while (current) {
+    if (current.type === "requirement_block") {
+      return buildSymbolPath(current, "requirement", symbolIndex, fileUri);
+    }
+    if (current.type === "feature_block") {
+      return buildSymbolPath(current, "feature", symbolIndex, fileUri);
+    }
+    if (current.type === "module_block") {
+      return buildSymbolPath(current, "module", symbolIndex, fileUri);
+    }
+    current = current.parent;
+  }
+
+  return null;
+}
+
+/**
+ * Find the deepest node containing a position.
+ */
+function findDeepestNodeAt(
+  node: { startPosition: { row: number; column: number }; endPosition: { row: number; column: number }; children: any[]; type: string },
+  line: number,
+  column: number
+): any | null {
+  const start = node.startPosition;
+  const end = node.endPosition;
+
+  // Check if position is within this node
+  if (line < start.row || (line === start.row && column < start.column)) {
+    return null;
+  }
+  if (line > end.row || (line === end.row && column > end.column)) {
+    return null;
+  }
+
+  // Try to find a more specific child
+  for (const child of node.children) {
+    const found = findDeepestNodeAt(child, line, column);
+    if (found) {
+      return found;
+    }
+  }
+
+  return node;
+}
+
+/**
+ * Build the symbol path for a block node.
+ */
+function buildSymbolPath(
+  blockNode: any,
+  kind: "module" | "feature" | "requirement",
+  symbolIndex: CrossFileSymbolIndex,
+  fileUri: string
+): SymbolAtPosition | null {
+  const nameNode = blockNode.childForFieldName?.("name");
+  if (!nameNode) return null;
+
+  let path = nameNode.text;
+  
+  // Walk up to find parent scope and build full path
+  let parent = blockNode.parent;
+  while (parent) {
+    if (parent.type === "feature_block" && kind === "requirement") {
+      const featureNameNode = parent.childForFieldName?.("name");
+      if (featureNameNode) {
+        path = `${featureNameNode.text}.${path}`;
+      }
+    }
+    if (parent.type === "module_block") {
+      const moduleNameNode = parent.childForFieldName?.("name");
+      if (moduleNameNode) {
+        path = `${moduleNameNode.text}.${path}`;
+      }
+      break;
+    }
+    parent = parent.parent;
+  }
+
+  return { path, kind };
+}
+
+/**
+ * Convert a SourceLocation to an LSP Location.
+ */
+function sourceLocationToLocation(location: SourceLocation, fileUri: string): Location {
+  return {
+    uri: fileUri,
+    range: {
+      start: { line: location.startLine, character: location.startColumn },
+      end: { line: location.endLine, character: location.endColumn },
+    },
+  };
+}
+
+/**
+ * Build code actions for showing dependencies and dependents.
+ */
+function buildDependencyCodeActions(
+  params: CodeActionParams,
+  context: CodeActionsContext
+): CodeAction[] {
+  const actions: CodeAction[] = [];
+
+  // Need the dependency graph and parse tree to build dependency actions
+  if (!context.dependencyGraph || !context.tree) {
+    return actions;
+  }
+
+  // Find the symbol at the cursor position
+  const symbol = findSymbolAtPosition(
+    context.tree,
+    params.range.start,
+    context.symbolIndex,
+    params.textDocument.uri
+  );
+
+  if (!symbol) {
+    return actions;
+  }
+
+  // Get dependencies (what this symbol depends on)
+  const dependencies = context.dependencyGraph.getDependencies(symbol.path);
+  
+  // Get dependents (what depends on this symbol)
+  const dependents = context.dependencyGraph.getDependents(symbol.path);
+
+  // Create "Show all dependencies" action if there are dependencies
+  if (dependencies.length > 0) {
+    const locations = getDependencyLocations(dependencies, context.symbolIndex);
+    
+    if (locations.length > 0) {
+      const action: CodeAction = {
+        title: `Show ${dependencies.length} dependenc${dependencies.length === 1 ? 'y' : 'ies'} of '${symbol.path}'`,
+        kind: CodeActionKind.Source,
+        command: {
+          title: "Show Dependencies",
+          command: "blueprint.showLocations",
+          arguments: [locations, `Dependencies of ${symbol.path}`],
+        },
+      };
+      actions.push(action);
+    }
+  }
+
+  // Create "Show all dependents" action if there are dependents
+  if (dependents.length > 0) {
+    const locations = getDependencyLocations(dependents, context.symbolIndex);
+    
+    if (locations.length > 0) {
+      const action: CodeAction = {
+        title: `Show ${dependents.length} dependent${dependents.length === 1 ? '' : 's'} of '${symbol.path}'`,
+        kind: CodeActionKind.Source,
+        command: {
+          title: "Show Dependents",
+          command: "blueprint.showLocations",
+          arguments: [locations, `Dependents of ${symbol.path}`],
+        },
+      };
+      actions.push(action);
+    }
+  }
+
+  return actions;
+}
+
+/**
+ * Get the locations of dependency symbols.
+ */
+function getDependencyLocations(
+  paths: string[],
+  symbolIndex: CrossFileSymbolIndex
+): Location[] {
+  const locations: Location[] = [];
+
+  for (const path of paths) {
+    const symbols = symbolIndex.getSymbol(path);
+    if (symbols && symbols.length > 0) {
+      const symbol = symbols[0]!;
+      locations.push(sourceLocationToLocation(symbol.node.location, symbol.fileUri));
+    }
+  }
+
+  return locations;
 }

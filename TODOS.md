@@ -276,9 +276,8 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Suggest removing obsolete ticket references (Completed: Extended `code-actions.ts` with `extractOrphanedTicketInfo()` to parse "orphaned-ticket" diagnostic messages and `createRemoveTicketEdit()` to generate edits that remove tickets from `.tickets.json` files. Handles comma removal for proper JSON formatting. Added handling for "orphaned-ticket" diagnostics in `buildCodeActions()`. 18 new tests added in `code-actions.test.ts`.)
 
 ### 10.2 Code Actions
-- [ ] "Go to ticket" action for requirements
-- [ ] "Show all dependencies" action
-- [ ] "Show all dependents" action
+- [x] "Show all dependencies" action (Completed: Added `findSymbolAtPosition()`, `buildDependencyCodeActions()`, and `getDependencyLocations()` functions in `code-actions.ts`. When cursor is on a module, feature, or requirement that has dependencies, a source code action "Show N dependencies of 'path'" appears. The action includes a command with locations array for the client to display. Updated `CodeActionsContext` to include `dependencyGraph` and `tree`. Updated `index.ts` to build dependency graph and pass parse tree to code actions handler. 13 new tests added in `code-actions.test.ts`.)
+- [x] "Show all dependents" action (Completed: Implemented alongside "Show all dependencies" in the same commit. When a symbol has dependents, a source code action "Show N dependents of 'path'" appears with locations of symbols that depend on the current one. Uses `blueprint.showLocations` command for client-side handling.)
 
 ---
 
