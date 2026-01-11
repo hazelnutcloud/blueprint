@@ -1,10 +1,12 @@
 import type { Location, Position, Range } from "vscode-languageserver/node";
+import { URI } from "vscode-uri";
 import type { Tree, Node } from "./parser";
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import type { SourceLocation } from "./ast";
 import type { DependencyGraph, DependencyEdge } from "./dependency-graph";
 import type { RequirementTicketMap } from "./requirement-ticket-map";
 import type { Ticket } from "./tickets";
+import { join } from "node:path";
 
 // ============================================================================
 // Types
@@ -40,6 +42,8 @@ export interface ReferencesContext {
   ticketMap?: RequirementTicketMap;
   /** All ticket files indexed by their URI (optional, for finding ticket references) */
   ticketFiles?: Map<string, TicketFileInfo>;
+  /** Workspace folder URIs for resolving relative implementation file paths */
+  workspaceFolderUris?: string[];
 }
 
 /**
@@ -534,16 +538,103 @@ function findTicketReferences(
 }
 
 /**
+ * Find all implementation file locations that implement a requirement.
+ * 
+ * Per SPEC.md Section 5.7: Find references should include source files 
+ * implementing a requirement (via ticket data).
+ * 
+ * This looks at the `implementation.files` and `implementation.tests` arrays
+ * in tickets to find the source files that implement the requirement.
+ */
+function findImplementationFileReferences(
+  requirementPath: string,
+  context: ReferencesContext
+): Location[] {
+  const locations: Location[] = [];
+
+  // Need ticket context and workspace folders to resolve implementation files
+  if (!context.ticketMap || !context.workspaceFolderUris || context.workspaceFolderUris.length === 0) {
+    return locations;
+  }
+
+  // Get tickets for this requirement
+  const ticketInfo = context.ticketMap.get(requirementPath);
+  if (!ticketInfo || ticketInfo.tickets.length === 0) {
+    return locations;
+  }
+
+  // Use the first workspace folder for resolving relative paths
+  const workspaceFolderUri = context.workspaceFolderUris[0]!;
+  const workspaceFolderPath = URI.parse(workspaceFolderUri).fsPath;
+
+  // Collect all implementation files from all tickets for this requirement
+  const seenPaths = new Set<string>();
+  
+  for (const ticket of ticketInfo.tickets) {
+    if (!ticket.implementation) {
+      continue;
+    }
+
+    // Process implementation.files
+    const files = ticket.implementation.files ?? [];
+    for (const filePath of files) {
+      if (seenPaths.has(filePath)) {
+        continue;
+      }
+      seenPaths.add(filePath);
+
+      // Convert relative path to absolute URI
+      const absolutePath = join(workspaceFolderPath, filePath);
+      const fileUri = URI.file(absolutePath).toString();
+
+      // Create a location pointing to the start of the file
+      // (line 0, character 0 since we're referencing the file itself)
+      locations.push({
+        uri: fileUri,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+      });
+    }
+
+    // Process implementation.tests
+    const tests = ticket.implementation.tests ?? [];
+    for (const testPath of tests) {
+      if (seenPaths.has(testPath)) {
+        continue;
+      }
+      seenPaths.add(testPath);
+
+      // Convert relative path to absolute URI
+      const absolutePath = join(workspaceFolderPath, testPath);
+      const fileUri = URI.file(absolutePath).toString();
+
+      locations.push({
+        uri: fileUri,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+      });
+    }
+  }
+
+  return locations;
+}
+
+/**
  * Find all references to a target symbol.
  * 
  * References in Blueprint are:
  * - @depends-on declarations that reference a symbol
  * - Tickets that track a requirement
+ * - Source files implementing a requirement (via ticket data)
  * 
  * Per SPEC.md Section 5.7:
  * - Find all @depends-on declarations referencing an element
  * - Find tickets tracking a requirement
- * - Find source files implementing a requirement (via ticket data - future)
+ * - Find source files implementing a requirement (via ticket data)
  */
 export function buildReferences(
   target: ReferencesTarget,
@@ -586,6 +677,10 @@ export function buildReferences(
   if (target.kind === "requirement") {
     const ticketLocations = findTicketReferences(target.path, context);
     locations.push(...ticketLocations);
+
+    // Find implementation file references for requirements
+    const implementationLocations = findImplementationFileReferences(target.path, context);
+    locations.push(...implementationLocations);
   }
 
   return locations.length > 0 ? locations : null;

@@ -782,6 +782,7 @@ connection.onReferences((params: ReferenceParams) => {
     includeDeclaration: params.context.includeDeclaration,
     ticketMap,
     ticketFiles: ticketFilesMap,
+    workspaceFolderUris: workspaceManager.getWorkspaceFolderUris(),
   };
 
   return buildReferences(target, referencesContext);
