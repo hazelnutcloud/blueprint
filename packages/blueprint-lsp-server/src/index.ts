@@ -18,6 +18,7 @@ import type {
   ReferenceParams,
   DocumentSymbolParams,
   WorkspaceSymbolParams,
+  CodeActionParams,
 } from "vscode-languageserver/node";
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
@@ -36,6 +37,7 @@ import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
 import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
 import { computeWorkspaceDiagnostics, computeOrphanedTicketDiagnostics, computeConstraintMismatchDiagnostics, mergeDiagnosticResults } from "./workspace-diagnostics";
+import { buildCodeActions, type CodeActionsContext } from "./code-actions";
 import { readFile } from "node:fs/promises";
 import { URI } from "vscode-uri";
 
@@ -231,6 +233,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       referencesProvider: true,
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
+      codeActionProvider: true,
       semanticTokensProvider: {
         legend: semanticTokensLegend,
         full: true,
@@ -833,6 +836,28 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams) => {
   // Build workspace symbols from the cross-file symbol index
   // The query parameter filters results (empty query returns all symbols)
   return buildWorkspaceSymbols(symbolIndex, params.query);
+});
+
+// Handle code action request (quick fixes)
+connection.onCodeAction((params: CodeActionParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  const filePath = getFilePath(params.textDocument.uri);
+  if (!isBlueprintFilePath(filePath)) {
+    return [];
+  }
+
+  // Build the code actions context
+  const codeActionsContext: CodeActionsContext = {
+    symbolIndex,
+    ticketDocumentManager,
+    workspaceFolderUris: workspaceManager.getWorkspaceFolderUris(),
+  };
+
+  return buildCodeActions(params, codeActionsContext);
 });
 
 connection.onShutdown(() => {
