@@ -372,56 +372,166 @@ export interface SymbolTable {
 }
 
 /**
- * Build a symbol table from a DocumentNode.
+ * Represents a duplicate identifier detected during symbol table construction.
+ * Contains both the original and duplicate nodes for diagnostic reporting.
  */
-export function buildSymbolTable(doc: DocumentNode): SymbolTable {
+export interface DuplicateIdentifier {
+  /** The type of element that has a duplicate */
+  kind: "module" | "feature" | "requirement" | "constraint";
+  /** The fully-qualified path of the duplicate */
+  path: string;
+  /** The original (first) node with this identifier */
+  original: ASTNode;
+  /** The duplicate node (second or later occurrence) */
+  duplicate: ASTNode;
+}
+
+/**
+ * Result of building a symbol table, including any duplicate identifiers found.
+ */
+export interface SymbolTableResult {
+  /** The symbol table with unique entries (last one wins for duplicates) */
+  symbolTable: SymbolTable;
+  /** List of duplicate identifiers detected */
+  duplicates: DuplicateIdentifier[];
+}
+
+/**
+ * Build a symbol table from a DocumentNode.
+ * Detects duplicate identifiers within the same scope and returns them
+ * for diagnostic reporting. When duplicates exist, the last one wins
+ * in the symbol table (for error recovery), but all duplicates are reported.
+ */
+export function buildSymbolTable(doc: DocumentNode): SymbolTableResult {
   const modules = new Map<string, ModuleNode>();
   const features = new Map<string, FeatureNode>();
   const requirements = new Map<string, RequirementNode>();
   const constraints = new Map<string, ConstraintNode>();
+  const duplicates: DuplicateIdentifier[] = [];
 
   for (const mod of doc.modules) {
     const modPath = mod.name;
+    
+    // Check for duplicate module
+    const existingModule = modules.get(modPath);
+    if (existingModule) {
+      duplicates.push({
+        kind: "module",
+        path: modPath,
+        original: existingModule,
+        duplicate: mod,
+      });
+    }
     modules.set(modPath, mod);
 
     // Module-level constraints
     for (const constraint of mod.constraints) {
-      constraints.set(`${modPath}.${constraint.name}`, constraint);
+      const constraintPath = `${modPath}.${constraint.name}`;
+      const existingConstraint = constraints.get(constraintPath);
+      if (existingConstraint) {
+        duplicates.push({
+          kind: "constraint",
+          path: constraintPath,
+          original: existingConstraint,
+          duplicate: constraint,
+        });
+      }
+      constraints.set(constraintPath, constraint);
     }
 
     // Module-level requirements (not in a feature)
     for (const req of mod.requirements) {
       const reqPath = `${modPath}.${req.name}`;
+      const existingReq = requirements.get(reqPath);
+      if (existingReq) {
+        duplicates.push({
+          kind: "requirement",
+          path: reqPath,
+          original: existingReq,
+          duplicate: req,
+        });
+      }
       requirements.set(reqPath, req);
 
       for (const constraint of req.constraints) {
-        constraints.set(`${reqPath}.${constraint.name}`, constraint);
+        const constraintPath = `${reqPath}.${constraint.name}`;
+        const existingConstraint = constraints.get(constraintPath);
+        if (existingConstraint) {
+          duplicates.push({
+            kind: "constraint",
+            path: constraintPath,
+            original: existingConstraint,
+            duplicate: constraint,
+          });
+        }
+        constraints.set(constraintPath, constraint);
       }
     }
 
     // Features
     for (const feature of mod.features) {
       const featurePath = `${modPath}.${feature.name}`;
+      const existingFeature = features.get(featurePath);
+      if (existingFeature) {
+        duplicates.push({
+          kind: "feature",
+          path: featurePath,
+          original: existingFeature,
+          duplicate: feature,
+        });
+      }
       features.set(featurePath, feature);
 
       // Feature-level constraints
       for (const constraint of feature.constraints) {
-        constraints.set(`${featurePath}.${constraint.name}`, constraint);
+        const constraintPath = `${featurePath}.${constraint.name}`;
+        const existingConstraint = constraints.get(constraintPath);
+        if (existingConstraint) {
+          duplicates.push({
+            kind: "constraint",
+            path: constraintPath,
+            original: existingConstraint,
+            duplicate: constraint,
+          });
+        }
+        constraints.set(constraintPath, constraint);
       }
 
       // Requirements in the feature
       for (const req of feature.requirements) {
         const reqPath = `${featurePath}.${req.name}`;
+        const existingReq = requirements.get(reqPath);
+        if (existingReq) {
+          duplicates.push({
+            kind: "requirement",
+            path: reqPath,
+            original: existingReq,
+            duplicate: req,
+          });
+        }
         requirements.set(reqPath, req);
 
         for (const constraint of req.constraints) {
-          constraints.set(`${reqPath}.${constraint.name}`, constraint);
+          const constraintPath = `${reqPath}.${constraint.name}`;
+          const existingConstraint = constraints.get(constraintPath);
+          if (existingConstraint) {
+            duplicates.push({
+              kind: "constraint",
+              path: constraintPath,
+              original: existingConstraint,
+              duplicate: constraint,
+            });
+          }
+          constraints.set(constraintPath, constraint);
         }
       }
     }
   }
 
-  return { modules, features, requirements, constraints };
+  return {
+    symbolTable: { modules, features, requirements, constraints },
+    duplicates,
+  };
 }
 
 /**

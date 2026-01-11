@@ -1,6 +1,7 @@
 import { test, expect, beforeAll, describe } from "bun:test";
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
 import { initializeParser, parseDocument, type Node } from "../src/parser";
+import { transformToAST, buildSymbolTable, type DocumentNode, type DuplicateIdentifier } from "../src/ast";
 
 /**
  * Helper function to validate @description placement.
@@ -468,6 +469,297 @@ describe("Description Placement Validation", () => {
       // @description starts at line 3 (0-indexed), column 0
       expect(range.start.line).toBe(3);
       expect(range.start.character).toBe(0);
+    });
+  });
+});
+
+/**
+ * Helper function to validate duplicate identifiers.
+ * This mirrors the logic in DocumentManager.validateDuplicateIdentifiers()
+ * for testing purposes.
+ */
+function validateDuplicateIdentifiers(ast: DocumentNode): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  const { duplicates } = buildSymbolTable(ast);
+
+  for (const dup of duplicates) {
+    const loc = dup.duplicate.location;
+    const kindLabel = getDuplicateKindLabel(dup.kind);
+    const originalLoc = dup.original.location;
+    const identifier = getIdentifierFromPath(dup.path);
+
+    diagnostics.push({
+      severity: DiagnosticSeverity.Error,
+      range: {
+        start: { line: loc.startLine, character: loc.startColumn },
+        end: { line: loc.endLine, character: loc.endColumn },
+      },
+      message: `Duplicate ${kindLabel} identifier '${identifier}'. First defined at line ${originalLoc.startLine + 1}.`,
+      source: "blueprint",
+    });
+  }
+
+  return diagnostics;
+}
+
+function getDuplicateKindLabel(kind: DuplicateIdentifier["kind"]): string {
+  switch (kind) {
+    case "module":
+      return "@module";
+    case "feature":
+      return "@feature";
+    case "requirement":
+      return "@requirement";
+    case "constraint":
+      return "@constraint";
+  }
+}
+
+function getIdentifierFromPath(path: string): string {
+  const parts = path.split(".");
+  return parts[parts.length - 1] || path;
+}
+
+describe("Duplicate Identifier Validation", () => {
+  beforeAll(async () => {
+    await initializeParser();
+  });
+
+  describe("no duplicates", () => {
+    test("unique identifiers produce no diagnostics", () => {
+      const code = `
+@module authentication
+  Auth module.
+
+@feature login
+  Login feature.
+
+@requirement basic-auth
+  Basic auth requirement.
+
+  @constraint bcrypt
+    Use bcrypt.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+      expect(diagnostics).toHaveLength(0);
+    });
+
+    test("same name in different scopes produces no diagnostics", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement validate
+  Login validation.
+
+@feature logout
+
+@requirement validate
+  Logout validation.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+      expect(diagnostics).toHaveLength(0);
+    });
+  });
+
+  describe("duplicate modules", () => {
+    test("reports error for duplicate module identifier", () => {
+      const code = `
+@module authentication
+  First auth module.
+
+@module authentication
+  Second auth module.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.severity).toBe(DiagnosticSeverity.Error);
+      expect(diagnostics[0]!.message).toContain("Duplicate @module identifier 'authentication'");
+      expect(diagnostics[0]!.message).toContain("First defined at line");
+      expect(diagnostics[0]!.source).toBe("blueprint");
+    });
+  });
+
+  describe("duplicate features", () => {
+    test("reports error for duplicate feature identifier in same module", () => {
+      const code = `
+@module auth
+
+@feature login
+  First login.
+
+@feature login
+  Second login.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.message).toContain("Duplicate @feature identifier 'login'");
+    });
+  });
+
+  describe("duplicate requirements", () => {
+    test("reports error for duplicate requirement identifier in same feature", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  First basic-auth.
+
+@requirement basic-auth
+  Second basic-auth.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.message).toContain("Duplicate @requirement identifier 'basic-auth'");
+    });
+
+    test("reports error for duplicate module-level requirements", () => {
+      const code = `
+@module auth
+
+@requirement global-check
+  First check.
+
+@requirement global-check
+  Second check.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.message).toContain("Duplicate @requirement identifier 'global-check'");
+    });
+  });
+
+  describe("duplicate constraints", () => {
+    test("reports error for duplicate constraint identifier in same requirement", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic auth.
+
+  @constraint security
+    First security.
+
+  @constraint security
+    Second security.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.message).toContain("Duplicate @constraint identifier 'security'");
+    });
+  });
+
+  describe("multiple duplicates", () => {
+    test("reports all duplicates in a complex document", () => {
+      const code = `
+@module auth
+  First auth.
+
+@module auth
+  Second auth.
+
+@feature login
+  First login.
+
+@feature login
+  Second login.
+
+@requirement basic
+  First basic.
+
+@requirement basic
+  Second basic.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(3);
+      expect(diagnostics.map(d => d.message)).toEqual([
+        expect.stringContaining("@module"),
+        expect.stringContaining("@feature"),
+        expect.stringContaining("@requirement"),
+      ]);
+    });
+  });
+
+  describe("diagnostic ranges", () => {
+    test("error range covers the duplicate element", () => {
+      const code = `@module auth
+  First auth.
+
+@module auth
+  Second auth.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(1);
+      const range = diagnostics[0]!.range;
+      // The duplicate @module starts at line 3 (0-indexed)
+      expect(range.start.line).toBe(3);
+      expect(range.start.character).toBe(0);
+    });
+
+    test("error message references correct original line number", () => {
+      const code = `@module auth
+  First auth.
+
+@module auth
+  Second auth.
+`;
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const diagnostics = validateDuplicateIdentifiers(ast);
+
+      expect(diagnostics).toHaveLength(1);
+      // Original is at line 0 (0-indexed), so message should say "line 1"
+      expect(diagnostics[0]!.message).toContain("First defined at line 1");
     });
   });
 });

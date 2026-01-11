@@ -474,7 +474,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### Symbol Table Issues
 
-- [ ] **No duplicate identifier detection in buildSymbolTable()** - SPEC.md Section 5.8 requires "Error | Duplicate identifier in scope". The `buildSymbolTable()` function uses `Map.set()` which silently overwrites duplicates. Should detect and report duplicate keys for diagnostic purposes. Consider returning a list of duplicates alongside the symbol table.
+- [x] **No duplicate identifier detection in buildSymbolTable()** - SPEC.md Section 5.8 requires "Error | Duplicate identifier in scope". The `buildSymbolTable()` function uses `Map.set()` which silently overwrites duplicates. Should detect and report duplicate keys for diagnostic purposes. Consider returning a list of duplicates alongside the symbol table. (Completed: Modified `buildSymbolTable()` to return a `SymbolTableResult` containing both the symbol table and a `duplicates` array of `DuplicateIdentifier` objects. Added `validateDuplicateIdentifiers()` in `documents.ts` to report duplicates as diagnostics. Added comprehensive tests in both `ast.test.ts` and `documents.test.ts`.)
 
 ### AST Design Issues
 

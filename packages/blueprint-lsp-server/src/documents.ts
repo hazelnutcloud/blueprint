@@ -1,6 +1,7 @@
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { DiagnosticSeverity, type Connection, type Diagnostic } from "vscode-languageserver/node";
 import { parseDocument, type Tree, type Node } from "./parser";
+import { transformToAST, buildSymbolTable, type DocumentNode, type DuplicateIdentifier } from "./ast";
 
 /**
  * Represents the parsed state of a Blueprint document.
@@ -146,7 +147,66 @@ export class DocumentManager {
     const diagnostics: Diagnostic[] = [];
     this.collectErrorNodes(tree.rootNode, diagnostics);
     this.validateDescriptionPlacement(tree.rootNode, diagnostics);
+    
+    // Transform to AST and check for duplicate identifiers
+    const ast = transformToAST(tree);
+    this.validateDuplicateIdentifiers(ast, diagnostics);
+    
     return diagnostics;
+  }
+
+  /**
+   * Validate that there are no duplicate identifiers within the same scope.
+   * 
+   * Per SPEC.md Section 5.8:
+   * - Error | Duplicate identifier in scope
+   */
+  private validateDuplicateIdentifiers(
+    ast: DocumentNode,
+    diagnostics: Diagnostic[]
+  ): void {
+    const { duplicates } = buildSymbolTable(ast);
+    
+    for (const dup of duplicates) {
+      const loc = dup.duplicate.location;
+      const kindLabel = this.getDuplicateKindLabel(dup.kind);
+      const originalLoc = dup.original.location;
+      
+      diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: {
+          start: { line: loc.startLine, character: loc.startColumn },
+          end: { line: loc.endLine, character: loc.endColumn },
+        },
+        message: `Duplicate ${kindLabel} identifier '${this.getIdentifierFromPath(dup.path)}'. First defined at line ${originalLoc.startLine + 1}.`,
+        source: "blueprint",
+      });
+    }
+  }
+
+  /**
+   * Get a human-readable label for a duplicate kind.
+   */
+  private getDuplicateKindLabel(kind: DuplicateIdentifier["kind"]): string {
+    switch (kind) {
+      case "module":
+        return "@module";
+      case "feature":
+        return "@feature";
+      case "requirement":
+        return "@requirement";
+      case "constraint":
+        return "@constraint";
+    }
+  }
+
+  /**
+   * Extract the identifier from a fully-qualified path.
+   * E.g., "auth.login.basic-auth" -> "basic-auth"
+   */
+  private getIdentifierFromPath(path: string): string {
+    const parts = path.split(".");
+    return parts[parts.length - 1] || path;
   }
 
   /**

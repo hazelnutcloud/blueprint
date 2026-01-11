@@ -218,7 +218,7 @@ describe("AST Transformation", () => {
 
   describe("buildSymbolTable", () => {
     describe("duplicate identifier handling", () => {
-      test("duplicate module names - last one wins", () => {
+      test("duplicate module names - last one wins and duplicate is reported", () => {
         const code = `
 @module authentication
   First auth module.
@@ -228,16 +228,23 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
         // Map.set() overwrites, so only one entry exists
-        expect(symbols.modules.size).toBe(1);
-        expect(symbols.modules.has("authentication")).toBe(true);
+        expect(symbolTable.modules.size).toBe(1);
+        expect(symbolTable.modules.has("authentication")).toBe(true);
         // The last module wins (second one)
-        expect(symbols.modules.get("authentication")!.description).toContain("Second auth module");
+        expect(symbolTable.modules.get("authentication")!.description).toContain("Second auth module");
+
+        // Duplicate should be reported
+        expect(duplicates).toHaveLength(1);
+        expect(duplicates[0]!.kind).toBe("module");
+        expect(duplicates[0]!.path).toBe("authentication");
+        expect((duplicates[0]!.original as any).description).toContain("First auth module");
+        expect((duplicates[0]!.duplicate as any).description).toContain("Second auth module");
       });
 
-      test("duplicate feature names within same module - last one wins", () => {
+      test("duplicate feature names within same module - last one wins and duplicate is reported", () => {
         const code = `
 @module authentication
 
@@ -249,16 +256,21 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
-        expect(symbols.features.size).toBe(1);
-        expect(symbols.features.has("authentication.login")).toBe(true);
-        expect(symbols.features.get("authentication.login")!.description).toContain(
+        expect(symbolTable.features.size).toBe(1);
+        expect(symbolTable.features.has("authentication.login")).toBe(true);
+        expect(symbolTable.features.get("authentication.login")!.description).toContain(
           "Second login feature"
         );
+
+        // Duplicate should be reported
+        expect(duplicates).toHaveLength(1);
+        expect(duplicates[0]!.kind).toBe("feature");
+        expect(duplicates[0]!.path).toBe("authentication.login");
       });
 
-      test("same feature name in different modules - both preserved", () => {
+      test("same feature name in different modules - both preserved, no duplicates", () => {
         const code = `
 @module authentication
 
@@ -272,17 +284,20 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
         // Different fully-qualified paths, so both are kept
-        expect(symbols.features.size).toBe(2);
-        expect(symbols.features.has("authentication.login")).toBe(true);
-        expect(symbols.features.has("payments.login")).toBe(true);
-        expect(symbols.features.get("authentication.login")!.description).toContain("Auth login");
-        expect(symbols.features.get("payments.login")!.description).toContain("Payments login");
+        expect(symbolTable.features.size).toBe(2);
+        expect(symbolTable.features.has("authentication.login")).toBe(true);
+        expect(symbolTable.features.has("payments.login")).toBe(true);
+        expect(symbolTable.features.get("authentication.login")!.description).toContain("Auth login");
+        expect(symbolTable.features.get("payments.login")!.description).toContain("Payments login");
+
+        // No duplicates because paths are different
+        expect(duplicates).toHaveLength(0);
       });
 
-      test("duplicate requirement names within same feature - last one wins", () => {
+      test("duplicate requirement names within same feature - last one wins and duplicate is reported", () => {
         const code = `
 @module authentication
 
@@ -296,16 +311,21 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
-        expect(symbols.requirements.size).toBe(1);
-        expect(symbols.requirements.has("authentication.login.basic-auth")).toBe(true);
+        expect(symbolTable.requirements.size).toBe(1);
+        expect(symbolTable.requirements.has("authentication.login.basic-auth")).toBe(true);
         expect(
-          symbols.requirements.get("authentication.login.basic-auth")!.description
+          symbolTable.requirements.get("authentication.login.basic-auth")!.description
         ).toContain("Second basic-auth");
+
+        // Duplicate should be reported
+        expect(duplicates).toHaveLength(1);
+        expect(duplicates[0]!.kind).toBe("requirement");
+        expect(duplicates[0]!.path).toBe("authentication.login.basic-auth");
       });
 
-      test("same requirement name in different features - both preserved", () => {
+      test("same requirement name in different features - both preserved, no duplicates", () => {
         const code = `
 @module authentication
 
@@ -321,14 +341,17 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
-        expect(symbols.requirements.size).toBe(2);
-        expect(symbols.requirements.has("authentication.login.validate")).toBe(true);
-        expect(symbols.requirements.has("authentication.logout.validate")).toBe(true);
+        expect(symbolTable.requirements.size).toBe(2);
+        expect(symbolTable.requirements.has("authentication.login.validate")).toBe(true);
+        expect(symbolTable.requirements.has("authentication.logout.validate")).toBe(true);
+
+        // No duplicates because paths are different
+        expect(duplicates).toHaveLength(0);
       });
 
-      test("duplicate constraint names within same requirement - last one wins", () => {
+      test("duplicate constraint names within same requirement - last one wins and duplicate is reported", () => {
         const code = `
 @module authentication
 
@@ -345,14 +368,14 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
         // Only one constraint with this path
-        expect(symbols.constraints.has("authentication.login.basic-auth.security")).toBe(true);
+        expect(symbolTable.constraints.has("authentication.login.basic-auth.security")).toBe(true);
 
         // Count how many constraints have "security" in their path
         let securityCount = 0;
-        for (const key of symbols.constraints.keys()) {
+        for (const key of symbolTable.constraints.keys()) {
           if (key.endsWith(".security")) {
             securityCount++;
           }
@@ -361,11 +384,16 @@ describe("AST Transformation", () => {
 
         // Last one wins
         expect(
-          symbols.constraints.get("authentication.login.basic-auth.security")!.description
+          symbolTable.constraints.get("authentication.login.basic-auth.security")!.description
         ).toContain("Second security constraint");
+
+        // Duplicate should be reported
+        expect(duplicates).toHaveLength(1);
+        expect(duplicates[0]!.kind).toBe("constraint");
+        expect(duplicates[0]!.path).toBe("authentication.login.basic-auth.security");
       });
 
-      test("same constraint name in different requirements - both preserved", () => {
+      test("same constraint name in different requirements - both preserved, no duplicates", () => {
         const code = `
 @module authentication
 
@@ -385,19 +413,22 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
-        expect(symbols.constraints.has("authentication.login.basic-auth.rate-limit")).toBe(true);
-        expect(symbols.constraints.has("authentication.login.oauth.rate-limit")).toBe(true);
+        expect(symbolTable.constraints.has("authentication.login.basic-auth.rate-limit")).toBe(true);
+        expect(symbolTable.constraints.has("authentication.login.oauth.rate-limit")).toBe(true);
         expect(
-          symbols.constraints.get("authentication.login.basic-auth.rate-limit")!.description
+          symbolTable.constraints.get("authentication.login.basic-auth.rate-limit")!.description
         ).toContain("basic auth");
         expect(
-          symbols.constraints.get("authentication.login.oauth.rate-limit")!.description
+          symbolTable.constraints.get("authentication.login.oauth.rate-limit")!.description
         ).toContain("OAuth");
+
+        // No duplicates because paths are different
+        expect(duplicates).toHaveLength(0);
       });
 
-      test("duplicate module-level requirements - last one wins", () => {
+      test("duplicate module-level requirements - last one wins and duplicate is reported", () => {
         const code = `
 @module authentication
 
@@ -409,16 +440,21 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
-        expect(symbols.requirements.size).toBe(1);
-        expect(symbols.requirements.has("authentication.global-check")).toBe(true);
+        expect(symbolTable.requirements.size).toBe(1);
+        expect(symbolTable.requirements.has("authentication.global-check")).toBe(true);
         expect(
-          symbols.requirements.get("authentication.global-check")!.description
+          symbolTable.requirements.get("authentication.global-check")!.description
         ).toContain("Second global check");
+
+        // Duplicate should be reported
+        expect(duplicates).toHaveLength(1);
+        expect(duplicates[0]!.kind).toBe("requirement");
+        expect(duplicates[0]!.path).toBe("authentication.global-check");
       });
 
-      test("duplicate module-level constraints - last one wins", () => {
+      test("duplicate module-level constraints - last one wins and duplicate is reported", () => {
         const code = `
 @module authentication
   Auth module.
@@ -431,12 +467,46 @@ describe("AST Transformation", () => {
 `;
         const tree = parseDocument(code);
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable, duplicates } = buildSymbolTable(ast);
 
-        expect(symbols.constraints.has("authentication.global-security")).toBe(true);
+        expect(symbolTable.constraints.has("authentication.global-security")).toBe(true);
         expect(
-          symbols.constraints.get("authentication.global-security")!.description
+          symbolTable.constraints.get("authentication.global-security")!.description
         ).toContain("Second global security");
+
+        // Duplicate should be reported
+        expect(duplicates).toHaveLength(1);
+        expect(duplicates[0]!.kind).toBe("constraint");
+        expect(duplicates[0]!.path).toBe("authentication.global-security");
+      });
+
+      test("multiple duplicates in complex document", () => {
+        const code = `
+@module auth
+  First auth.
+
+@module auth
+  Second auth.
+
+@feature login
+  First login.
+
+@feature login
+  Second login.
+
+@requirement basic
+  First basic.
+
+@requirement basic
+  Second basic.
+`;
+        const tree = parseDocument(code);
+        const ast = transformToAST(tree!);
+        const { duplicates } = buildSymbolTable(ast);
+
+        // Should report 3 duplicates: module, feature, requirement
+        expect(duplicates).toHaveLength(3);
+        expect(duplicates.map(d => d.kind)).toEqual(["module", "feature", "requirement"]);
       });
     });
 
@@ -447,11 +517,11 @@ describe("AST Transformation", () => {
 `;
       const tree = parseDocument(code);
       const ast = transformToAST(tree!);
-      const symbols = buildSymbolTable(ast);
+      const { symbolTable } = buildSymbolTable(ast);
 
-      expect(symbols.modules.has("authentication")).toBe(true);
-      expect(symbols.modules.has("payments")).toBe(true);
-      expect(symbols.modules.size).toBe(2);
+      expect(symbolTable.modules.has("authentication")).toBe(true);
+      expect(symbolTable.modules.has("payments")).toBe(true);
+      expect(symbolTable.modules.size).toBe(2);
     });
 
     test("builds symbol table for features", () => {
@@ -463,10 +533,10 @@ describe("AST Transformation", () => {
 `;
       const tree = parseDocument(code);
       const ast = transformToAST(tree!);
-      const symbols = buildSymbolTable(ast);
+      const { symbolTable } = buildSymbolTable(ast);
 
-      expect(symbols.features.has("authentication.login")).toBe(true);
-      expect(symbols.features.has("authentication.logout")).toBe(true);
+      expect(symbolTable.features.has("authentication.login")).toBe(true);
+      expect(symbolTable.features.has("authentication.logout")).toBe(true);
     });
 
     test("builds symbol table for requirements", () => {
@@ -480,10 +550,10 @@ describe("AST Transformation", () => {
 `;
       const tree = parseDocument(code);
       const ast = transformToAST(tree!);
-      const symbols = buildSymbolTable(ast);
+      const { symbolTable } = buildSymbolTable(ast);
 
-      expect(symbols.requirements.has("authentication.login.basic-auth")).toBe(true);
-      expect(symbols.requirements.has("authentication.login.oauth")).toBe(true);
+      expect(symbolTable.requirements.has("authentication.login.basic-auth")).toBe(true);
+      expect(symbolTable.requirements.has("authentication.login.oauth")).toBe(true);
     });
 
     test("builds symbol table for constraints", () => {
@@ -502,10 +572,10 @@ describe("AST Transformation", () => {
 `;
       const tree = parseDocument(code);
       const ast = transformToAST(tree!);
-      const symbols = buildSymbolTable(ast);
+      const { symbolTable } = buildSymbolTable(ast);
 
-      expect(symbols.constraints.has("authentication.login.basic-auth.bcrypt")).toBe(true);
-      expect(symbols.constraints.has("authentication.login.basic-auth.rate-limit")).toBe(true);
+      expect(symbolTable.constraints.has("authentication.login.basic-auth.bcrypt")).toBe(true);
+      expect(symbolTable.constraints.has("authentication.login.basic-auth.rate-limit")).toBe(true);
     });
 
     test("handles module-level requirements", () => {
@@ -517,9 +587,28 @@ describe("AST Transformation", () => {
 `;
       const tree = parseDocument(code);
       const ast = transformToAST(tree!);
-      const symbols = buildSymbolTable(ast);
+      const { symbolTable } = buildSymbolTable(ast);
 
-      expect(symbols.requirements.has("authentication.global-auth-check")).toBe(true);
+      expect(symbolTable.requirements.has("authentication.global-auth-check")).toBe(true);
+    });
+
+    test("returns empty duplicates array when no duplicates exist", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  Basic authentication.
+
+  @constraint bcrypt
+    Use bcrypt.
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+      const { duplicates } = buildSymbolTable(ast);
+
+      expect(duplicates).toHaveLength(0);
     });
   });
 
@@ -889,10 +978,10 @@ describe("AST Transformation", () => {
         expect(tree!.rootNode.hasError).toBe(true);
 
         const ast = transformToAST(tree!);
-        const symbols = buildSymbolTable(ast);
+        const { symbolTable } = buildSymbolTable(ast);
 
         // The module should be in the symbol table
-        expect(symbols.modules.has("auth")).toBe(true);
+        expect(symbolTable.modules.has("auth")).toBe(true);
 
         // Parser recovery: @feature becomes ERROR, requirement is at module level
         expect(ast.modules[0]!.features).toHaveLength(0);
@@ -900,7 +989,7 @@ describe("AST Transformation", () => {
         expect(ast.modules[0]!.requirements[0]!.name).toBe("test-req");
 
         // The requirement should be in the symbol table at module level
-        expect(symbols.requirements.has("auth.test-req")).toBe(true);
+        expect(symbolTable.requirements.has("auth.test-req")).toBe(true);
       });
 
       test("subsequent valid elements are still parsed after missing identifier", () => {
@@ -1008,15 +1097,15 @@ describe("AST Transformation", () => {
       );
 
       // Symbol table
-      const symbols = buildSymbolTable(ast);
-      expect(symbols.modules.has("authentication")).toBe(true);
-      expect(symbols.features.has("authentication.login")).toBe(true);
-      expect(symbols.features.has("authentication.session")).toBe(true);
-      expect(symbols.requirements.has("authentication.login.credentials-login")).toBe(true);
-      expect(symbols.requirements.has("authentication.login.oauth-login")).toBe(true);
-      expect(symbols.requirements.has("authentication.session.create-token")).toBe(true);
+      const { symbolTable } = buildSymbolTable(ast);
+      expect(symbolTable.modules.has("authentication")).toBe(true);
+      expect(symbolTable.features.has("authentication.login")).toBe(true);
+      expect(symbolTable.features.has("authentication.session")).toBe(true);
+      expect(symbolTable.requirements.has("authentication.login.credentials-login")).toBe(true);
+      expect(symbolTable.requirements.has("authentication.login.oauth-login")).toBe(true);
+      expect(symbolTable.requirements.has("authentication.session.create-token")).toBe(true);
       expect(
-        symbols.constraints.has("authentication.login.credentials-login.bcrypt-verification")
+        symbolTable.constraints.has("authentication.login.credentials-login.bcrypt-verification")
       ).toBe(true);
     });
   });
