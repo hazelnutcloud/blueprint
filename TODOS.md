@@ -457,3 +457,43 @@ easier to distribute and works across all platforms without native compilation. 
 ### Performance (Future)
 
 - [ ] **Consider incremental parsing** - Current implementation uses `TextDocumentSyncKind.Full` which re-parses the entire document on every change. Tree-sitter supports incremental parsing via `tree.edit()` which would improve performance for large files.
+
+---
+
+## Code Review: Phase 3.3 AST Implementation (Commit 8899d29)
+
+### SPEC Compliance Issues
+
+- [ ] **Clarify requirement placement in SPEC or code** - SPEC.md Section 3.3.3 states "A requirement must be declared within a feature", but the AST implementation (`ModuleNode.requirements`) and grammar allow requirements directly under modules without a feature. Either update SPEC.md to allow module-level requirements, or remove this capability from the grammar/AST and add a diagnostic error.
+
+- [ ] **Missing `CommentNode` AST type** - Per SPEC.md Section 3.1.2, comments are "preserved for documentation purposes", but the AST has no `CommentNode` type. Add a `CommentNode` interface and collect comments during AST transformation for potential documentation extraction.
+
+- [ ] **No validation for @description placement** - SPEC.md Section 3.2.1 requires `@description` to appear before any `@module` declaration. The `transformToAST()` function does not validate this ordering. This validation should be added (likely in diagnostics phase, but the AST should expose enough information to detect this).
+
+- [ ] **No detection of multiple @description blocks** - SPEC.md Section 5.8 specifies "Error | Multiple @description blocks in one file". The current `transformToAST()` simply overwrites `description` if multiple blocks exist. Should either collect all and report in diagnostics, or at minimum flag that multiple were found.
+
+### Symbol Table Issues
+
+- [ ] **No duplicate identifier detection in buildSymbolTable()** - SPEC.md Section 5.8 requires "Error | Duplicate identifier in scope". The `buildSymbolTable()` function uses `Map.set()` which silently overwrites duplicates. Should detect and report duplicate keys for diagnostic purposes. Consider returning a list of duplicates alongside the symbol table.
+
+### AST Design Issues
+
+- [ ] **Missing parent references in AST nodes** - For navigation features (Phase 9) and path resolution, it would be useful for child nodes to have a reference to their parent. Currently `getRequirementPath()` must search the entire document. Consider adding optional `parent` field to nodes.
+
+### Test Coverage Gaps
+
+- [ ] **Add test for multiple @description blocks** - Should verify behavior when a document contains multiple `@description` blocks.
+
+- [ ] **Add test for @description after @module** - Should verify the AST still parses (for error recovery) but diagnostics can detect the invalid ordering.
+
+- [ ] **Add test for duplicate identifiers** - Test that `buildSymbolTable()` handles duplicate module names, feature names, requirement names, and constraint names appropriately.
+
+- [ ] **Add test for empty identifier** - Test behavior when identifier is missing (e.g., `@module` without a name).
+
+- [ ] **Add test for deeply nested references** - Test references with more than 3 parts (even if invalid per spec, should handle gracefully).
+
+### Minor Code Quality
+
+- [ ] **Import `ReferenceNode` type in ast.test.ts** - The test file tests `ReferenceNode` properties but doesn't import the type. Add to imports for type safety.
+
+- [ ] **Add JSDoc for `SymbolTable` interface fields** - The `SymbolTable` interface lacks documentation for what each map contains. Add JSDoc comments explaining the key format and value type for each map.
