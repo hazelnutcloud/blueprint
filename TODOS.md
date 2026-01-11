@@ -117,8 +117,8 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 4: Ticket Artifact Integration
 
 ### 4.1 Ticket File Discovery
-- [ ] Implement ticket file path resolution (`requirements/foo.bp` → `.blueprint/tickets/foo.tickets.json`)
-- [ ] Handle configurable tickets path from settings
+- [x] Implement ticket file path resolution (`requirements/foo.bp` → `.blueprint/tickets/foo.tickets.json`) (Completed: Added `tickets.ts` module with `resolveTicketFilePath()`, `resolveTicketFileUri()`, `ticketFileExists()`, `resolveBpFileBaseName()`, `getTicketFileName()`, `isTicketFilePath()`, and `isBlueprintFilePath()` functions. Supports configurable tickets path via parameter. 27 tests added in `tickets.test.ts`.)
+- [x] Handle configurable tickets path from settings (Completed: All ticket path functions accept an optional `ticketsPath` parameter that defaults to `.blueprint/tickets` per SPEC.md Section 5.9.)
 - [ ] Set up file watcher for `.tickets.json` changes
 
 ### 4.2 Ticket Schema Validation
