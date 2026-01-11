@@ -11,7 +11,7 @@ import type {
   TextDocumentSyncOptions,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { initializeParser } from "./parser";
+import { initializeParser, cleanupParser } from "./parser";
 import { DocumentManager } from "./documents";
 
 // Create a connection for the server using Node's IPC as transport.
@@ -124,6 +124,14 @@ documents.onDidSave((event) => {
 
 connection.onShutdown(() => {
   connection.console.log("Blueprint LSP server shutting down");
+  
+  // Clean up document manager resources (syntax trees)
+  documentManager.cleanup();
+  
+  // Clean up parser resources
+  cleanupParser();
+  
+  connection.console.log("Blueprint LSP server resources cleaned up");
 });
 
 // Make the text document manager listen on the connection

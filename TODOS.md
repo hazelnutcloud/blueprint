@@ -436,7 +436,7 @@ easier to distribute and works across all platforms without native compilation. 
 
 ### Code Quality
 
-- [ ] **Add parser cleanup in shutdown handler** - The parser and document manager resources are not cleaned up when the server shuts down. Add cleanup logic in `connection.onShutdown()`.
+- [x] **Add parser cleanup in shutdown handler** - The parser and document manager resources are not cleaned up when the server shuts down. Add cleanup logic in `connection.onShutdown()`. (Completed: Added `cleanupParser()` in parser.ts and `cleanup()` in DocumentManager, called from `connection.onShutdown()`)
 - [x] **Use `DiagnosticSeverity` constant** - In `documents.ts`, use `DiagnosticSeverity.Error` from `vscode-languageserver` instead of hardcoded `severity: 1`. (Fixed)
 - [x] **Remove unused `document` parameter** - In `documents.ts:120`, the `document` parameter in `collectDiagnostics()` is not used. (Fixed)
 

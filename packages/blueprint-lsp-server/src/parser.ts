@@ -88,3 +88,16 @@ export function parseDocument(text: string): Tree | null {
 export function getParser(): Parser | null {
   return parser;
 }
+
+/**
+ * Clean up the parser and free its resources.
+ * Call this when the LSP server is shutting down.
+ */
+export function cleanupParser(): void {
+  if (parser) {
+    parser.delete();
+    parser = null;
+  }
+  isInitializing = false;
+  initPromise = null;
+}

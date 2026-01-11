@@ -92,6 +92,19 @@ export class DocumentManager {
   }
 
   /**
+   * Clean up all document states and free their resources.
+   * Call this when the LSP server is shutting down.
+   */
+  cleanup(): void {
+    this.states.forEach((state) => {
+      if (state.tree) {
+        state.tree.delete();
+      }
+    });
+    this.states.clear();
+  }
+
+  /**
    * Parse a document and create its state.
    */
   private parseAndCreateState(document: TextDocument): DocumentState {
