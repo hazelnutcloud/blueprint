@@ -24,7 +24,8 @@
     "clean": "rm -rf dist",
     "bench": "bun run benchmarks/parsing.bench.ts",
     "bench:workspace": "bun run benchmarks/workspace-indexing.bench.ts",
-    "bench:all": "bun run bench && bun run bench:workspace"
+    "bench:hover": "bun run benchmarks/hover.bench.ts",
+    "bench:all": "bun run bench && bun run bench:workspace && bun run bench:hover"
   },
   "devDependencies": {
     "@types/bun": "latest",
