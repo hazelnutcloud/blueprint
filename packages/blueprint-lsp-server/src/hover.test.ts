@@ -646,6 +646,117 @@ describe("hover", () => {
   });
 
   describe("blocking status in hover", () => {
+    test("shows circular dependency warning when requirement is in a cycle", () => {
+      // Create a circular dependency: A depends on B, B depends on A
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @depends-on auth.login.oauth
+      Basic auth.
+    
+    @requirement oauth
+      @depends-on auth.login.basic-auth
+      OAuth login.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.login.basic-auth",
+            description: "Implement basic auth",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-002",
+            ref: "auth.login.oauth",
+            description: "Implement OAuth",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+      // Hover over basic-auth requirement (which is in the cycle)
+      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      expect(target).not.toBeNull();
+      expect(target!.kind).toBe("requirement");
+      expect(target!.path).toBe("auth.login.basic-auth");
+
+      const content = buildHoverContent(target!, context);
+      expect(content).not.toBeNull();
+      
+      // Should show circular dependency warning
+      expect(content!.value).toContain("Part of circular dependency");
+      // Should show the cycle path with arrow notation
+      expect(content!.value).toContain("Cycle:");
+      // The cycle should include both requirements
+      expect(content!.value).toContain("auth.login.basic-auth");
+      expect(content!.value).toContain("auth.login.oauth");
+    });
+
+    test("shows circular dependency for all requirements in the cycle", () => {
+      // Create a 3-node cycle: A -> B -> C -> A
+      const source = `@module auth
+  @feature flow
+    @requirement step-a
+      @depends-on auth.flow.step-c
+      Step A.
+    
+    @requirement step-b
+      @depends-on auth.flow.step-a
+      Step B.
+    
+    @requirement step-c
+      @depends-on auth.flow.step-b
+      Step C.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.flow.step-a",
+            description: "Step A",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-002",
+            ref: "auth.flow.step-b",
+            description: "Step B",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-003",
+            ref: "auth.flow.step-c",
+            description: "Step C",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+      // All three requirements should show they're in a cycle
+      for (const [line, reqName] of [[2, "step-a"], [6, "step-b"], [10, "step-c"]] as const) {
+        const target = findHoverTarget(tree!, { line, character: 17 }, context.symbolIndex, context.fileUri);
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("requirement");
+
+        const content = buildHoverContent(target!, context);
+        expect(content!.value).toContain("Part of circular dependency");
+        expect(content!.value).toContain("Cycle:");
+      }
+    });
+
     test("shows blocked status when dependency is not complete", () => {
       const source = `@module auth
   @feature login
