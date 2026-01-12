@@ -1,5 +1,14 @@
 import * as path from "node:path";
-import { workspace, ExtensionContext, ConfigurationTarget } from "vscode";
+import {
+  workspace,
+  ExtensionContext,
+  ConfigurationTarget,
+  window,
+  TextEditor,
+  TextEditorDecorationType,
+  Range,
+  Uri,
+} from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -8,6 +17,22 @@ import {
 } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
+
+/**
+ * Gutter decoration types for each requirement status.
+ * Created lazily when the feature is enabled.
+ */
+let gutterDecorationTypes: Map<string, TextEditorDecorationType> | undefined;
+
+/**
+ * Debounce timer for updating gutter decorations.
+ */
+let gutterUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Debounce delay for gutter updates in milliseconds.
+ */
+const GUTTER_UPDATE_DEBOUNCE_MS = 100;
 
 /**
  * Default highlighting colors per SPEC.md Section 5.9
@@ -69,6 +94,142 @@ function updateGotoModifier(): void {
 }
 
 /**
+ * Requirement status types that match the server's RequirementHighlightStatus.
+ */
+type RequirementStatus =
+  | "no-ticket"
+  | "pending"
+  | "blocked"
+  | "in-progress"
+  | "complete"
+  | "obsolete";
+
+/**
+ * Response from the blueprint/requirementStatuses request.
+ */
+interface RequirementStatusItem {
+  line: number;
+  status: RequirementStatus;
+  path: string;
+}
+
+interface RequirementStatusesResult {
+  requirements: RequirementStatusItem[];
+}
+
+/**
+ * Creates gutter decoration types for each requirement status.
+ * Icons are loaded from the icons directory.
+ */
+function createGutterDecorationTypes(
+  context: ExtensionContext
+): Map<string, TextEditorDecorationType> {
+  const types = new Map<string, TextEditorDecorationType>();
+
+  const statuses: { status: RequirementStatus; icon: string }[] = [
+    { status: "complete", icon: "complete.svg" },
+    { status: "in-progress", icon: "in-progress.svg" },
+    { status: "blocked", icon: "blocked.svg" },
+    { status: "no-ticket", icon: "no-ticket.svg" },
+    { status: "obsolete", icon: "obsolete.svg" },
+    { status: "pending", icon: "pending.svg" },
+  ];
+
+  for (const { status, icon } of statuses) {
+    const iconPath = Uri.file(context.asAbsolutePath(path.join("icons", icon)));
+    const decorationType = window.createTextEditorDecorationType({
+      gutterIconPath: iconPath,
+      gutterIconSize: "contain",
+    });
+    types.set(status, decorationType);
+  }
+
+  return types;
+}
+
+/**
+ * Disposes all gutter decoration types.
+ */
+function disposeGutterDecorationTypes(): void {
+  if (gutterDecorationTypes) {
+    for (const decorationType of gutterDecorationTypes.values()) {
+      decorationType.dispose();
+    }
+    gutterDecorationTypes = undefined;
+  }
+}
+
+/**
+ * Updates gutter decorations for a text editor.
+ * Requests requirement statuses from the server and applies decorations.
+ */
+async function updateGutterDecorations(editor: TextEditor): Promise<void> {
+  if (!client || !gutterDecorationTypes) {
+    return;
+  }
+
+  // Only apply to Blueprint files
+  if (editor.document.languageId !== "blueprint") {
+    return;
+  }
+
+  try {
+    // Request requirement statuses from the server
+    const result = await client.sendRequest<RequirementStatusesResult>(
+      "blueprint/requirementStatuses",
+      { uri: editor.document.uri.toString() }
+    );
+
+    // Group requirements by status
+    const decorationsByStatus = new Map<RequirementStatus, Range[]>();
+    for (const { line, status } of result.requirements) {
+      const ranges = decorationsByStatus.get(status) ?? [];
+      // Create a range that covers just the line number gutter area
+      ranges.push(new Range(line, 0, line, 0));
+      decorationsByStatus.set(status, ranges);
+    }
+
+    // Apply decorations for each status
+    for (const [status, decorationType] of gutterDecorationTypes) {
+      const ranges = decorationsByStatus.get(status as RequirementStatus) ?? [];
+      editor.setDecorations(decorationType, ranges);
+    }
+  } catch (error) {
+    // Silently ignore errors (e.g., server not ready)
+    console.error("Failed to update gutter decorations:", error);
+  }
+}
+
+/**
+ * Schedules a debounced update of gutter decorations for all visible editors.
+ */
+function scheduleGutterUpdate(): void {
+  if (gutterUpdateTimer) {
+    clearTimeout(gutterUpdateTimer);
+  }
+  gutterUpdateTimer = setTimeout(() => {
+    gutterUpdateTimer = undefined;
+    for (const editor of window.visibleTextEditors) {
+      updateGutterDecorations(editor);
+    }
+  }, GUTTER_UPDATE_DEBOUNCE_MS);
+}
+
+/**
+ * Clears gutter decorations from all visible editors.
+ */
+function clearAllGutterDecorations(): void {
+  if (!gutterDecorationTypes) {
+    return;
+  }
+  for (const editor of window.visibleTextEditors) {
+    for (const decorationType of gutterDecorationTypes.values()) {
+      editor.setDecorations(decorationType, []);
+    }
+  }
+}
+
+/**
  * Updates the semantic token color customizations based on the user's
  * blueprint.highlighting.* settings. This allows users to customize
  * the colors used for requirement status highlighting.
@@ -122,6 +283,27 @@ function updateSemanticTokenColors(): void {
   );
 }
 
+/**
+ * Initializes or disposes gutter decorations based on the showProgressInGutter setting.
+ */
+function updateGutterIconsEnabled(context: ExtensionContext): void {
+  const config = workspace.getConfiguration("blueprint");
+  const enabled = config.get<boolean>("showProgressInGutter") ?? true;
+
+  if (enabled) {
+    // Create decoration types if not already created
+    if (!gutterDecorationTypes) {
+      gutterDecorationTypes = createGutterDecorationTypes(context);
+    }
+    // Update decorations for all visible editors
+    scheduleGutterUpdate();
+  } else {
+    // Clear and dispose decoration types
+    clearAllGutterDecorations();
+    disposeGutterDecorationTypes();
+  }
+}
+
 export function activate(context: ExtensionContext): void {
   // The server is implemented in the blueprint-lsp-server package
   // We look for the server module in node_modules or use a local path during development
@@ -169,7 +351,11 @@ export function activate(context: ExtensionContext): void {
   );
 
   // Start the client. This will also launch the server.
-  client.start();
+  // Wait for the client to be ready before enabling gutter decorations
+  client.start().then(() => {
+    // Initialize gutter decorations after server is ready
+    updateGutterIconsEnabled(context);
+  });
 
   // Apply initial settings
   updateSemanticTokenColors();
@@ -184,11 +370,51 @@ export function activate(context: ExtensionContext): void {
       if (e.affectsConfiguration("blueprint.gotoModifier")) {
         updateGotoModifier();
       }
+      if (e.affectsConfiguration("blueprint.showProgressInGutter")) {
+        updateGutterIconsEnabled(context);
+      }
+    })
+  );
+
+  // Update gutter decorations when visible editors change
+  context.subscriptions.push(
+    window.onDidChangeVisibleTextEditors(() => {
+      if (gutterDecorationTypes) {
+        scheduleGutterUpdate();
+      }
+    })
+  );
+
+  // Update gutter decorations when document content changes
+  context.subscriptions.push(
+    workspace.onDidChangeTextDocument((e) => {
+      if (gutterDecorationTypes && e.document.languageId === "blueprint") {
+        scheduleGutterUpdate();
+      }
+    })
+  );
+
+  // Update gutter decorations when a document is saved (ticket files may change)
+  context.subscriptions.push(
+    workspace.onDidSaveTextDocument((doc) => {
+      if (gutterDecorationTypes) {
+        // Trigger update for .bp files or when ticket files are saved
+        if (doc.languageId === "blueprint" || doc.fileName.endsWith(".tickets.json")) {
+          scheduleGutterUpdate();
+        }
+      }
     })
   );
 }
 
 export function deactivate(): Thenable<void> | undefined {
+  // Clean up gutter decorations
+  if (gutterUpdateTimer) {
+    clearTimeout(gutterUpdateTimer);
+    gutterUpdateTimer = undefined;
+  }
+  disposeGutterDecorationTypes();
+
   if (!client) {
     return undefined;
   }

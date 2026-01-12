@@ -97,6 +97,12 @@
           ],
           "default": "alt",
           "markdownDescription": "Modifier key for Ctrl/Cmd+Click to go to definition. When set to `alt`, use Alt+Click for go-to-definition (Ctrl/Cmd+Click adds cursors). When set to `ctrlCmd`, use Ctrl/Cmd+Click for go-to-definition (Alt+Click adds cursors). See [SPEC.md Section 5.9](https://github.com/blueprintlang/blueprint/blob/main/SPEC.md#59-configuration) and [VS Code multi-cursor documentation](https://code.visualstudio.com/docs/editor/codebasics#_multicursor-modifier)."
+        },
+        "blueprint.showProgressInGutter": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Show progress icons in the editor gutter for requirements. Icons indicate completion status: checkmark for complete, spinner for in-progress, blocked icon for blocked requirements, etc."
         }
       }
     },

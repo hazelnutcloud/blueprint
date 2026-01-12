@@ -21,7 +21,12 @@ import type {
   WorkspaceSymbolParams,
   CodeActionParams,
 } from "vscode-languageserver/node";
-import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
+import {
+  semanticTokensLegend,
+  buildSemanticTokens,
+  buildRequirementStatusMap,
+  type RequirementHighlightStatus,
+} from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
 import { findDefinitionTarget, buildDefinition, type DefinitionContext } from "./definition";
 import {
@@ -46,6 +51,7 @@ import {
   computeConstraintMismatchDiagnostics,
   mergeDiagnosticResults,
 } from "./workspace-diagnostics";
+import { computeAllBlockingStatus } from "./blocking-status";
 import { buildCodeActions, type CodeActionsContext } from "./code-actions";
 import { ComputedDataCache } from "./computed-data-cache";
 import { readFile } from "node:fs/promises";
@@ -960,6 +966,123 @@ connection.onShutdown(() => {
 
   connection.console.log("Blueprint LSP server resources cleaned up");
 });
+
+/**
+ * Custom request to get requirement statuses for gutter icon decorations.
+ *
+ * This request returns an array of requirement positions and their statuses
+ * for a given document. The client uses this to display gutter icons.
+ *
+ * Request: "blueprint/requirementStatuses"
+ * Params: { uri: string }
+ * Response: { requirements: Array<{ line: number; status: RequirementHighlightStatus }> }
+ */
+interface RequirementStatusesParams {
+  uri: string;
+}
+
+interface RequirementStatusItem {
+  /** Zero-based line number where the @requirement keyword starts */
+  line: number;
+  /** The requirement's highlight status */
+  status: RequirementHighlightStatus;
+  /** The requirement's full path (e.g., "module.feature.requirement") */
+  path: string;
+}
+
+interface RequirementStatusesResult {
+  requirements: RequirementStatusItem[];
+}
+
+connection.onRequest(
+  "blueprint/requirementStatuses",
+  (params: RequirementStatusesParams): RequirementStatusesResult => {
+    const document = documents.get(params.uri);
+    if (!document) {
+      return { requirements: [] };
+    }
+
+    const filePath = getFilePath(params.uri);
+    if (!isBlueprintFilePath(filePath)) {
+      return { requirements: [] };
+    }
+
+    if (!parserInitialized) {
+      return { requirements: [] };
+    }
+
+    // Get the parse tree from the document manager
+    const state = documentManager.getState(params.uri);
+    if (!state?.tree) {
+      return { requirements: [] };
+    }
+
+    // Get ticket map and dependency graph using cached data
+    const { map: ticketMap } = computedDataCache.getTicketMap();
+    const { graph, cycles } = computedDataCache.getDependencyGraph();
+
+    // Compute blocking status for all requirements
+    const blockingStatus = computeAllBlockingStatus(graph, ticketMap, cycles);
+
+    // Build the status map
+    const statusMap = buildRequirementStatusMap(ticketMap, blockingStatus);
+
+    // Walk the tree to find all requirement blocks and their positions
+    const requirements: RequirementStatusItem[] = [];
+
+    // Helper to build requirement path
+    let currentModule: string | null = null;
+    let currentFeature: string | null = null;
+
+    function walkTree(node: import("./parser").Node): void {
+      if (node.type === "module_block") {
+        const nameNode = node.childForFieldName("name");
+        if (nameNode) {
+          currentModule = nameNode.text;
+          currentFeature = null;
+        }
+      } else if (node.type === "feature_block") {
+        const nameNode = node.childForFieldName("name");
+        if (nameNode) {
+          currentFeature = nameNode.text;
+        }
+      } else if (node.type === "requirement_block") {
+        const nameNode = node.childForFieldName("name");
+        if (nameNode && currentModule) {
+          const requirementName = nameNode.text;
+          const fullPath = currentFeature
+            ? `${currentModule}.${currentFeature}.${requirementName}`
+            : `${currentModule}.${requirementName}`;
+
+          const status = statusMap.get(fullPath) ?? "no-ticket";
+
+          requirements.push({
+            line: node.startPosition.row,
+            status,
+            path: fullPath,
+          });
+        }
+      }
+
+      // Recursively process children
+      for (const child of node.children) {
+        walkTree(child);
+      }
+
+      // Restore scope when exiting blocks
+      if (node.type === "module_block") {
+        currentModule = null;
+        currentFeature = null;
+      } else if (node.type === "feature_block") {
+        currentFeature = null;
+      }
+    }
+
+    walkTree(state.tree.rootNode);
+
+    return { requirements };
+  }
+);
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events
