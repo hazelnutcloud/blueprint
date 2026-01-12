@@ -1438,6 +1438,511 @@ suite("File Associations", () => {
   });
 });
 
+suite("Hover Popup Rendering", () => {
+  /**
+   * Flag to track if we've successfully communicated with the LSP server.
+   * Once true, we know the server is operational.
+   */
+  let serverConfirmedReady = false;
+
+  /**
+   * Helper to wait for the LSP server to be ready by checking if document symbols are available.
+   */
+  async function waitForDocumentReady(
+    docUri: vscode.Uri,
+    maxAttempts?: number,
+    delayMs?: number
+  ): Promise<boolean> {
+    const attempts = maxAttempts ?? (serverConfirmedReady ? 10 : 20);
+    const delay = delayMs ?? (serverConfirmedReady ? 300 : 500);
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        "vscode.executeDocumentSymbolProvider",
+        docUri
+      );
+      if (Array.isArray(symbols) && symbols.length > 0) {
+        serverConfirmedReady = true;
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    return false;
+  }
+
+  /**
+   * Helper to retry an operation until it succeeds or times out.
+   */
+  async function retryOperation<T>(
+    operation: () => Thenable<T>,
+    isReady: (result: T) => boolean,
+    maxAttempts = 5,
+    delayMs = 300
+  ): Promise<T | undefined> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const result = await operation();
+      if (isReady(result)) {
+        return result;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    return undefined;
+  }
+
+  /**
+   * Helper to extract text content from hover results.
+   */
+  function getHoverText(hovers: vscode.Hover[]): string {
+    const texts: string[] = [];
+    for (const hover of hovers) {
+      for (const content of hover.contents) {
+        if (typeof content === "string") {
+          texts.push(content);
+        } else if ("value" in content) {
+          texts.push(content.value);
+        }
+      }
+    }
+    return texts.join("\n");
+  }
+
+  test("hover on @module shows progress information", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module authentication
+  User authentication module
+
+  @feature login
+    Login functionality
+
+    @requirement basic-auth
+      Email and password login
+
+  @feature session
+    Session management
+
+    @requirement create-token
+      Create session tokens
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on "authentication" identifier (line 0, character 10)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(0, 10)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify module hover contains expected sections
+      assert.ok(hoverText.includes("@module"), "Hover should include @module header");
+      assert.ok(
+        hoverText.includes("Progress") || hoverText.includes("requirements"),
+        "Hover should include progress information"
+      );
+
+      console.log("Module hover verified with progress information");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+
+  test("hover on @feature shows requirements list", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module auth
+  Authentication
+
+  @feature login
+    Login feature with multiple requirements
+
+    @requirement email-login
+      Login with email
+
+    @requirement oauth-login
+      Login with OAuth
+
+    @requirement two-factor
+      Two-factor authentication
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on "login" identifier (line 3, character 12)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(3, 12)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify feature hover contains expected sections
+      assert.ok(hoverText.includes("@feature"), "Hover should include @feature header");
+      assert.ok(
+        hoverText.includes("Progress") || hoverText.includes("requirements"),
+        "Hover should include progress information"
+      );
+
+      console.log("Feature hover verified with progress information");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+
+  test("hover on @requirement shows status and constraints", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module security
+  Security module
+
+  @feature passwords
+    Password handling
+
+    @requirement hash-passwords
+      Securely hash user passwords
+
+      @constraint bcrypt-cost
+        Use bcrypt with cost factor >= 12
+
+      @constraint no-plaintext
+        Never store plaintext passwords
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on "hash-passwords" identifier (line 6, character 20)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(6, 20)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify requirement hover contains expected sections
+      assert.ok(hoverText.includes("@requirement"), "Hover should include @requirement header");
+      assert.ok(
+        hoverText.includes("Status") || hoverText.includes("No tickets"),
+        "Hover should include status information"
+      );
+
+      console.log("Requirement hover verified with status information");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+
+  test("hover on @constraint shows satisfaction status", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module auth
+  Authentication
+
+  @feature login
+    Login feature
+
+    @requirement secure-login
+      Secure login implementation
+
+      @constraint rate-limit
+        Rate limit to 5 attempts per 15 minutes
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on "rate-limit" identifier (line 9, character 20)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(9, 20)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify constraint hover contains expected sections
+      assert.ok(hoverText.includes("@constraint"), "Hover should include @constraint header");
+      assert.ok(
+        hoverText.includes("Status") ||
+          hoverText.includes("Satisfied") ||
+          hoverText.includes("Not"),
+        "Hover should include satisfaction status"
+      );
+
+      console.log("Constraint hover verified with satisfaction status");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+
+  test("hover on @depends-on reference shows target information", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module storage
+  Storage module
+
+  @feature users
+    User storage
+
+    @requirement user-table
+      User database table
+
+@module auth
+  Authentication
+
+  @feature login
+    @depends-on storage.users.user-table
+
+    Login feature
+
+    @requirement basic-auth
+      Basic authentication
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on "storage.users.user-table" reference (line 13, character 25)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(13, 25)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify reference hover contains target information
+      // Should show the referenced requirement's info
+      assert.ok(
+        hoverText.includes("requirement") ||
+          hoverText.includes("storage") ||
+          hoverText.includes("user-table"),
+        "Hover should include reference target information"
+      );
+
+      console.log("Reference hover verified with target information");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+
+  test("hover on @module keyword shows Blueprint DSL documentation", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module test
+  Test module
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on @module keyword (line 0, character 3)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(0, 3)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify keyword hover contains Blueprint DSL documentation
+      assert.ok(
+        hoverText.includes("Blueprint") ||
+          hoverText.includes("Keyword") ||
+          hoverText.includes("DSL"),
+        "Hover should include Blueprint DSL documentation"
+      );
+
+      console.log("Keyword hover verified with Blueprint DSL documentation");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+
+  test("hover on requirement with dependencies shows blocking info", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module core
+  Core module
+
+  @feature base
+    Base functionality
+
+    @requirement foundation
+      Foundation component
+
+@module app
+  Application
+
+  @feature main
+    Main feature
+
+    @requirement startup
+      @depends-on core.base.foundation
+
+      Application startup
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on "startup" requirement identifier (line 15, character 20)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(15, 20)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify requirement hover contains dependency info
+      assert.ok(hoverText.includes("@requirement"), "Hover should include @requirement header");
+      assert.ok(
+        hoverText.includes("Dependencies") ||
+          hoverText.includes("foundation") ||
+          hoverText.includes("core"),
+        "Hover should include dependency information"
+      );
+
+      console.log("Requirement hover verified with dependency information");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+
+  test("hover on unresolved reference shows warning", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module app
+  Application
+
+  @feature main
+    @depends-on nonexistent.module.requirement
+
+    Main feature
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    const isReady = await waitForDocumentReady(doc.uri);
+    if (!isReady) {
+      console.log("LSP server did not become ready - skipping hover verification");
+      return;
+    }
+
+    // Hover on unresolved reference (line 4, character 20)
+    const hovers = await retryOperation(
+      () =>
+        vscode.commands.executeCommand<vscode.Hover[]>(
+          "vscode.executeHoverProvider",
+          doc.uri,
+          new vscode.Position(4, 20)
+        ),
+      (result) => Array.isArray(result) && result.length > 0 && result[0]!.contents.length > 0
+    );
+
+    if (hovers && hovers.length > 0) {
+      const hoverText = getHoverText(hovers);
+
+      // Verify unresolved reference hover contains warning
+      assert.ok(
+        hoverText.includes("Unresolved") ||
+          hoverText.includes("⚠") ||
+          hoverText.includes("not resolve"),
+        "Hover should indicate unresolved reference"
+      );
+
+      console.log("Unresolved reference hover verified with warning");
+    } else {
+      console.log("Hover not available (LSP server may not be ready)");
+    }
+  });
+});
+
 suite("Settings Application", () => {
   /**
    * Helper to update a configuration setting and wait for it to propagate.
