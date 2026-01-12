@@ -1,4 +1,3 @@
-
 Default to using Bun instead of Node.js.
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
@@ -108,6 +107,7 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
 ## Project Structure
 
 This is a monorepo with packages in `packages/`:
+
 - `blueprint-lsp-server` - LSP server for Blueprint DSL
 - `blueprint-lsp-client` - VS Code extension client
 - `tree-sitter-blueprint` - Tree-sitter grammar for Blueprint
@@ -137,6 +137,7 @@ if (result.success) {
 ## Type Checking
 
 Type check individual packages:
+
 ```sh
 cd packages/blueprint-lsp-server && bunx tsc --noEmit
 ```
@@ -144,11 +145,13 @@ cd packages/blueprint-lsp-server && bunx tsc --noEmit
 ## Tree-sitter
 
 Generate the parser after grammar changes:
+
 ```sh
 cd packages/tree-sitter-blueprint && bunx tree-sitter generate
 ```
 
 Run corpus tests:
+
 ```sh
 cd packages/tree-sitter-blueprint && bunx tree-sitter test
 ```

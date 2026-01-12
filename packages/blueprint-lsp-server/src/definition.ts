@@ -407,10 +407,7 @@ function sourceLocationToRange(location: SourceLocation): Range {
  * Find the position of a ticket in the ticket file content.
  * Returns the range of the ticket object in the JSON file.
  */
-function findTicketPositionInContent(
-  content: string,
-  ticketId: string
-): Range | null {
+function findTicketPositionInContent(content: string, ticketId: string): Range | null {
   // Find the ticket by searching for its ID in the JSON
   // Look for: "id": "TKT-001"
   const idPattern = `"id"\\s*:\\s*"${escapeRegExp(ticketId)}"`;
@@ -476,7 +473,7 @@ function escapeRegExp(string: string): string {
 
 /**
  * Build the definition location for a target.
- * 
+ *
  * Navigation behavior per SPEC.md Section 5.6:
  * - Requirement identifier → ticket in .tickets.json (if exists), else symbol definition
  * - @depends-on reference → referenced requirement
@@ -538,11 +535,11 @@ function buildRequirementDefinition(
 
   // Try to find tickets for this requirement
   const ticketInfo = context.ticketMap.get(target.path);
-  
+
   if (ticketInfo && ticketInfo.tickets.length > 0) {
     // Find which ticket file contains these tickets
     const ticketLocations: Location[] = [];
-    
+
     for (const ticket of ticketInfo.tickets) {
       // Search through all ticket files to find where this ticket is defined
       for (const [uri, ticketFile] of context.ticketFiles) {

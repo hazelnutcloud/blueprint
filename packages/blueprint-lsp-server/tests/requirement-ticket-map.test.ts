@@ -38,10 +38,7 @@ function createConstraint(name: string): ConstraintNode {
   };
 }
 
-function createRequirement(
-  name: string,
-  constraints: string[] = []
-): RequirementNode {
+function createRequirement(name: string, constraints: string[] = []): RequirementNode {
   return {
     type: "requirement",
     name,
@@ -69,10 +66,7 @@ function createTicket(
   };
 }
 
-function createTicketFile(
-  source: string,
-  tickets: Ticket[]
-): TicketFile {
+function createTicketFile(source: string, tickets: Ticket[]): TicketFile {
   return {
     version: "1.0",
     source,
@@ -189,18 +183,18 @@ describe("requirement-ticket-map", () => {
     test("returns empty array for requirement with no constraints", () => {
       const req = createRequirement("basic-auth", []);
       const tickets = [createTicket("TKT-001", "ref", "complete", ["some-constraint"])];
-      
+
       const statuses = computeConstraintStatuses(req, tickets);
-      
+
       expect(statuses).toHaveLength(0);
     });
 
     test("marks constraints as unsatisfied when no tickets satisfy them", () => {
       const req = createRequirement("basic-auth", ["bcrypt", "rate-limit"]);
       const tickets: Ticket[] = [];
-      
+
       const statuses = computeConstraintStatuses(req, tickets);
-      
+
       expect(statuses).toHaveLength(2);
       expect(statuses[0]).toEqual({
         name: "bcrypt",
@@ -220,9 +214,9 @@ describe("requirement-ticket-map", () => {
         createTicket("TKT-001", "ref", "complete", ["bcrypt"]),
         createTicket("TKT-002", "ref", "complete", ["rate-limit"]),
       ];
-      
+
       const statuses = computeConstraintStatuses(req, tickets);
-      
+
       expect(statuses).toHaveLength(2);
       expect(statuses[0]).toEqual({
         name: "bcrypt",
@@ -242,9 +236,9 @@ describe("requirement-ticket-map", () => {
         createTicket("TKT-001", "ref", "complete", ["bcrypt"]),
         createTicket("TKT-002", "ref", "complete", ["bcrypt"]),
       ];
-      
+
       const statuses = computeConstraintStatuses(req, tickets);
-      
+
       expect(statuses[0]).toEqual({
         name: "bcrypt",
         satisfied: true,
@@ -254,16 +248,14 @@ describe("requirement-ticket-map", () => {
 
     test("handles partial constraint satisfaction", () => {
       const req = createRequirement("basic-auth", ["bcrypt", "rate-limit", "audit-log"]);
-      const tickets = [
-        createTicket("TKT-001", "ref", "complete", ["bcrypt", "audit-log"]),
-      ];
-      
+      const tickets = [createTicket("TKT-001", "ref", "complete", ["bcrypt", "audit-log"])];
+
       const statuses = computeConstraintStatuses(req, tickets);
-      
+
       expect(statuses).toHaveLength(3);
-      expect(statuses.find(s => s.name === "bcrypt")?.satisfied).toBe(true);
-      expect(statuses.find(s => s.name === "rate-limit")?.satisfied).toBe(false);
-      expect(statuses.find(s => s.name === "audit-log")?.satisfied).toBe(true);
+      expect(statuses.find((s) => s.name === "bcrypt")?.satisfied).toBe(true);
+      expect(statuses.find((s) => s.name === "rate-limit")?.satisfied).toBe(false);
+      expect(statuses.find((s) => s.name === "audit-log")?.satisfied).toBe(true);
     });
 
     test("ignores constraint names in tickets that don't exist in requirement", () => {
@@ -271,9 +263,9 @@ describe("requirement-ticket-map", () => {
       const tickets = [
         createTicket("TKT-001", "ref", "complete", ["bcrypt", "unknown-constraint"]),
       ];
-      
+
       const statuses = computeConstraintStatuses(req, tickets);
-      
+
       expect(statuses).toHaveLength(1);
       expect(statuses[0]?.name).toBe("bcrypt");
     });
@@ -281,10 +273,8 @@ describe("requirement-ticket-map", () => {
 
   describe("collectImplementationFiles", () => {
     test("returns empty array for tickets without implementation", () => {
-      const tickets = [
-        createTicket("TKT-001", "ref", "pending"),
-      ];
-      
+      const tickets = [createTicket("TKT-001", "ref", "pending")];
+
       expect(collectImplementationFiles(tickets)).toEqual([]);
     });
 
@@ -294,9 +284,9 @@ describe("requirement-ticket-map", () => {
           files: ["src/auth/login.ts", "src/auth/password.ts"],
         }),
       ];
-      
+
       const files = collectImplementationFiles(tickets);
-      
+
       expect(files).toHaveLength(2);
       expect(files).toContain("src/auth/login.ts");
       expect(files).toContain("src/auth/password.ts");
@@ -311,9 +301,9 @@ describe("requirement-ticket-map", () => {
           files: ["src/auth/login.ts", "src/auth/rate-limit.ts"],
         }),
       ];
-      
+
       const files = collectImplementationFiles(tickets);
-      
+
       expect(files).toHaveLength(3);
       expect(files).toContain("src/auth/login.ts");
       expect(files).toContain("src/auth/password.ts");
@@ -321,20 +311,16 @@ describe("requirement-ticket-map", () => {
     });
 
     test("handles empty files array", () => {
-      const tickets = [
-        createTicket("TKT-001", "ref", "complete", [], { files: [] }),
-      ];
-      
+      const tickets = [createTicket("TKT-001", "ref", "complete", [], { files: [] })];
+
       expect(collectImplementationFiles(tickets)).toEqual([]);
     });
   });
 
   describe("collectTestFiles", () => {
     test("returns empty array for tickets without tests", () => {
-      const tickets = [
-        createTicket("TKT-001", "ref", "pending"),
-      ];
-      
+      const tickets = [createTicket("TKT-001", "ref", "pending")];
+
       expect(collectTestFiles(tickets)).toEqual([]);
     });
 
@@ -347,9 +333,9 @@ describe("requirement-ticket-map", () => {
           tests: ["tests/auth/rate-limit.test.ts"],
         }),
       ];
-      
+
       const files = collectTestFiles(tickets);
-      
+
       expect(files).toHaveLength(2);
       expect(files).toContain("tests/auth/login.test.ts");
       expect(files).toContain("tests/auth/rate-limit.test.ts");
@@ -364,9 +350,9 @@ describe("requirement-ticket-map", () => {
           tests: ["tests/auth/login.test.ts"],
         }),
       ];
-      
+
       const files = collectTestFiles(tickets);
-      
+
       expect(files).toHaveLength(1);
     });
   });
@@ -377,25 +363,25 @@ describe("requirement-ticket-map", () => {
         ["auth.login.basic", createRequirement("basic", ["bcrypt", "rate-limit"])],
         ["auth.login.oauth", createRequirement("oauth", ["csrf"])],
       ]);
-      
+
       const ticketFile = createTicketFile("auth.bp", [
         createTicket("TKT-001", "auth.login.basic", "complete", ["bcrypt"]),
         createTicket("TKT-002", "auth.login.basic", "in-progress", ["rate-limit"]),
         createTicket("TKT-003", "auth.login.oauth", "pending"),
       ]);
-      
+
       const result = buildRequirementTicketMap(requirements, ticketFile);
-      
+
       expect(result.map.size).toBe(2);
       expect(result.orphanedTickets).toHaveLength(0);
       expect(result.requirementsWithoutTickets).toHaveLength(0);
-      
+
       const basicInfo = result.map.get("auth.login.basic");
       expect(basicInfo?.tickets).toHaveLength(2);
       expect(basicInfo?.status).toBe("in-progress");
       expect(basicInfo?.constraintsSatisfied).toBe(2);
       expect(basicInfo?.constraintsTotal).toBe(2);
-      
+
       const oauthInfo = result.map.get("auth.login.oauth");
       expect(oauthInfo?.tickets).toHaveLength(1);
       expect(oauthInfo?.status).toBe("pending");
@@ -408,15 +394,15 @@ describe("requirement-ticket-map", () => {
         ["auth.login.basic", createRequirement("basic")],
         ["auth.login.oauth", createRequirement("oauth")],
       ]);
-      
+
       const ticketFile = createTicketFile("auth.bp", [
         createTicket("TKT-001", "auth.login.basic", "pending"),
       ]);
-      
+
       const result = buildRequirementTicketMap(requirements, ticketFile);
-      
+
       expect(result.requirementsWithoutTickets).toEqual(["auth.login.oauth"]);
-      
+
       const oauthInfo = result.map.get("auth.login.oauth");
       expect(oauthInfo?.status).toBe("no-ticket");
       expect(oauthInfo?.tickets).toHaveLength(0);
@@ -426,44 +412,44 @@ describe("requirement-ticket-map", () => {
       const requirements = new Map<string, RequirementNode>([
         ["auth.login.basic", createRequirement("basic")],
       ]);
-      
+
       const ticketFile = createTicketFile("auth.bp", [
         createTicket("TKT-001", "auth.login.basic", "pending"),
         createTicket("TKT-002", "auth.login.nonexistent", "pending"),
         createTicket("TKT-003", "payments.checkout", "pending"),
       ]);
-      
+
       const result = buildRequirementTicketMap(requirements, ticketFile);
-      
+
       expect(result.orphanedTickets).toHaveLength(2);
-      expect(result.orphanedTickets.map(o => o.ref)).toContain("auth.login.nonexistent");
-      expect(result.orphanedTickets.map(o => o.ref)).toContain("payments.checkout");
+      expect(result.orphanedTickets.map((o) => o.ref)).toContain("auth.login.nonexistent");
+      expect(result.orphanedTickets.map((o) => o.ref)).toContain("payments.checkout");
     });
 
     test("handles null ticket file", () => {
       const requirements = new Map<string, RequirementNode>([
         ["auth.login.basic", createRequirement("basic")],
       ]);
-      
+
       const result = buildRequirementTicketMap(requirements, null);
-      
+
       expect(result.map.size).toBe(1);
       expect(result.orphanedTickets).toHaveLength(0);
       expect(result.requirementsWithoutTickets).toEqual(["auth.login.basic"]);
-      
+
       const info = result.map.get("auth.login.basic");
       expect(info?.status).toBe("no-ticket");
     });
 
     test("handles empty requirements map", () => {
       const requirements = new Map<string, RequirementNode>();
-      
+
       const ticketFile = createTicketFile("auth.bp", [
         createTicket("TKT-001", "auth.login.basic", "pending"),
       ]);
-      
+
       const result = buildRequirementTicketMap(requirements, ticketFile);
-      
+
       expect(result.map.size).toBe(0);
       expect(result.orphanedTickets).toHaveLength(1);
       expect(result.requirementsWithoutTickets).toHaveLength(0);
@@ -473,7 +459,7 @@ describe("requirement-ticket-map", () => {
       const requirements = new Map<string, RequirementNode>([
         ["auth.login.basic", createRequirement("basic")],
       ]);
-      
+
       const ticketFile = createTicketFile("auth.bp", [
         createTicket("TKT-001", "auth.login.basic", "complete", [], {
           files: ["src/auth/login.ts"],
@@ -484,14 +470,14 @@ describe("requirement-ticket-map", () => {
           tests: ["tests/auth/password.test.ts"],
         }),
       ]);
-      
+
       const result = buildRequirementTicketMap(requirements, ticketFile);
       const info = result.map.get("auth.login.basic");
-      
+
       expect(info?.implementationFiles).toHaveLength(2);
       expect(info?.implementationFiles).toContain("src/auth/login.ts");
       expect(info?.implementationFiles).toContain("src/auth/password.ts");
-      
+
       expect(info?.testFiles).toHaveLength(2);
       expect(info?.testFiles).toContain("tests/auth/login.test.ts");
       expect(info?.testFiles).toContain("tests/auth/password.test.ts");
@@ -514,13 +500,13 @@ describe("requirement-ticket-map", () => {
           node: createRequirement("oauth"),
         },
       ];
-      
+
       const ticketFile = createTicketFile("auth.bp", [
         createTicket("TKT-001", "auth.login.basic", "complete", ["bcrypt"]),
       ]);
-      
+
       const result = buildRequirementTicketMapFromSymbols(symbols, ticketFile);
-      
+
       expect(result.map.size).toBe(2);
       expect(result.map.get("auth.login.basic")?.status).toBe("complete");
       expect(result.map.get("auth.login.oauth")?.status).toBe("no-ticket");
@@ -547,9 +533,9 @@ describe("requirement-ticket-map", () => {
           node: createRequirement("basic"),
         },
       ];
-      
+
       const result = buildRequirementTicketMapFromSymbols(symbols, null);
-      
+
       expect(result.map.size).toBe(1);
       expect(result.map.has("auth.login.basic")).toBe(true);
     });
@@ -558,7 +544,7 @@ describe("requirement-ticket-map", () => {
   describe("getCompletionSummary", () => {
     test("computes summary for mixed statuses", () => {
       const map = new Map<string, RequirementTicketInfo>();
-      
+
       // Add requirements with different statuses
       const statuses: RequirementStatus[] = [
         "complete",
@@ -568,7 +554,7 @@ describe("requirement-ticket-map", () => {
         "no-ticket",
         "obsolete",
       ];
-      
+
       statuses.forEach((status, i) => {
         map.set(`req-${i}`, {
           requirementPath: `req-${i}`,
@@ -582,9 +568,9 @@ describe("requirement-ticket-map", () => {
           testFiles: [],
         });
       });
-      
+
       const summary = getCompletionSummary(map);
-      
+
       expect(summary.total).toBe(6);
       expect(summary.complete).toBe(2);
       expect(summary.inProgress).toBe(1);
@@ -596,7 +582,7 @@ describe("requirement-ticket-map", () => {
 
     test("returns zeros for empty map", () => {
       const summary = getCompletionSummary(new Map());
-      
+
       expect(summary.total).toBe(0);
       expect(summary.complete).toBe(0);
       expect(summary.percentComplete).toBe(0);
@@ -604,7 +590,7 @@ describe("requirement-ticket-map", () => {
 
     test("computes 100% for all complete", () => {
       const map = new Map<string, RequirementTicketInfo>();
-      
+
       for (let i = 0; i < 5; i++) {
         map.set(`req-${i}`, {
           requirementPath: `req-${i}`,
@@ -618,9 +604,9 @@ describe("requirement-ticket-map", () => {
           testFiles: [],
         });
       }
-      
+
       const summary = getCompletionSummary(map);
-      
+
       expect(summary.percentComplete).toBe(100);
     });
   });
@@ -628,7 +614,7 @@ describe("requirement-ticket-map", () => {
   describe("filterByPathPrefix", () => {
     test("filters requirements by module prefix", () => {
       const map = new Map<string, RequirementTicketInfo>();
-      
+
       const paths = [
         "auth.login.basic",
         "auth.login.oauth",
@@ -636,8 +622,8 @@ describe("requirement-ticket-map", () => {
         "payments.checkout.cart",
         "payments.refund.process",
       ];
-      
-      paths.forEach(path => {
+
+      paths.forEach((path) => {
         map.set(path, {
           requirementPath: path,
           requirement: createRequirement(path.split(".").pop()!),
@@ -650,9 +636,9 @@ describe("requirement-ticket-map", () => {
           testFiles: [],
         });
       });
-      
+
       const authOnly = filterByPathPrefix(map, "auth");
-      
+
       expect(authOnly.size).toBe(3);
       expect(authOnly.has("auth.login.basic")).toBe(true);
       expect(authOnly.has("auth.login.oauth")).toBe(true);
@@ -662,14 +648,10 @@ describe("requirement-ticket-map", () => {
 
     test("filters requirements by feature prefix", () => {
       const map = new Map<string, RequirementTicketInfo>();
-      
-      const paths = [
-        "auth.login.basic",
-        "auth.login.oauth",
-        "auth.logout.session",
-      ];
-      
-      paths.forEach(path => {
+
+      const paths = ["auth.login.basic", "auth.login.oauth", "auth.logout.session"];
+
+      paths.forEach((path) => {
         map.set(path, {
           requirementPath: path,
           requirement: createRequirement(path.split(".").pop()!),
@@ -682,9 +664,9 @@ describe("requirement-ticket-map", () => {
           testFiles: [],
         });
       });
-      
+
       const loginOnly = filterByPathPrefix(map, "auth.login");
-      
+
       expect(loginOnly.size).toBe(2);
       expect(loginOnly.has("auth.login.basic")).toBe(true);
       expect(loginOnly.has("auth.login.oauth")).toBe(true);
@@ -704,9 +686,9 @@ describe("requirement-ticket-map", () => {
         implementationFiles: [],
         testFiles: [],
       });
-      
+
       const filtered = filterByPathPrefix(map, "payments");
-      
+
       expect(filtered.size).toBe(0);
     });
 
@@ -723,16 +705,16 @@ describe("requirement-ticket-map", () => {
         implementationFiles: [],
         testFiles: [],
       });
-      
+
       const filtered = filterByPathPrefix(map, "auth.login.basic");
-      
+
       expect(filtered.size).toBe(1);
       expect(filtered.has("auth.login.basic")).toBe(true);
     });
 
     test("does not match partial identifiers", () => {
       const map = new Map<string, RequirementTicketInfo>();
-      
+
       // "auth" should not match "authentication"
       map.set("authentication.login.basic", {
         requirementPath: "authentication.login.basic",
@@ -745,9 +727,9 @@ describe("requirement-ticket-map", () => {
         implementationFiles: [],
         testFiles: [],
       });
-      
+
       const filtered = filterByPathPrefix(map, "auth");
-      
+
       expect(filtered.size).toBe(0);
     });
   });

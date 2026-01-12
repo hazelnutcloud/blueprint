@@ -217,7 +217,14 @@ describe("CrossFileSymbolIndex", () => {
         type: "reference" as const,
         parts: ["authentication"],
         path: "authentication",
-        location: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0, startOffset: 0, endOffset: 0 },
+        location: {
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+          startOffset: 0,
+          endOffset: 0,
+        },
       };
 
       const result = index.resolveReference(ref);
@@ -232,7 +239,14 @@ describe("CrossFileSymbolIndex", () => {
         type: "reference" as const,
         parts: ["authentication", "login"],
         path: "authentication.login",
-        location: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0, startOffset: 0, endOffset: 0 },
+        location: {
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+          startOffset: 0,
+          endOffset: 0,
+        },
       };
 
       const result = index.resolveReference(ref);
@@ -246,7 +260,14 @@ describe("CrossFileSymbolIndex", () => {
         type: "reference" as const,
         parts: ["authentication", "login", "basic-auth"],
         path: "authentication.login.basic-auth",
-        location: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0, startOffset: 0, endOffset: 0 },
+        location: {
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+          startOffset: 0,
+          endOffset: 0,
+        },
       };
 
       const result = index.resolveReference(ref);
@@ -259,7 +280,14 @@ describe("CrossFileSymbolIndex", () => {
         type: "reference" as const,
         parts: ["nonexistent"],
         path: "nonexistent",
-        location: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0, startOffset: 0, endOffset: 0 },
+        location: {
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+          startOffset: 0,
+          endOffset: 0,
+        },
       };
 
       const result = index.resolveReference(ref);
@@ -272,7 +300,14 @@ describe("CrossFileSymbolIndex", () => {
         type: "reference" as const,
         parts: ["authentication", "login"],
         path: "authentication.login",
-        location: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0, startOffset: 0, endOffset: 0 },
+        location: {
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+          startOffset: 0,
+          endOffset: 0,
+        },
       };
 
       const result = index.resolveReference(ref);

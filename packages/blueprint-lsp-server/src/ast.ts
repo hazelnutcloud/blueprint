@@ -411,7 +411,7 @@ export function buildSymbolTable(doc: DocumentNode): SymbolTableResult {
 
   for (const mod of doc.modules) {
     const modPath = mod.name;
-    
+
     // Check for duplicate module
     const existingModule = modules.get(modPath);
     if (existingModule) {
@@ -538,10 +538,7 @@ export function buildSymbolTable(doc: DocumentNode): SymbolTableResult {
  * Get the fully-qualified path for a requirement.
  * Walks up the hierarchy to construct the path.
  */
-export function getRequirementPath(
-  doc: DocumentNode,
-  requirement: RequirementNode
-): string | null {
+export function getRequirementPath(doc: DocumentNode, requirement: RequirementNode): string | null {
   for (const mod of doc.modules) {
     // Check module-level requirements
     for (const req of mod.requirements) {

@@ -1,10 +1,6 @@
 import type { Connection, Diagnostic } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
-import {
-  parseTicketFileContent,
-  type TicketFile,
-  type TicketValidationError,
-} from "./tickets";
+import { parseTicketFileContent, type TicketFile, type TicketValidationError } from "./tickets";
 
 /**
  * Represents the parsed state of a ticket document.
@@ -106,7 +102,7 @@ export class TicketDocumentManager {
   /**
    * Get all parsed ticket files from all tracked documents.
    * Returns only valid, successfully parsed ticket files.
-   * 
+   *
    * @returns Array of parsed ticket files with their URIs
    */
   getAllTicketFiles(): Array<{ uri: string; data: TicketFile }> {
@@ -122,7 +118,7 @@ export class TicketDocumentManager {
   /**
    * Get all parsed ticket files with their raw content.
    * Returns only valid, successfully parsed ticket files.
-   * 
+   *
    * @returns Array of parsed ticket files with their URIs and content
    */
   getAllTicketFilesWithContent(): Array<{ uri: string; content: string; data: TicketFile }> {
@@ -138,7 +134,7 @@ export class TicketDocumentManager {
   /**
    * Get all tickets from all tracked documents.
    * Aggregates tickets from all valid ticket files.
-   * 
+   *
    * @returns Array of all tickets with their source file URIs
    */
   getAllTickets(): Array<{ ticket: import("./tickets").Ticket; fileUri: string }> {
@@ -212,7 +208,7 @@ export class TicketDocumentManager {
 
   /**
    * Find the location in the document for a given JSON path.
-   * 
+   *
    * Attempts to locate the position by parsing the JSON path and
    * searching for the corresponding key in the content.
    */
@@ -235,7 +231,7 @@ export class TicketDocumentManager {
     // Parse the path to extract components
     // Examples: "version", "tickets[0].status", "tickets[2].constraints_satisfied"
     const parts = this.parseJsonPath(path);
-    
+
     if (parts.length === 0) {
       return defaultLocation;
     }
@@ -277,7 +273,7 @@ export class TicketDocumentManager {
     content: string
   ): { line: number; character: number; endLine: number; endCharacter: number } | null {
     const lines = content.split("\n");
-    
+
     // Track our position in the path
     let currentPart = 0;
     let arrayIndex = 0;
@@ -295,7 +291,7 @@ export class TicketDocumentManager {
         // Looking for a key
         const keyPattern = new RegExp(`"${part}"\\s*:`);
         const match = keyPattern.exec(line);
-        
+
         if (match) {
           // Found the key
           if (currentPart === parts.length - 1) {

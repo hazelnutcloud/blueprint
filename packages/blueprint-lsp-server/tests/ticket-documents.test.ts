@@ -6,7 +6,7 @@ import { TicketDocumentManager } from "../src/ticket-documents";
 function createMockConnection() {
   const diagnostics: { uri: string; diagnostics: unknown[] }[] = [];
   const logs: string[] = [];
-  
+
   return {
     sendDiagnostics: mock((params: { uri: string; diagnostics: unknown[] }) => {
       diagnostics.push(params);

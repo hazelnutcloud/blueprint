@@ -437,10 +437,7 @@ function escapeRegExp(string: string): string {
  * Find the position of a ticket in the ticket file content.
  * Returns the range of the ticket object in the JSON file.
  */
-function findTicketPositionInContent(
-  content: string,
-  ticketId: string
-): Range | null {
+function findTicketPositionInContent(content: string, ticketId: string): Range | null {
   // Find the ticket by searching for its ID in the JSON
   // Look for: "id": "TKT-001"
   const idPattern = `"id"\\s*:\\s*"${escapeRegExp(ticketId)}"`;
@@ -499,13 +496,10 @@ function findTicketPositionInContent(
 
 /**
  * Find all ticket locations that track a requirement.
- * 
+ *
  * Per SPEC.md Section 5.7: Find references should include tickets tracking a requirement.
  */
-function findTicketReferences(
-  requirementPath: string,
-  context: ReferencesContext
-): Location[] {
+function findTicketReferences(requirementPath: string, context: ReferencesContext): Location[] {
   const locations: Location[] = [];
 
   // Need ticket context to find ticket references
@@ -539,10 +533,10 @@ function findTicketReferences(
 
 /**
  * Find all implementation file locations that implement a requirement.
- * 
- * Per SPEC.md Section 5.7: Find references should include source files 
+ *
+ * Per SPEC.md Section 5.7: Find references should include source files
  * implementing a requirement (via ticket data).
- * 
+ *
  * This looks at the `implementation.files` and `implementation.tests` arrays
  * in tickets to find the source files that implement the requirement.
  */
@@ -553,7 +547,11 @@ function findImplementationFileReferences(
   const locations: Location[] = [];
 
   // Need ticket context and workspace folders to resolve implementation files
-  if (!context.ticketMap || !context.workspaceFolderUris || context.workspaceFolderUris.length === 0) {
+  if (
+    !context.ticketMap ||
+    !context.workspaceFolderUris ||
+    context.workspaceFolderUris.length === 0
+  ) {
     return locations;
   }
 
@@ -569,7 +567,7 @@ function findImplementationFileReferences(
 
   // Collect all implementation files from all tickets for this requirement
   const seenPaths = new Set<string>();
-  
+
   for (const ticket of ticketInfo.tickets) {
     if (!ticket.implementation) {
       continue;
@@ -625,12 +623,12 @@ function findImplementationFileReferences(
 
 /**
  * Find all references to a target symbol.
- * 
+ *
  * References in Blueprint are:
  * - @depends-on declarations that reference a symbol
  * - Tickets that track a requirement
  * - Source files implementing a requirement (via ticket data)
- * 
+ *
  * Per SPEC.md Section 5.7:
  * - Find all @depends-on declarations referencing an element
  * - Find tickets tracking a requirement
@@ -688,16 +686,13 @@ export function buildReferences(
 
 /**
  * Find all edges that reference the target path.
- * 
+ *
  * This includes:
  * - Exact matches: @depends-on target.path
- * - Prefix matches: When referencing a parent (e.g., @depends-on module 
+ * - Prefix matches: When referencing a parent (e.g., @depends-on module
  *   implicitly references all children)
  */
-function findReferencingEdges(
-  targetPath: string,
-  edges: DependencyEdge[]
-): DependencyEdge[] {
+function findReferencingEdges(targetPath: string, edges: DependencyEdge[]): DependencyEdge[] {
   const result: DependencyEdge[] = [];
 
   for (const edge of edges) {

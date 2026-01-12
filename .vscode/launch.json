@@ -6,9 +6,7 @@
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/blueprint-lsp-client"
-      ],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/blueprint-lsp-client"],
       "outFiles": [
         "${workspaceFolder}/packages/blueprint-lsp-client/out/**/*.js",
         "${workspaceFolder}/packages/blueprint-lsp-server/out/**/*.js"
@@ -23,9 +21,7 @@
       "port": 6009,
       "restart": true,
       "sourceMaps": true,
-      "outFiles": [
-        "${workspaceFolder}/packages/blueprint-lsp-server/out/**/*.js"
-      ]
+      "outFiles": ["${workspaceFolder}/packages/blueprint-lsp-server/out/**/*.js"]
     },
     {
       "name": "Debug LSP Server (Standalone)",
@@ -46,11 +42,7 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "bun",
-      "runtimeArgs": [
-        "test",
-        "--inspect=6010",
-        "${file}"
-      ],
+      "runtimeArgs": ["test", "--inspect=6010", "${file}"],
       "sourceMaps": true,
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen"
@@ -60,10 +52,7 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "bun",
-      "runtimeArgs": [
-        "test",
-        "--inspect=6010"
-      ],
+      "runtimeArgs": ["test", "--inspect=6010"],
       "cwd": "${workspaceFolder}/packages/blueprint-lsp-server",
       "sourceMaps": true,
       "console": "integratedTerminal",

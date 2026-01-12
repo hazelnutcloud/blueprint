@@ -20,15 +20,10 @@ export const TICKET_SCHEMA_VERSION = "1.0";
  * - in-progress: Currently being implemented
  * - complete: Fully implemented and all constraints satisfied
  * - obsolete: Requirement was removed (ticket pending cleanup)
- * 
+ *
  * Note: "blocked" is NOT a valid status - it's computed dynamically by the LSP.
  */
-export const VALID_TICKET_STATUSES = [
-  "pending",
-  "in-progress",
-  "complete",
-  "obsolete",
-] as const;
+export const VALID_TICKET_STATUSES = ["pending", "in-progress", "complete", "obsolete"] as const;
 
 export type TicketStatus = (typeof VALID_TICKET_STATUSES)[number];
 
@@ -132,7 +127,7 @@ export interface TicketValidationResult {
  */
 function formatIssuePath(issue: v.BaseIssue<unknown>): string {
   if (!issue.path) return "";
-  
+
   return issue.path
     .map((segment) => {
       if (segment.type === "array") {
@@ -149,10 +144,10 @@ function formatIssuePath(issue: v.BaseIssue<unknown>): string {
  */
 function issueToError(issue: v.BaseIssue<unknown>): TicketValidationError {
   const path = formatIssuePath(issue);
-  
+
   // Create user-friendly error messages
   let message: string;
-  
+
   if (issue.type === "object" && issue.expected === "Object") {
     // Check if this is a ticket in the array (path like "tickets[0]")
     if (/^tickets\[\d+\]$/.test(path)) {
@@ -176,7 +171,7 @@ function issueToError(issue: v.BaseIssue<unknown>): TicketValidationError {
   } else {
     message = issue.message;
   }
-  
+
   return {
     message,
     path,
@@ -187,13 +182,13 @@ function issueToError(issue: v.BaseIssue<unknown>): TicketValidationError {
 /**
  * Validates a parsed ticket file object against the schema.
  * Does not check semantic validity (e.g., whether refs point to real requirements).
- * 
+ *
  * @param data The parsed JSON object to validate
  * @returns Validation result with errors if invalid
  */
 export function validateTicketFile(data: unknown): TicketValidationResult {
   const errors: TicketValidationError[] = [];
-  
+
   // First check if it's an object at all
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     return {
@@ -205,22 +200,22 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
 
   // Parse with valibot
   const result = v.safeParse(TicketFileSchema, data);
-  
+
   if (!result.success) {
     // Convert valibot issues to our error format
     for (const issue of result.issues) {
       errors.push(issueToError(issue));
     }
-    
+
     return {
       valid: false,
       data: null,
       errors,
     };
   }
-  
+
   const ticketFile = result.output;
-  
+
   // Check for version mismatch (warning, not error)
   if (ticketFile.version !== TICKET_SCHEMA_VERSION) {
     errors.push({
@@ -229,7 +224,7 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
       value: ticketFile.version,
     });
   }
-  
+
   // Check for duplicate ticket IDs
   const ticketIds = new Set<string>();
   for (let i = 0; i < ticketFile.tickets.length; i++) {
@@ -243,9 +238,9 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
     }
     ticketIds.add(ticket.id);
   }
-  
+
   // If we have duplicate IDs, that's a critical error
-  const hasDuplicates = errors.some(e => e.message.includes("duplicate ticket id"));
+  const hasDuplicates = errors.some((e) => e.message.includes("duplicate ticket id"));
   if (hasDuplicates) {
     return {
       valid: false,
@@ -263,7 +258,7 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
 
 /**
  * Parses and validates a ticket file from a JSON string.
- * 
+ *
  * @param jsonString The JSON string to parse
  * @returns Validation result with parsed data if valid
  */
@@ -275,10 +270,12 @@ export function parseTicketFileContent(jsonString: string): TicketValidationResu
     return {
       valid: false,
       data: null,
-      errors: [{
-        message: `invalid JSON: ${e instanceof Error ? e.message : String(e)}`,
-        path: "",
-      }],
+      errors: [
+        {
+          message: `invalid JSON: ${e instanceof Error ? e.message : String(e)}`,
+          path: "",
+        },
+      ],
     };
   }
 
@@ -287,7 +284,7 @@ export function parseTicketFileContent(jsonString: string): TicketValidationResu
 
 /**
  * Reads and validates a ticket file from disk.
- * 
+ *
  * @param ticketFilePath Absolute path to the .tickets.json file
  * @returns Validation result with parsed data if valid, or errors if invalid/not found
  */
@@ -299,10 +296,12 @@ export async function parseTicketFile(ticketFilePath: string): Promise<TicketVal
     return {
       valid: false,
       data: null,
-      errors: [{
-        message: `failed to read file: ${e instanceof Error ? e.message : String(e)}`,
-        path: "",
-      }],
+      errors: [
+        {
+          message: `failed to read file: ${e instanceof Error ? e.message : String(e)}`,
+          path: "",
+        },
+      ],
     };
   }
 
@@ -322,15 +321,15 @@ export const TICKET_FILE_EXTENSION = ".tickets.json";
 
 /**
  * Resolves the ticket file path for a given Blueprint file.
- * 
+ *
  * Per SPEC.md Section 4.3:
  *   requirements/auth.bp → .blueprint/tickets/auth.tickets.json
- * 
+ *
  * The resolution works by:
  * 1. Finding the workspace root (containing the .bp file)
  * 2. Getting the base name of the .bp file (without extension)
  * 3. Constructing the ticket path: {workspaceRoot}/{ticketsPath}/{basename}.tickets.json
- * 
+ *
  * @param bpFilePath - Absolute path to the .bp file
  * @param workspaceRoot - Absolute path to the workspace root directory
  * @param ticketsPath - Relative path from workspace root to tickets directory (defaults to ".blueprint/tickets")
@@ -343,14 +342,14 @@ export function resolveTicketFilePath(
 ): string {
   // Get the base name without .bp extension
   const bpBaseName = basename(bpFilePath, ".bp");
-  
+
   // Construct the ticket file path
   return join(workspaceRoot, ticketsPath, `${bpBaseName}${TICKET_FILE_EXTENSION}`);
 }
 
 /**
  * Resolves the ticket file path from a Blueprint file URI.
- * 
+ *
  * @param bpFileUri - URI of the .bp file (e.g., "file:///path/to/auth.bp")
  * @param workspaceRootUri - URI of the workspace root
  * @param ticketsPath - Relative path from workspace root to tickets directory
@@ -369,7 +368,7 @@ export function resolveTicketFileUri(
 
 /**
  * Checks if a ticket file exists for a given Blueprint file.
- * 
+ *
  * @param bpFilePath - Absolute path to the .bp file
  * @param workspaceRoot - Absolute path to the workspace root directory
  * @param ticketsPath - Relative path from workspace root to tickets directory
@@ -392,11 +391,11 @@ export async function ticketFileExists(
 /**
  * Resolves the Blueprint file path from a ticket file path.
  * This is the reverse operation of resolveTicketFilePath.
- * 
+ *
  * Note: This returns the expected .bp file name, but the actual location
  * of the .bp file must be found through workspace scanning since .bp files
  * can be in any directory within the workspace.
- * 
+ *
  * @param ticketFilePath - Absolute path to the .tickets.json file
  * @returns The base name of the corresponding .bp file (e.g., "auth.bp")
  */
@@ -409,7 +408,7 @@ export function resolveBpFileBaseName(ticketFilePath: string): string {
 /**
  * Extracts the ticket file base name from a Blueprint file path.
  * This is useful for matching ticket files without full path resolution.
- * 
+ *
  * @param bpFilePath - Path to the .bp file (can be relative or absolute)
  * @returns The expected ticket file name (e.g., "auth.tickets.json")
  */
@@ -420,7 +419,7 @@ export function getTicketFileName(bpFilePath: string): string {
 
 /**
  * Validates that a path appears to be a valid ticket file path.
- * 
+ *
  * @param filePath - Path to check
  * @returns true if the path ends with .tickets.json
  */
@@ -430,7 +429,7 @@ export function isTicketFilePath(filePath: string): boolean {
 
 /**
  * Validates that a path appears to be a valid Blueprint file path.
- * 
+ *
  * @param filePath - Path to check
  * @returns true if the path ends with .bp
  */

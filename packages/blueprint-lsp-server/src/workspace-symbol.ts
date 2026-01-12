@@ -1,5 +1,9 @@
 import type { SymbolInformation, SymbolKind, Location } from "vscode-languageserver/node";
-import type { CrossFileSymbolIndex, IndexedSymbol, SymbolKind as BlueprintSymbolKind } from "./symbol-index";
+import type {
+  CrossFileSymbolIndex,
+  IndexedSymbol,
+  SymbolKind as BlueprintSymbolKind,
+} from "./symbol-index";
 
 // ============================================================================
 // Constants
@@ -7,7 +11,7 @@ import type { CrossFileSymbolIndex, IndexedSymbol, SymbolKind as BlueprintSymbol
 
 /**
  * LSP SymbolKind values for Blueprint elements.
- * 
+ *
  * Per LSP specification, SymbolKind is an enum:
  * - Module = 2 (used for @module)
  * - Class = 5 (used for @feature - represents a grouping of methods/functions)
@@ -15,10 +19,10 @@ import type { CrossFileSymbolIndex, IndexedSymbol, SymbolKind as BlueprintSymbol
  * - Constant = 14 (used for @constraint - represents a fixed rule)
  */
 const SYMBOL_KIND_MAP: Record<BlueprintSymbolKind, SymbolKind> = {
-  module: 2 as SymbolKind,      // SymbolKind.Module
-  feature: 5 as SymbolKind,     // SymbolKind.Class
+  module: 2 as SymbolKind, // SymbolKind.Module
+  feature: 5 as SymbolKind, // SymbolKind.Class
   requirement: 12 as SymbolKind, // SymbolKind.Function
-  constraint: 14 as SymbolKind,  // SymbolKind.Constant
+  constraint: 14 as SymbolKind, // SymbolKind.Constant
 };
 
 // ============================================================================
@@ -71,26 +75,26 @@ function matchesQuery(symbol: IndexedSymbol, query: string): boolean {
   if (!query) {
     return true; // Empty query matches everything
   }
-  
+
   const lowerQuery = query.toLowerCase();
   const name = symbol.node.name?.toLowerCase() ?? "";
   const path = symbol.path.toLowerCase();
-  
+
   // Exact prefix match on name
   if (name.startsWith(lowerQuery)) {
     return true;
   }
-  
+
   // Substring match on name
   if (name.includes(lowerQuery)) {
     return true;
   }
-  
+
   // Substring match on full path
   if (path.includes(lowerQuery)) {
     return true;
   }
-  
+
   // Fuzzy match: query characters appear in order in name
   let queryIdx = 0;
   for (let i = 0; i < name.length && queryIdx < lowerQuery.length; i++) {
@@ -101,7 +105,7 @@ function matchesQuery(symbol: IndexedSymbol, query: string): boolean {
   if (queryIdx === lowerQuery.length) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -113,38 +117,38 @@ function calculateScore(symbol: IndexedSymbol, query: string): number {
   if (!query) {
     return 0;
   }
-  
+
   const lowerQuery = query.toLowerCase();
   const name = symbol.node.name?.toLowerCase() ?? "";
   const path = symbol.path.toLowerCase();
-  
+
   // Exact match on name
   if (name === lowerQuery) {
     return 100;
   }
-  
+
   // Prefix match on name
   if (name.startsWith(lowerQuery)) {
     return 80 + (lowerQuery.length / name.length) * 10;
   }
-  
+
   // Exact match on path segment
   const pathParts = path.split(".");
   if (pathParts.includes(lowerQuery)) {
     return 70;
   }
-  
+
   // Substring match on name (earlier position is better)
   const nameIdx = name.indexOf(lowerQuery);
   if (nameIdx !== -1) {
     return 60 - nameIdx;
   }
-  
+
   // Substring match on path
   if (path.includes(lowerQuery)) {
     return 40;
   }
-  
+
   // Fuzzy match (fallback)
   return 20;
 }
@@ -155,10 +159,10 @@ function calculateScore(symbol: IndexedSymbol, query: string): number {
 
 /**
  * Build workspace symbols from the cross-file symbol index.
- * 
+ *
  * Returns a flat list of SymbolInformation objects matching the query.
  * Results are sorted by relevance to the query.
- * 
+ *
  * @param symbolIndex The cross-file symbol index
  * @param query The search query (can be empty to return all symbols)
  * @param maxResults Maximum number of results to return (default: 100)
@@ -169,10 +173,10 @@ export function buildWorkspaceSymbols(
   maxResults: number = 100
 ): SymbolInformation[] {
   const results: Array<{ symbol: IndexedSymbol; score: number }> = [];
-  
+
   // Collect all symbols from the index
   const kinds: BlueprintSymbolKind[] = ["module", "feature", "requirement", "constraint"];
-  
+
   for (const kind of kinds) {
     const symbols = symbolIndex.getSymbolsByKind(kind);
     for (const symbol of symbols) {
@@ -182,7 +186,7 @@ export function buildWorkspaceSymbols(
       }
     }
   }
-  
+
   // Sort by score (descending), then by name (ascending)
   results.sort((a, b) => {
     if (b.score !== a.score) {
@@ -192,11 +196,9 @@ export function buildWorkspaceSymbols(
     const nameB = b.symbol.node.name ?? "";
     return nameA.localeCompare(nameB);
   });
-  
+
   // Limit results and convert to SymbolInformation
-  return results.slice(0, maxResults).map(({ symbol }) => 
-    indexedSymbolToSymbolInformation(symbol)
-  );
+  return results.slice(0, maxResults).map(({ symbol }) => indexedSymbolToSymbolInformation(symbol));
 }
 
 /**

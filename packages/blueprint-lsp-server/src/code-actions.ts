@@ -71,8 +71,8 @@ export function levenshteinDistance(a: string, b: string): number {
     for (let j = 1; j <= bLen; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       currRow[j] = Math.min(
-        prevRow[j]! + 1,      // deletion
-        currRow[j - 1]! + 1,  // insertion
+        prevRow[j]! + 1, // deletion
+        currRow[j - 1]! + 1, // insertion
         prevRow[j - 1]! + cost // substitution
       );
     }
@@ -387,10 +387,7 @@ export function createAddTicketEdit(
   if (insertLineContent.includes("[]")) {
     // Replace empty array with array containing new ticket
     const ticketJson = formatTicketJson(newTicket, "    ");
-    const newContent = insertLineContent.replace(
-      "[]",
-      `[\n${ticketJson}\n  ]`
-    );
+    const newContent = insertLineContent.replace("[]", `[\n${ticketJson}\n  ]`);
 
     const edit: TextEdit = {
       range: {
@@ -558,8 +555,8 @@ export function createRemoveTicketEdit(
   // - Any trailing comma on the previous ticket if this is not the first ticket
   // - Any trailing comma on this ticket if it exists
 
-  let removeStartLine = ticketStartLine;
-  let removeEndLine = ticketEndLine;
+  const removeStartLine = ticketStartLine;
+  const removeEndLine = ticketEndLine;
 
   // Check if there's a trailing comma after this ticket
   const endLine = lines[ticketEndLine]!;
@@ -700,10 +697,7 @@ export function buildCodeActions(
   // Process each diagnostic in the context
   for (const diagnostic of params.context.diagnostics) {
     // Handle "no-ticket" diagnostics
-    if (
-      diagnostic.code === "no-ticket" &&
-      diagnostic.severity === DiagnosticSeverity.Warning
-    ) {
+    if (diagnostic.code === "no-ticket" && diagnostic.severity === DiagnosticSeverity.Warning) {
       const requirementPath = extractRequirementPathFromMessage(diagnostic.message);
       if (!requirementPath) {
         continue;
@@ -735,9 +729,7 @@ export function buildCodeActions(
       }
 
       // Get all existing tickets to generate a unique ID
-      const allTickets = context.ticketDocumentManager
-        .getAllTickets()
-        .map((t) => t.ticket);
+      const allTickets = context.ticketDocumentManager.getAllTickets().map((t) => t.ticket);
 
       // Generate the new ticket
       const ticketId = generateTicketId(allTickets);
@@ -760,11 +752,7 @@ export function buildCodeActions(
 
       if (existingTicketFile) {
         // Add ticket to existing file
-        edit = createAddTicketEdit(
-          ticketFileUri,
-          existingTicketFile.content,
-          newTicket
-        );
+        edit = createAddTicketEdit(ticketFileUri, existingTicketFile.content, newTicket);
         title = `Create ticket ${ticketId} for '${requirementPath}'`;
       } else {
         // Create new ticket file
@@ -813,11 +801,7 @@ export function buildCodeActions(
       }
 
       // Create an edit to remove the orphaned ticket
-      const edit = createRemoveTicketEdit(
-        ticketFileUri,
-        ticketFile.content,
-        orphanedInfo.ticketId
-      );
+      const edit = createRemoveTicketEdit(ticketFileUri, ticketFile.content, orphanedInfo.ticketId);
 
       if (!edit) {
         continue;
@@ -911,7 +895,7 @@ export function findSymbolAtPosition(
   fileUri: string
 ): SymbolAtPosition | null {
   const root = tree.rootNode;
-  
+
   // Find the deepest node at the position
   const node = findDeepestNodeAt(root, position.line, position.character);
   if (!node) {
@@ -940,7 +924,12 @@ export function findSymbolAtPosition(
  * Find the deepest node containing a position.
  */
 function findDeepestNodeAt(
-  node: { startPosition: { row: number; column: number }; endPosition: { row: number; column: number }; children: any[]; type: string },
+  node: {
+    startPosition: { row: number; column: number };
+    endPosition: { row: number; column: number };
+    children: any[];
+    type: string;
+  },
   line: number,
   column: number
 ): any | null {
@@ -979,7 +968,7 @@ function buildSymbolPath(
   if (!nameNode) return null;
 
   let path = nameNode.text;
-  
+
   // Walk up to find parent scope and build full path
   let parent = blockNode.parent;
   while (parent) {
@@ -1043,17 +1032,17 @@ function buildDependencyCodeActions(
 
   // Get dependencies (what this symbol depends on)
   const dependencies = context.dependencyGraph.getDependencies(symbol.path);
-  
+
   // Get dependents (what depends on this symbol)
   const dependents = context.dependencyGraph.getDependents(symbol.path);
 
   // Create "Show all dependencies" action if there are dependencies
   if (dependencies.length > 0) {
     const locations = getDependencyLocations(dependencies, context.symbolIndex);
-    
+
     if (locations.length > 0) {
       const action: CodeAction = {
-        title: `Show ${dependencies.length} dependenc${dependencies.length === 1 ? 'y' : 'ies'} of '${symbol.path}'`,
+        title: `Show ${dependencies.length} dependenc${dependencies.length === 1 ? "y" : "ies"} of '${symbol.path}'`,
         kind: CodeActionKind.Source,
         command: {
           title: "Show Dependencies",
@@ -1068,10 +1057,10 @@ function buildDependencyCodeActions(
   // Create "Show all dependents" action if there are dependents
   if (dependents.length > 0) {
     const locations = getDependencyLocations(dependents, context.symbolIndex);
-    
+
     if (locations.length > 0) {
       const action: CodeAction = {
-        title: `Show ${dependents.length} dependent${dependents.length === 1 ? '' : 's'} of '${symbol.path}'`,
+        title: `Show ${dependents.length} dependent${dependents.length === 1 ? "" : "s"} of '${symbol.path}'`,
         kind: CodeActionKind.Source,
         command: {
           title: "Show Dependents",
@@ -1089,10 +1078,7 @@ function buildDependencyCodeActions(
 /**
  * Get the locations of dependency symbols.
  */
-function getDependencyLocations(
-  paths: string[],
-  symbolIndex: CrossFileSymbolIndex
-): Location[] {
+function getDependencyLocations(paths: string[], symbolIndex: CrossFileSymbolIndex): Location[] {
   const locations: Location[] = [];
 
   for (const path of paths) {

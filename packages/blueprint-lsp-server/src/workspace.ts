@@ -20,9 +20,7 @@ export class WorkspaceManager {
   private connection: Connection;
   private workspaceFolders: WorkspaceFolder[] = [];
   private discoveredFiles: Map<string, WorkspaceFile> = new Map();
-  private onFilesChangedCallbacks: Array<
-    (files: WorkspaceFile[]) => void
-  > = [];
+  private onFilesChangedCallbacks: Array<(files: WorkspaceFile[]) => void> = [];
 
   constructor(connection: Connection) {
     this.connection = connection;
@@ -45,9 +43,7 @@ export class WorkspaceManager {
     // Remove files from removed folders
     for (const folder of event.removed) {
       this.removeFilesFromFolder(folder);
-      const index = this.workspaceFolders.findIndex(
-        (f) => f.uri === folder.uri
-      );
+      const index = this.workspaceFolders.findIndex((f) => f.uri === folder.uri);
       if (index !== -1) {
         this.workspaceFolders.splice(index, 1);
       }
@@ -91,9 +87,7 @@ export class WorkspaceManager {
     try {
       await this.scanDirectory(folderPath);
     } catch (error) {
-      this.connection.console.error(
-        `Error scanning folder ${folderPath}: ${error}`
-      );
+      this.connection.console.error(`Error scanning folder ${folderPath}: ${error}`);
     }
   }
 
@@ -151,9 +145,7 @@ export class WorkspaceManager {
     for (const [uri, file] of this.discoveredFiles) {
       if (file.path.startsWith(folderPath)) {
         this.discoveredFiles.delete(uri);
-        this.connection.console.log(
-          `Removed Blueprint file from index: ${file.path}`
-        );
+        this.connection.console.log(`Removed Blueprint file from index: ${file.path}`);
       }
     }
   }
@@ -221,9 +213,7 @@ export class WorkspaceManager {
     const file = this.discoveredFiles.get(uri);
     if (file) {
       this.discoveredFiles.delete(uri);
-      this.connection.console.log(
-        `Removed Blueprint file from index: ${file.path}`
-      );
+      this.connection.console.log(`Removed Blueprint file from index: ${file.path}`);
       this.notifyFilesChanged();
     }
   }

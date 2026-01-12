@@ -1,0 +1,8 @@
+dist/
+out/
+node_modules/
+coverage/
+*.tgz
+bun.lock
+packages/tree-sitter-blueprint/src/
+packages/tree-sitter-blueprint/bindings/

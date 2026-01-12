@@ -61,10 +61,7 @@ export function computeCircularDependencyDiagnostics(
 /**
  * Add diagnostics for a single cycle to the diagnostics map.
  */
-function addCycleDiagnostics(
-  cycle: CircularDependency,
-  byFile: Map<string, Diagnostic[]>
-): void {
+function addCycleDiagnostics(cycle: CircularDependency, byFile: Map<string, Diagnostic[]>): void {
   // Format the cycle path for the error message
   // cycle.cycle is like ["a", "b", "c", "a"] where first and last are the same
   const cyclePath = cycle.cycle.join(" -> ");
@@ -222,7 +219,11 @@ export function computeNoTicketDiagnostics(
           end: {
             line: node.location.startLine,
             // Highlight just the @requirement line, not the whole block
-            character: node.location.startColumn + "@requirement".length + 1 + (node as { name: string }).name.length,
+            character:
+              node.location.startColumn +
+              "@requirement".length +
+              1 +
+              (node as { name: string }).name.length,
           },
         },
         message: `Requirement '${req.path}' has no associated ticket`,
@@ -461,11 +462,8 @@ export function computeBlockingDiagnostics(
     const node = symbol.node as RequirementNode;
 
     // Build the message with blocker information
-    const allBlockers = [
-      ...blockingInfo.directBlockers,
-      ...blockingInfo.transitiveBlockers,
-    ];
-    
+    const allBlockers = [...blockingInfo.directBlockers, ...blockingInfo.transitiveBlockers];
+
     let message: string;
     if (blockingInfo.directBlockers.length > 0 && blockingInfo.transitiveBlockers.length > 0) {
       message = `Requirement blocked by: ${formatBlockers(blockingInfo.directBlockers)}. Also transitively blocked by: ${formatBlockers(blockingInfo.transitiveBlockers)}`;
@@ -485,8 +483,7 @@ export function computeBlockingDiagnostics(
         end: {
           line: node.location.startLine,
           // Highlight just the @requirement keyword and identifier
-          character:
-            node.location.startColumn + "@requirement".length + 1 + node.name.length,
+          character: node.location.startColumn + "@requirement".length + 1 + node.name.length,
         },
       },
       message,

@@ -49,7 +49,7 @@ describe("document-symbol", () => {
 
       const symbols = buildDocumentSymbols(tree!);
       expect(symbols).toHaveLength(1);
-      
+
       const mod = symbols[0]!;
       expect(mod.name).toBe("auth");
       expect(mod.kind).toBe(SymbolKind.Module);
@@ -67,11 +67,11 @@ describe("document-symbol", () => {
 
       const symbols = buildDocumentSymbols(tree!);
       expect(symbols).toHaveLength(1);
-      
+
       const mod = symbols[0]!;
       expect(mod.name).toBe("auth");
       expect(mod.children).toHaveLength(1);
-      
+
       const feature = mod.children![0]!;
       expect(feature.name).toBe("login");
       expect(feature.kind).toBe(SymbolKind.Class);
@@ -96,7 +96,7 @@ describe("document-symbol", () => {
       const mod = symbols[0]!;
       const feature = mod.children![0]!;
       expect(feature.children).toHaveLength(1);
-      
+
       const req = feature.children![0]!;
       expect(req.name).toBe("basic-auth");
       expect(req.kind).toBe(SymbolKind.Function);
@@ -122,9 +122,9 @@ describe("document-symbol", () => {
       const mod = symbols[0]!;
       const feature = mod.children![0]!;
       const req = feature.children![0]!;
-      
+
       expect(req.children).toHaveLength(1);
-      
+
       const constraint = req.children![0]!;
       expect(constraint.name).toBe("bcrypt-cost");
       expect(constraint.kind).toBe(SymbolKind.Constant);
@@ -142,10 +142,10 @@ describe("document-symbol", () => {
 
       const symbols = buildDocumentSymbols(tree!);
       expect(symbols).toHaveLength(1);
-      
+
       const mod = symbols[0]!;
       expect(mod.children).toHaveLength(1);
-      
+
       const req = mod.children![0]!;
       expect(req.name).toBe("global-auth");
       expect(req.kind).toBe(SymbolKind.Function);
@@ -162,10 +162,10 @@ describe("document-symbol", () => {
 
       const symbols = buildDocumentSymbols(tree!);
       expect(symbols).toHaveLength(1);
-      
+
       const mod = symbols[0]!;
       expect(mod.children).toHaveLength(1);
-      
+
       const constraint = mod.children![0]!;
       expect(constraint.name).toBe("security-audit");
       expect(constraint.kind).toBe(SymbolKind.Constant);
@@ -186,9 +186,9 @@ describe("document-symbol", () => {
       const symbols = buildDocumentSymbols(tree!);
       const mod = symbols[0]!;
       const feature = mod.children![0]!;
-      
+
       expect(feature.children).toHaveLength(1);
-      
+
       const constraint = feature.children![0]!;
       expect(constraint.name).toBe("rate-limit");
       expect(constraint.kind).toBe(SymbolKind.Constant);
@@ -230,7 +230,7 @@ describe("document-symbol", () => {
 
       const symbols = buildDocumentSymbols(tree!);
       expect(symbols).toHaveLength(1);
-      
+
       const mod = symbols[0]!;
       expect(mod.children).toHaveLength(3);
       expect(mod.children![0]!.name).toBe("login");
@@ -259,7 +259,7 @@ describe("document-symbol", () => {
       const symbols = buildDocumentSymbols(tree!);
       const mod = symbols[0]!;
       const feature = mod.children![0]!;
-      
+
       expect(feature.children).toHaveLength(3);
       expect(feature.children![0]!.name).toBe("email-login");
       expect(feature.children![1]!.name).toBe("oauth-login");
@@ -291,7 +291,7 @@ describe("document-symbol", () => {
       const mod = symbols[0]!;
       const feature = mod.children![0]!;
       const req = feature.children![0]!;
-      
+
       expect(req.children).toHaveLength(3);
       expect(req.children![0]!.name).toBe("bcrypt-cost");
       expect(req.children![1]!.name).toBe("rate-limit");

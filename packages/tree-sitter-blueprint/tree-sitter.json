@@ -5,9 +5,7 @@
       "camelcase": "Blueprint",
       "scope": "source.blueprint",
       "path": ".",
-      "file-types": [
-        "bp"
-      ],
+      "file-types": ["bp"],
       "injection-regex": "^blueprint$"
     }
   ],

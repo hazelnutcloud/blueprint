@@ -47,10 +47,7 @@ function createConstraint(name: string): ConstraintNode {
   };
 }
 
-function createRequirement(
-  name: string,
-  constraints: string[] = []
-): RequirementNode {
+function createRequirement(name: string, constraints: string[] = []): RequirementNode {
   return {
     type: "requirement",
     name,
@@ -275,12 +272,7 @@ describe("blocking-status", () => {
       ]);
       const mapResult = buildRequirementTicketMap(requirements, ticketFile);
 
-      const info = computeBlockingInfo(
-        "auth.login.c",
-        graph,
-        mapResult.map,
-        graphResult.cycles
-      );
+      const info = computeBlockingInfo("auth.login.c", graph, mapResult.map, graphResult.cycles);
 
       expect(info.status).toBe("blocked");
       // b is direct, a is transitive
@@ -308,12 +300,7 @@ describe("blocking-status", () => {
       const mapResult = buildRequirementTicketMap(requirements, null);
 
       // Even though 'a' is a module, not a requirement, we can still check blocking
-      const info = computeBlockingInfo(
-        "a",
-        graph,
-        mapResult.map,
-        graphResult.cycles
-      );
+      const info = computeBlockingInfo("a", graph, mapResult.map, graphResult.cycles);
 
       expect(info.status).toBe("in-cycle");
       expect(info.cycleInfo).toBeDefined();
@@ -462,9 +449,7 @@ describe("blocking-status", () => {
             const current = stack.pop()!;
             if (visited.has(current)) continue;
             if (current !== path) visited.add(current);
-            const deps = result.edges
-              .filter((e) => e.from === current)
-              .map((e) => e.to);
+            const deps = result.edges.filter((e) => e.from === current).map((e) => e.to);
             stack.push(...deps);
           }
           return visited;
@@ -476,9 +461,7 @@ describe("blocking-status", () => {
             const current = stack.pop()!;
             if (visited.has(current)) continue;
             if (current !== path) visited.add(current);
-            const deps = result.edges
-              .filter((e) => e.to === current)
-              .map((e) => e.from);
+            const deps = result.edges.filter((e) => e.to === current).map((e) => e.from);
             stack.push(...deps);
           }
           return visited;
@@ -519,9 +502,7 @@ describe("blocking-status", () => {
             const current = stack.pop()!;
             if (visited.has(current)) continue;
             if (current !== path) visited.add(current);
-            const deps = result.edges
-              .filter((e) => e.from === current)
-              .map((e) => e.to);
+            const deps = result.edges.filter((e) => e.from === current).map((e) => e.to);
             stack.push(...deps);
           }
           return visited;
@@ -533,9 +514,7 @@ describe("blocking-status", () => {
             const current = stack.pop()!;
             if (visited.has(current)) continue;
             if (current !== path) visited.add(current);
-            const deps = result.edges
-              .filter((e) => e.to === current)
-              .map((e) => e.from);
+            const deps = result.edges.filter((e) => e.to === current).map((e) => e.from);
             stack.push(...deps);
           }
           return visited;
@@ -575,11 +554,7 @@ describe("blocking-status", () => {
       ]);
       const mapResult = buildRequirementTicketMap(requirements, ticketFile);
 
-      const result = computeAllBlockingStatus(
-        graph,
-        mapResult.map,
-        graphResult.cycles
-      );
+      const result = computeAllBlockingStatus(graph, mapResult.map, graphResult.cycles);
 
       expect(result.unblockedRequirements).toContain("auth.login.a");
       expect(result.unblockedRequirements).toContain("auth.login.b");
@@ -587,11 +562,7 @@ describe("blocking-status", () => {
     });
 
     test("handles empty ticket map", () => {
-      const result = computeAllBlockingStatus(
-        {} as DependencyGraph,
-        new Map(),
-        []
-      );
+      const result = computeAllBlockingStatus({} as DependencyGraph, new Map(), []);
 
       expect(result.blockedRequirements).toHaveLength(0);
       expect(result.requirementsInCycles).toHaveLength(0);
@@ -742,9 +713,7 @@ describe("blocking-status", () => {
             const current = stack.pop()!;
             if (visited.has(current)) continue;
             if (current !== path) visited.add(current);
-            const deps = result.edges
-              .filter((e) => e.from === current)
-              .map((e) => e.to);
+            const deps = result.edges.filter((e) => e.from === current).map((e) => e.to);
             stack.push(...deps);
           }
           return visited;
@@ -756,9 +725,7 @@ describe("blocking-status", () => {
             const current = stack.pop()!;
             if (visited.has(current)) continue;
             if (current !== path) visited.add(current);
-            const deps = result.edges
-              .filter((e) => e.to === current)
-              .map((e) => e.from);
+            const deps = result.edges.filter((e) => e.to === current).map((e) => e.from);
             stack.push(...deps);
           }
           return visited;
@@ -891,13 +858,9 @@ describe("blocking-status", () => {
           unblockedRequirements: [],
         };
 
-        const hierarchyStatus = new Map<string, BlockingStatus>([
-          ["auth", "blocked"],
-        ]);
+        const hierarchyStatus = new Map<string, BlockingStatus>([["auth", "blocked"]]);
 
-        updateBlockingStatusCache(cache, result, hierarchyStatus, [
-          "file:///auth.bp",
-        ]);
+        updateBlockingStatusCache(cache, result, hierarchyStatus, ["file:///auth.bp"]);
 
         expect(cache.result.blockedRequirements).toContain("auth.login");
         expect(cache.hierarchyStatus.get("auth")).toBe("blocked");
@@ -922,9 +885,9 @@ describe("blocking-status", () => {
       test("returns true for any .tickets.json file", () => {
         const cache = createBlockingStatusCache();
 
-        expect(
-          shouldInvalidateCache(cache, "file:///.blueprint/tickets/auth.tickets.json")
-        ).toBe(true);
+        expect(shouldInvalidateCache(cache, "file:///.blueprint/tickets/auth.tickets.json")).toBe(
+          true
+        );
       });
 
       test("returns false for unrelated files", () => {

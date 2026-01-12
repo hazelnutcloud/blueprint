@@ -48,7 +48,7 @@ export const TokenTypes = {
  * The token modifiers used by the Blueprint LSP.
  *
  * These are bit flags that can be combined.
- * 
+ *
  * Status modifiers (from SPEC.md Section 5.4):
  * - noTicket: Dim/gray background (no ticket exists)
  * - pending: No highlight (default)
@@ -93,7 +93,7 @@ const CustomTokenModifiers = {
  * that the Blueprint LSP provides.
  *
  * This legend must be registered with the LSP client during initialization.
- * 
+ *
  * Modifiers are ordered to match the bit positions in TokenModifiers:
  * - Index 0 (bit 0): declaration
  * - Index 1 (bit 1): definition
@@ -140,12 +140,12 @@ const BLOCK_KEYWORDS: Record<string, string> = {
  * This combines ticket status with blocking status from dependency analysis.
  */
 export type RequirementHighlightStatus =
-  | "no-ticket"      // No tickets exist for this requirement
-  | "pending"        // All tickets are pending (default styling)
-  | "blocked"        // Blocked by incomplete dependencies
-  | "in-progress"    // At least one ticket is in-progress
-  | "complete"       // All constraints satisfied, all tickets complete
-  | "obsolete";      // All tickets are obsolete
+  | "no-ticket" // No tickets exist for this requirement
+  | "pending" // All tickets are pending (default styling)
+  | "blocked" // Blocked by incomplete dependencies
+  | "in-progress" // At least one ticket is in-progress
+  | "complete" // All constraints satisfied, all tickets complete
+  | "obsolete"; // All tickets are obsolete
 
 /**
  * Map from requirement identifier name to its highlight status.
@@ -250,13 +250,7 @@ export function buildSemanticTokens(
   const builder = new SemanticTokensBuilder();
   for (const token of tokens) {
     if (token.length > 0) {
-      builder.push(
-        token.line,
-        token.char,
-        token.length,
-        token.tokenType,
-        token.tokenModifiers
-      );
+      builder.push(token.line, token.char, token.length, token.tokenType, token.tokenModifiers);
     }
   }
 
@@ -274,8 +268,8 @@ function walkTree(node: Node, tokens: TokenData[], context: WalkContext): void {
   const nodeType = node.type;
 
   // Track scope changes for building requirement paths
-  let savedModule = context.currentModule;
-  let savedFeature = context.currentFeature;
+  const savedModule = context.currentModule;
+  const savedFeature = context.currentFeature;
 
   if (nodeType === "module_block") {
     const nameNode = node.childForFieldName("name");
@@ -311,10 +305,7 @@ function walkTree(node: Node, tokens: TokenData[], context: WalkContext): void {
  * Builds the full path for a requirement given the current context.
  * Returns null if we don't have complete scope information.
  */
-function buildRequirementPath(
-  requirementName: string,
-  context: WalkContext
-): string | null {
+function buildRequirementPath(requirementName: string, context: WalkContext): string | null {
   if (!context.currentModule) {
     return null;
   }
@@ -328,10 +319,7 @@ function buildRequirementPath(
 /**
  * Gets the status modifier for a requirement block based on the status map.
  */
-function getRequirementStatusModifier(
-  node: Node,
-  context: WalkContext
-): number {
+function getRequirementStatusModifier(node: Node, context: WalkContext): number {
   if (!context.statusMap) {
     return TokenModifiers.none;
   }
@@ -463,10 +451,7 @@ function processNode(node: Node, tokens: TokenData[], context: WalkContext): voi
         const lineNum = startLine + i;
         const startCol = i === 0 ? node.startPosition.column : 0;
         // For the last line, calculate the actual length
-        const length =
-          i === lines.length - 1
-            ? node.endPosition.column
-            : lineText.length;
+        const length = i === lines.length - 1 ? node.endPosition.column : lineText.length;
 
         if (length > 0) {
           tokens.push({
@@ -486,11 +471,11 @@ function processNode(node: Node, tokens: TokenData[], context: WalkContext): voi
 /**
  * Builds a RequirementHighlightStatus map from requirement-ticket mapping
  * and blocking status information.
- * 
+ *
  * The status priority is:
  * 1. If blocked by dependencies → "blocked"
  * 2. Otherwise use ticket status (no-ticket, pending, in-progress, complete, obsolete)
- * 
+ *
  * @param ticketMap The requirement-ticket mapping with status info
  * @param blockingStatus Optional blocking status from dependency analysis
  * @returns Map from requirement path to highlight status
@@ -505,7 +490,10 @@ export function buildRequirementStatusMap(
     // Check if blocked by dependencies (takes precedence)
     if (blockingStatus) {
       const blockingInfo = blockingStatus.blockingInfo.get(path);
-      if (blockingInfo && (blockingInfo.status === "blocked" || blockingInfo.status === "in-cycle")) {
+      if (
+        blockingInfo &&
+        (blockingInfo.status === "blocked" || blockingInfo.status === "in-cycle")
+      ) {
         statusMap.set(path, "blocked");
         continue;
       }

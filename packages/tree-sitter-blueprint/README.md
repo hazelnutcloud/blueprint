@@ -1,4 +1,5 @@
 # tree-sitter-blueprint
+
 To install dependencies:
 
 ```bash

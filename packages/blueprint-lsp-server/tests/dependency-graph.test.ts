@@ -412,18 +412,14 @@ describe("DependencyGraph", () => {
     });
 
     test("getDependencies returns direct dependencies via result edges", () => {
-      const authDeps = result.edges
-        .filter((e) => e.from === "auth")
-        .map((e) => e.to);
+      const authDeps = result.edges.filter((e) => e.from === "auth").map((e) => e.to);
 
       expect(authDeps).toContain("storage");
       expect(authDeps).toHaveLength(1);
     });
 
     test("getDependents returns direct dependents via result edges", () => {
-      const storageDependents = result.edges
-        .filter((e) => e.to === "storage")
-        .map((e) => e.from);
+      const storageDependents = result.edges.filter((e) => e.to === "storage").map((e) => e.from);
 
       expect(storageDependents).toContain("auth");
       expect(storageDependents).toContain("payments");
@@ -500,12 +496,8 @@ describe("DependencyGraph", () => {
       const authDeps = result.edges.filter((e) => e.from === "authentication");
       expect(authDeps.some((e) => e.to === "storage")).toBe(true);
 
-      const loginDeps = result.edges.filter(
-        (e) => e.from === "authentication.login"
-      );
-      expect(loginDeps.some((e) => e.to === "storage.database.user-table")).toBe(
-        true
-      );
+      const loginDeps = result.edges.filter((e) => e.from === "authentication.login");
+      expect(loginDeps.some((e) => e.to === "storage.database.user-table")).toBe(true);
     });
 
     test("detects cross-file cycles", () => {
@@ -670,24 +662,16 @@ describe("DependencyGraph", () => {
       expect(result.cycles).toHaveLength(0);
 
       // Verify key dependencies exist
-      const loginDeps = result.edges.filter(
-        (e) => e.from === "authentication.login"
-      );
+      const loginDeps = result.edges.filter((e) => e.from === "authentication.login");
       expect(loginDeps.some((e) => e.to === "storage.user-accounts")).toBe(true);
 
-      const oauthDeps = result.edges.filter(
-        (e) => e.from === "authentication.login.oauth-login"
-      );
-      expect(
-        oauthDeps.some((e) => e.to === "authentication.login.credentials-login")
-      ).toBe(true);
+      const oauthDeps = result.edges.filter((e) => e.from === "authentication.login.oauth-login");
+      expect(oauthDeps.some((e) => e.to === "authentication.login.credentials-login")).toBe(true);
 
       const refreshDeps = result.edges.filter(
         (e) => e.from === "authentication.session.refresh-token"
       );
-      expect(
-        refreshDeps.some((e) => e.to === "authentication.session.create-token")
-      ).toBe(true);
+      expect(refreshDeps.some((e) => e.to === "authentication.session.create-token")).toBe(true);
     });
   });
 });

@@ -53,7 +53,14 @@ export interface HoverContext {
  */
 export interface HoverTarget {
   /** The type of element being hovered */
-  kind: "module" | "feature" | "requirement" | "constraint" | "reference" | "keyword" | "description";
+  kind:
+    | "module"
+    | "feature"
+    | "requirement"
+    | "constraint"
+    | "reference"
+    | "keyword"
+    | "description";
   /** The symbol path if applicable */
   path?: string;
   /** The AST node if available */
@@ -426,10 +433,7 @@ function buildConstraintTarget(
 /**
  * Build hover target for a reference in @depends-on.
  */
-function buildReferenceTarget(
-  referenceNode: Node,
-  symbolIndex: CrossFileSymbolIndex
-): HoverTarget {
+function buildReferenceTarget(referenceNode: Node, symbolIndex: CrossFileSymbolIndex): HoverTarget {
   // Extract the reference path from identifiers
   const parts: string[] = [];
   for (const child of referenceNode.children) {
@@ -542,10 +546,7 @@ export function buildHoverContent(
  * Build hover content for a requirement.
  * Shows ticket info, status, constraint satisfaction, dependencies, and files.
  */
-function buildRequirementHover(
-  target: HoverTarget,
-  context: HoverContext
-): MarkupContent | null {
+function buildRequirementHover(target: HoverTarget, context: HoverContext): MarkupContent | null {
   if (!target.path) return null;
 
   const ticketInfo = context.ticketMap.get(target.path);
@@ -658,10 +659,7 @@ function buildRequirementHover(
  * Build hover content for a feature.
  * Shows aggregate progress and requirement list.
  */
-function buildFeatureHover(
-  target: HoverTarget,
-  context: HoverContext
-): MarkupContent | null {
+function buildFeatureHover(target: HoverTarget, context: HoverContext): MarkupContent | null {
   if (!target.path) return null;
 
   const featureReqs = filterByPathPrefix(context.ticketMap, target.path);
@@ -674,9 +672,7 @@ function buildFeatureHover(
   lines.push("");
 
   // Progress
-  lines.push(
-    `**Progress:** ${summary.complete}/${summary.total} requirements complete`
-  );
+  lines.push(`**Progress:** ${summary.complete}/${summary.total} requirements complete`);
   lines.push("");
 
   // Progress bar
@@ -725,10 +721,7 @@ function buildFeatureHover(
  * Build hover content for a module.
  * Shows aggregate progress and feature/requirement summary.
  */
-function buildModuleHover(
-  target: HoverTarget,
-  context: HoverContext
-): MarkupContent | null {
+function buildModuleHover(target: HoverTarget, context: HoverContext): MarkupContent | null {
   if (!target.path) return null;
 
   const moduleReqs = filterByPathPrefix(context.ticketMap, target.path);
@@ -741,9 +734,7 @@ function buildModuleHover(
   lines.push("");
 
   // Progress
-  lines.push(
-    `**Progress:** ${summary.complete}/${summary.total} requirements complete`
-  );
+  lines.push(`**Progress:** ${summary.complete}/${summary.total} requirements complete`);
   lines.push("");
 
   // Progress bar
@@ -788,10 +779,7 @@ function buildModuleHover(
 /**
  * Build hover content for a constraint.
  */
-function buildConstraintHover(
-  target: HoverTarget,
-  context: HoverContext
-): MarkupContent | null {
+function buildConstraintHover(target: HoverTarget, context: HoverContext): MarkupContent | null {
   if (!target.path) return null;
 
   const lines: string[] = [];
@@ -810,13 +798,13 @@ function buildConstraintHover(
 
   if (ticketInfo) {
     // Find this constraint's status
-    const constraintStatus = ticketInfo.constraintStatuses.find(
-      (cs) => cs.name === constraintName
-    );
+    const constraintStatus = ticketInfo.constraintStatuses.find((cs) => cs.name === constraintName);
 
     if (constraintStatus) {
       const icon = constraintStatus.satisfied ? "\u2713" : "\u25CB";
-      lines.push(`**Status:** ${icon} ${constraintStatus.satisfied ? "Satisfied" : "Not satisfied"}`);
+      lines.push(
+        `**Status:** ${icon} ${constraintStatus.satisfied ? "Satisfied" : "Not satisfied"}`
+      );
 
       if (constraintStatus.satisfiedBy.length > 0) {
         lines.push("");
@@ -851,10 +839,7 @@ function buildConstraintHover(
 /**
  * Build hover content for a reference.
  */
-function buildReferenceHover(
-  target: HoverTarget,
-  context: HoverContext
-): MarkupContent | null {
+function buildReferenceHover(target: HoverTarget, context: HoverContext): MarkupContent | null {
   if (!target.path) return null;
 
   const lines: string[] = [];
@@ -881,9 +866,7 @@ function buildReferenceHover(
       // Show progress for features/modules
       const reqs = filterByPathPrefix(context.ticketMap, target.path);
       const summary = getCompletionSummary(reqs);
-      lines.push(
-        `**Progress:** ${summary.complete}/${summary.total} requirements complete`
-      );
+      lines.push(`**Progress:** ${summary.complete}/${summary.total} requirements complete`);
     }
 
     lines.push("");
@@ -929,10 +912,7 @@ function buildKeywordHover(target: HoverTarget): MarkupContent | null {
  * Build hover content for a description block.
  * Shows the document-level description and overall project context.
  */
-function buildDescriptionHover(
-  target: HoverTarget,
-  context: HoverContext
-): MarkupContent | null {
+function buildDescriptionHover(target: HoverTarget, context: HoverContext): MarkupContent | null {
   const lines: string[] = [];
 
   // Header
@@ -1026,10 +1006,7 @@ function buildProgressBar(percent: number): string {
  * If workspace folders are available, resolves relative paths to file:// URIs.
  * Falls back to plain text if the path cannot be resolved.
  */
-export function formatFileLink(
-  filePath: string,
-  workspaceFolderUris?: string[]
-): string {
+export function formatFileLink(filePath: string, workspaceFolderUris?: string[]): string {
   // If no workspace folders, return plain text
   if (!workspaceFolderUris || workspaceFolderUris.length === 0) {
     return filePath;
@@ -1077,10 +1054,7 @@ export function targetRangeToLspRange(target: HoverTarget): {
 /**
  * Build a complete Hover response.
  */
-export function buildHover(
-  target: HoverTarget,
-  context: HoverContext
-): Hover | null {
+export function buildHover(target: HoverTarget, context: HoverContext): Hover | null {
   const content = buildHoverContent(target, context);
   if (!content) return null;
 

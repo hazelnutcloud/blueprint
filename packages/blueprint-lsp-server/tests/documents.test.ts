@@ -1,20 +1,25 @@
 import { test, expect, beforeAll, describe } from "bun:test";
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node";
 import { initializeParser, parseDocument, type Node } from "../src/parser";
-import { transformToAST, buildSymbolTable, type DocumentNode, type DuplicateIdentifier } from "../src/ast";
+import {
+  transformToAST,
+  buildSymbolTable,
+  type DocumentNode,
+  type DuplicateIdentifier,
+} from "../src/ast";
 
 /**
  * Helper function to validate @description placement.
  * This mirrors the logic in DocumentManager.validateDescriptionPlacement()
  * for testing purposes.
- * 
+ *
  * Note: When the grammar encounters invalid ordering, it may wrap elements
  * in ERROR nodes. We need to look inside ERROR nodes to find the actual
  * description_block and module_block elements for validation.
  */
 function validateDescriptionPlacement(root: Node): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  
+
   // Track all description and module blocks with their positions
   const descriptionBlocks: { node: Node; index: number }[] = [];
   const moduleBlocks: { node: Node; index: number }[] = [];
@@ -22,7 +27,7 @@ function validateDescriptionPlacement(root: Node): Diagnostic[] {
   // Scan top-level children, looking inside ERROR nodes too
   for (let i = 0; i < root.children.length; i++) {
     const child = root.children[i]!;
-    
+
     if (child.type === "description_block") {
       descriptionBlocks.push({ node: child, index: i });
     } else if (child.type === "module_block") {
@@ -43,7 +48,7 @@ function validateDescriptionPlacement(root: Node): Diagnostic[] {
   if (descriptionBlocks.length > 1) {
     // Sort by position to ensure we keep the first one
     descriptionBlocks.sort((a, b) => a.index - b.index);
-    
+
     for (let i = 1; i < descriptionBlocks.length; i++) {
       const { node } = descriptionBlocks[i]!;
       diagnostics.push({
@@ -52,7 +57,8 @@ function validateDescriptionPlacement(root: Node): Diagnostic[] {
           start: { line: node.startPosition.row, character: node.startPosition.column },
           end: { line: node.endPosition.row, character: node.endPosition.column },
         },
-        message: "Multiple @description blocks in one file. Only one @description is allowed per file.",
+        message:
+          "Multiple @description blocks in one file. Only one @description is allowed per file.",
         source: "blueprint",
       });
     }
@@ -61,7 +67,7 @@ function validateDescriptionPlacement(root: Node): Diagnostic[] {
   // Check if any @description appears after a @module
   if (moduleBlocks.length > 0) {
     const firstModuleIndex = Math.min(...moduleBlocks.map((m) => m.index));
-    
+
     for (const { node: descNode, index: descIndex } of descriptionBlocks) {
       if (descIndex > firstModuleIndex) {
         diagnostics.push({
@@ -111,7 +117,7 @@ describe("Parser", () => {
 
     const tree = parseDocument(code);
     expect(tree).not.toBeNull();
-    
+
     const moduleNode = tree!.rootNode.children[0]!;
     expect(moduleNode.type).toBe("module_block");
   });
@@ -134,7 +140,7 @@ describe("Parser", () => {
     const tree = parseDocument(code);
     expect(tree).not.toBeNull();
     expect(tree!.rootNode.hasError).toBe(false);
-    
+
     // Verify structure
     const sexp = tree!.rootNode.toString();
     expect(sexp).toContain("module_block");
@@ -156,7 +162,7 @@ describe("Parser", () => {
 
     const tree = parseDocument(code);
     expect(tree).not.toBeNull();
-    
+
     const sexp = tree!.rootNode.toString();
     expect(sexp).toContain("depends_on");
   });
@@ -184,14 +190,12 @@ describe("Parser", () => {
 
     const tree = parseDocument(code);
     expect(tree).not.toBeNull();
-    
+
     // The grammar produces an error for invalid structure
     expect(tree!.rootNode.hasError).toBe(true);
-    
+
     // Verify an ERROR node exists in the parse tree
-    const hasErrorNode = tree!.rootNode.children.some(
-      (child) => child.type === "ERROR"
-    );
+    const hasErrorNode = tree!.rootNode.children.some((child) => child.type === "ERROR");
     expect(hasErrorNode).toBe(true);
   });
 
@@ -219,7 +223,7 @@ describe("Parser", () => {
   describe("empty document parsing", () => {
     test("parses completely empty document", () => {
       const code = "";
-      
+
       const tree = parseDocument(code);
       expect(tree).not.toBeNull();
       expect(tree!.rootNode.type).toBe("source_file");
@@ -229,7 +233,7 @@ describe("Parser", () => {
 
     test("parses document with only whitespace", () => {
       const code = "   \n\n   \t   \n   ";
-      
+
       const tree = parseDocument(code);
       expect(tree).not.toBeNull();
       expect(tree!.rootNode.type).toBe("source_file");
@@ -238,7 +242,7 @@ describe("Parser", () => {
 
     test("parses document with only newlines", () => {
       const code = "\n\n\n\n";
-      
+
       const tree = parseDocument(code);
       expect(tree).not.toBeNull();
       expect(tree!.rootNode.type).toBe("source_file");
@@ -249,7 +253,7 @@ describe("Parser", () => {
       const code = `// This is a comment
 // Another comment line
 // Third comment`;
-      
+
       const tree = parseDocument(code);
       expect(tree).not.toBeNull();
       expect(tree!.rootNode.type).toBe("source_file");
@@ -262,7 +266,7 @@ describe("Parser", () => {
       const code = `/* This is a 
    multi-line comment
    spanning several lines */`;
-      
+
       const tree = parseDocument(code);
       expect(tree).not.toBeNull();
       expect(tree!.rootNode.type).toBe("source_file");
@@ -276,7 +280,7 @@ describe("Parser", () => {
 
 /* Multi-line
    comment block */`;
-      
+
       const tree = parseDocument(code);
       expect(tree).not.toBeNull();
       expect(tree!.rootNode.type).toBe("source_file");
@@ -440,9 +444,7 @@ describe("Description Placement Validation", () => {
       const placementErrors = diagnostics.filter((d) =>
         d.message.includes("must appear before any @module")
       );
-      const multipleErrors = diagnostics.filter((d) =>
-        d.message.includes("Multiple @description")
-      );
+      const multipleErrors = diagnostics.filter((d) => d.message.includes("Multiple @description"));
 
       // Both descriptions are misplaced (after @module)
       expect(placementErrors.length).toBeGreaterThanOrEqual(1);
@@ -715,7 +717,7 @@ describe("Duplicate Identifier Validation", () => {
       const diagnostics = validateDuplicateIdentifiers(ast);
 
       expect(diagnostics).toHaveLength(3);
-      expect(diagnostics.map(d => d.message)).toEqual([
+      expect(diagnostics.map((d) => d.message)).toEqual([
         expect.stringContaining("@module"),
         expect.stringContaining("@feature"),
         expect.stringContaining("@requirement"),
@@ -770,26 +772,24 @@ describe("Duplicate Identifier Validation", () => {
  */
 function collectErrorNodes(node: Node): Array<{ node: Node; message: string }> {
   const errors: Array<{ node: Node; message: string }> = [];
-  
+
   if (node.type === "ERROR" || node.isMissing) {
     errors.push({
       node,
-      message: node.isMissing
-        ? getMissingNodeMessage(node)
-        : getErrorNodeMessage(node),
+      message: node.isMissing ? getMissingNodeMessage(node) : getErrorNodeMessage(node),
     });
   }
-  
+
   for (const child of node.children) {
     errors.push(...collectErrorNodes(child));
   }
-  
+
   return errors;
 }
 
 function getMissingNodeMessage(node: Node): string {
   const nodeType = node.type;
-  
+
   switch (nodeType) {
     case "identifier":
       return getMissingIdentifierMessage(node);
@@ -827,32 +827,32 @@ function getMissingIdentifierMessage(node: Node): string {
 function getErrorNodeMessage(node: Node): string {
   const errorText = node.text.trim();
   const parent = node.parent;
-  
+
   // 1. Identifier starting with a digit
   if (/^\d/.test(errorText)) {
     return `Invalid identifier '${truncateText(errorText)}': identifiers cannot start with a digit`;
   }
-  
+
   // 2. Identifier with spaces
   if (/^[a-zA-Z_][a-zA-Z0-9_-]*\s+[a-zA-Z]/.test(errorText)) {
     return `Invalid identifier: identifiers cannot contain spaces. Use hyphens or underscores instead`;
   }
-  
+
   // 3. Orphaned @requirement at top level
   if (errorText.startsWith("@requirement") && parent?.type === "source_file") {
     return "@requirement must be inside a @feature or @module block";
   }
-  
+
   // 4. Orphaned @feature at top level
   if (errorText.startsWith("@feature") && parent?.type === "source_file") {
     return "@feature must be inside a @module block";
   }
-  
+
   // 5. Orphaned @constraint at top level
   if (errorText.startsWith("@constraint") && parent?.type === "source_file") {
     return "@constraint must be inside a @module, @feature, or @requirement block";
   }
-  
+
   // 6. @depends-on issues
   if (errorText.startsWith("@depends-on")) {
     if (parent?.type === "source_file") {
@@ -862,7 +862,7 @@ function getErrorNodeMessage(node: Node): string {
       return "@depends-on requires at least one reference";
     }
   }
-  
+
   // 7. Misplaced keyword
   if (errorText.startsWith("@") && !errorText.startsWith("@description")) {
     const keyword = errorText.split(/\s/)[0];
@@ -870,7 +870,7 @@ function getErrorNodeMessage(node: Node): string {
       return `Unexpected ${keyword} at this location`;
     }
   }
-  
+
   // 8. Check for common context-based errors
   if (parent) {
     const contextMessage = getContextualErrorMessage(node, parent, errorText);
@@ -878,12 +878,12 @@ function getErrorNodeMessage(node: Node): string {
       return contextMessage;
     }
   }
-  
+
   // 9. Generic message with context
   if (errorText.length > 0 && errorText.length <= 50) {
     return `Syntax error: unexpected '${errorText}'`;
   }
-  
+
   return "Syntax error: unexpected input";
 }
 
@@ -894,7 +894,7 @@ function getContextualErrorMessage(node: Node, parent: Node, errorText: string):
         return `Missing comma before reference '${truncateText(errorText)}'`;
       }
       return `Invalid reference in @depends-on: '${truncateText(errorText)}'`;
-      
+
     case "reference":
       if (errorText === ".") {
         return "Missing identifier after '.' in reference";
@@ -903,13 +903,13 @@ function getContextualErrorMessage(node: Node, parent: Node, errorText: string):
         return "Reference cannot start with '.'";
       }
       return `Invalid reference: '${truncateText(errorText)}'`;
-      
+
     case "code_block":
       if (errorText.includes("```")) {
         return "Nested code blocks are not allowed";
       }
       return null;
-      
+
     case "module_block":
     case "feature_block":
     case "requirement_block":
@@ -919,7 +919,7 @@ function getContextualErrorMessage(node: Node, parent: Node, errorText: string):
         return `Unexpected ${keyword} in ${parent.type.replace("_block", "").replace("_", " ")}`;
       }
       return null;
-      
+
     default:
       return null;
   }
@@ -978,7 +978,9 @@ describe("Parse Error Messages", () => {
 
       const errors = collectErrorNodes(tree!.rootNode);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors[0]!.message).toBe("@constraint must be inside a @module, @feature, or @requirement block");
+      expect(errors[0]!.message).toBe(
+        "@constraint must be inside a @module, @feature, or @requirement block"
+      );
     });
 
     test("reports meaningful error for @depends-on at top level", () => {
@@ -991,7 +993,9 @@ describe("Parse Error Messages", () => {
 
       const errors = collectErrorNodes(tree!.rootNode);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors[0]!.message).toBe("@depends-on must be inside a @module, @feature, or @requirement block");
+      expect(errors[0]!.message).toBe(
+        "@depends-on must be inside a @module, @feature, or @requirement block"
+      );
     });
   });
 
@@ -1025,11 +1029,14 @@ describe("Parse Error Messages", () => {
       const errors = collectErrorNodes(tree!.rootNode);
       expect(errors.length).toBeGreaterThan(0);
       // Should get a meaningful error about missing module name or unexpected input
-      expect(errors.some(e => 
-        e.message.includes("Missing") || 
-        e.message.includes("unexpected") ||
-        e.message.includes("Unexpected")
-      )).toBe(true);
+      expect(
+        errors.some(
+          (e) =>
+            e.message.includes("Missing") ||
+            e.message.includes("unexpected") ||
+            e.message.includes("Unexpected")
+        )
+      ).toBe(true);
     });
   });
 
@@ -1045,7 +1052,7 @@ describe("Parse Error Messages", () => {
 
       const errors = collectErrorNodes(tree!.rootNode);
       expect(errors.length).toBeGreaterThan(0);
-      
+
       // The error should be on line 0 (0-indexed) where @requirement starts
       const errorNode = errors[0]!.node;
       expect(errorNode.startPosition.row).toBe(0);

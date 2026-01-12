@@ -40,10 +40,7 @@ export class ComputedDataCache {
   /** Reference to the ticket document manager */
   private ticketDocumentManager: TicketDocumentManager;
 
-  constructor(
-    symbolIndex: CrossFileSymbolIndex,
-    ticketDocumentManager: TicketDocumentManager
-  ) {
+  constructor(symbolIndex: CrossFileSymbolIndex, ticketDocumentManager: TicketDocumentManager) {
     this.symbolIndex = symbolIndex;
     this.ticketDocumentManager = ticketDocumentManager;
   }
@@ -101,20 +98,13 @@ export class ComputedDataCache {
   getTicketMap(): RequirementTicketMapResult {
     if (this.ticketMapCache === null) {
       const requirementSymbols = this.symbolIndex.getSymbolsByKind("requirement");
-      const allTickets = this.ticketDocumentManager
-        .getAllTickets()
-        .map((t) => t.ticket);
+      const allTickets = this.ticketDocumentManager.getAllTickets().map((t) => t.ticket);
 
       // Create a combined ticket file for the map builder
       const ticketFile: TicketFile | null =
-        allTickets.length > 0
-          ? { version: "1.0", source: "", tickets: allTickets }
-          : null;
+        allTickets.length > 0 ? { version: "1.0", source: "", tickets: allTickets } : null;
 
-      this.ticketMapCache = buildRequirementTicketMapFromSymbols(
-        requirementSymbols,
-        ticketFile
-      );
+      this.ticketMapCache = buildRequirementTicketMapFromSymbols(requirementSymbols, ticketFile);
     }
     return this.ticketMapCache;
   }

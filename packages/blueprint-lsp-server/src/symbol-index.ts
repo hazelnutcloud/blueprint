@@ -55,7 +55,7 @@ export interface ResolvedReference {
 
 /**
  * Manages a cross-file symbol index for the Blueprint workspace.
- * 
+ *
  * This class maintains a global registry of all symbols across all .bp files
  * in the workspace, enabling cross-file reference resolution and dependency
  * tracking.
@@ -83,14 +83,12 @@ export class CrossFileSymbolIndex {
    * Maps file URIs to the references they contain (for dependency tracking).
    * Key: file URI, Value: array of { reference, containingPath }
    */
-  private fileReferences: Map<
-    string,
-    Array<{ reference: ReferenceNode; containingPath: string }>
-  > = new Map();
+  private fileReferences: Map<string, Array<{ reference: ReferenceNode; containingPath: string }>> =
+    new Map();
 
   /**
    * Add or update symbols from a parsed document.
-   * 
+   *
    * @param fileUri The URI of the file being indexed
    * @param document The parsed AST document
    */
@@ -152,7 +150,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Remove all symbols from a file.
-   * 
+   *
    * @param fileUri The URI of the file to remove
    */
   removeFile(fileUri: string): void {
@@ -180,12 +178,12 @@ export class CrossFileSymbolIndex {
 
   /**
    * Resolve a reference to its target symbol(s).
-   * 
+   *
    * References can be:
    * - Exact: "module.feature.requirement" matches exactly one requirement
    * - Partial: "module" matches the module and implicitly all its children
    * - Partial: "module.feature" matches the feature and all its requirements
-   * 
+   *
    * @param reference The reference to resolve
    * @returns The resolution result
    */
@@ -230,7 +228,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get all unresolved references across all indexed files.
-   * 
+   *
    * @returns Array of unresolved references with their locations
    */
   getUnresolvedReferences(): UnresolvedReference[] {
@@ -254,7 +252,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get unresolved references for a specific file.
-   * 
+   *
    * @param fileUri The URI of the file to check
    * @returns Array of unresolved references in that file
    */
@@ -282,7 +280,7 @@ export class CrossFileSymbolIndex {
   /**
    * Get all files that have references to symbols in the given file.
    * Used to determine which files need their diagnostics refreshed when a file changes.
-   * 
+   *
    * @param fileUri The URI of the file that changed
    * @returns Array of file URIs that depend on the changed file
    */
@@ -320,7 +318,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get a symbol by its fully-qualified path.
-   * 
+   *
    * @param path The fully-qualified path
    * @returns The symbol(s) at that path, or undefined if not found
    */
@@ -330,7 +328,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get all symbols of a specific kind.
-   * 
+   *
    * @param kind The kind of symbols to retrieve
    * @returns Array of symbols of that kind
    */
@@ -348,7 +346,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get all symbols defined in a specific file.
-   * 
+   *
    * @param fileUri The file URI
    * @returns Array of symbols defined in that file
    */
@@ -374,7 +372,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get the symbol table for a specific file.
-   * 
+   *
    * @param fileUri The file URI
    * @returns The symbol table for that file, or undefined if not indexed
    */
@@ -384,7 +382,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Check if a symbol path exists in the index.
-   * 
+   *
    * @param path The fully-qualified path to check
    * @returns True if the symbol exists
    */
@@ -394,7 +392,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get all indexed file URIs.
-   * 
+   *
    * @returns Array of file URIs that have been indexed
    */
   getIndexedFiles(): string[] {
@@ -403,7 +401,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get the total number of symbols in the index.
-   * 
+   *
    * @returns The count of unique symbol paths
    */
   getSymbolCount(): number {
@@ -412,7 +410,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Get the total number of indexed files.
-   * 
+   *
    * @returns The count of indexed files
    */
   getFileCount(): number {
@@ -421,7 +419,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Check if there are any symbol conflicts (same path defined in multiple files).
-   * 
+   *
    * @returns Array of paths that have conflicts
    */
   getConflictingPaths(): string[] {

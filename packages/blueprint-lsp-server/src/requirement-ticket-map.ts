@@ -12,11 +12,11 @@ import type { IndexedSymbol } from "./symbol-index";
  * are satisfied across all associated tickets.
  */
 export type RequirementStatus =
-  | "no-ticket"      // No tickets exist for this requirement
-  | "pending"        // All tickets are pending
-  | "in-progress"    // At least one ticket is in-progress
-  | "complete"       // All constraints satisfied, all tickets complete
-  | "obsolete";      // All tickets are obsolete
+  | "no-ticket" // No tickets exist for this requirement
+  | "pending" // All tickets are pending
+  | "in-progress" // At least one ticket is in-progress
+  | "complete" // All constraints satisfied, all tickets complete
+  | "obsolete"; // All tickets are obsolete
 
 /**
  * Information about a constraint and its satisfaction status.
@@ -125,15 +125,15 @@ export function computeRequirementStatus(tickets: Ticket[]): RequirementStatus {
     return "no-ticket";
   }
 
-  const statuses = tickets.map(t => t.status);
+  const statuses = tickets.map((t) => t.status);
 
   // If all obsolete
-  if (statuses.every(s => s === "obsolete")) {
+  if (statuses.every((s) => s === "obsolete")) {
     return "obsolete";
   }
 
   // Filter out obsolete tickets for remaining checks
-  const activeStatuses = statuses.filter(s => s !== "obsolete");
+  const activeStatuses = statuses.filter((s) => s !== "obsolete");
 
   if (activeStatuses.length === 0) {
     return "obsolete";
@@ -145,7 +145,7 @@ export function computeRequirementStatus(tickets: Ticket[]): RequirementStatus {
   }
 
   // If all complete
-  if (activeStatuses.every(s => s === "complete")) {
+  if (activeStatuses.every((s) => s === "complete")) {
     return "complete";
   }
 
@@ -180,7 +180,7 @@ export function computeConstraintStatuses(
   }
 
   // Build status for each constraint in the requirement
-  return requirement.constraints.map(constraint => ({
+  return requirement.constraints.map((constraint) => ({
     name: constraint.name,
     satisfied: satisfiedByMap.has(constraint.name),
     satisfiedBy: satisfiedByMap.get(constraint.name) ?? [],
@@ -261,7 +261,7 @@ export function buildRequirementTicketMap(
     }
 
     const constraintStatuses = computeConstraintStatuses(requirement, tickets);
-    const constraintsSatisfied = constraintStatuses.filter(c => c.satisfied).length;
+    const constraintsSatisfied = constraintStatuses.filter((c) => c.satisfied).length;
 
     const info: RequirementTicketInfo = {
       requirementPath: path,

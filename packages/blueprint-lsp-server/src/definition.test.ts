@@ -243,9 +243,8 @@ describe("definition", () => {
       ticketFileContent: string = "{}"
     ): DefinitionContext {
       const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
-      const ticketFile: TicketFile | null = tickets.length > 0
-        ? { version: "1.0", source: "test.bp", tickets }
-        : null;
+      const ticketFile: TicketFile | null =
+        tickets.length > 0 ? { version: "1.0", source: "test.bp", tickets } : null;
       const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
         requirementSymbols,
         ticketFile
@@ -296,7 +295,7 @@ describe("definition", () => {
       const result = buildDefinition(target!, context);
       expect(result).not.toBeNull();
       expect(result).not.toBeInstanceOf(Array);
-      
+
       const location = result as { uri: string; range: { start: { line: number } } };
       expect(location.uri).toBe("file:///test.bp");
       expect(location.range.start.line).toBe(0);
@@ -330,7 +329,7 @@ describe("definition", () => {
         symbolIndex,
         "file:///auth.bp"
       );
-      
+
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("reference");
       expect(target!.referencePath).toBe("storage.user-accounts");
@@ -340,7 +339,7 @@ describe("definition", () => {
 
       const result = buildDefinition(target!, context);
       expect(result).not.toBeNull();
-      
+
       const location = result as { uri: string; range: { start: { line: number } } };
       // Should navigate to storage.bp where the feature is defined
       expect(location.uri).toBe("file:///storage.bp");
@@ -397,17 +396,21 @@ describe("definition", () => {
         },
       ];
 
-      const ticketContent = JSON.stringify({
-        version: "1.0",
-        source: "test.bp",
-        tickets,
-      }, null, 2);
+      const ticketContent = JSON.stringify(
+        {
+          version: "1.0",
+          source: "test.bp",
+          tickets,
+        },
+        null,
+        2
+      );
 
       const context = createContext(symbolIndex, tickets, ticketContent);
 
       const result = buildDefinition(target!, context);
       expect(result).not.toBeNull();
-      
+
       const location = result as { uri: string; range: { start: { line: number } } };
       // Should navigate to the ticket file
       expect(location.uri).toBe("file:///test.tickets.json");
@@ -448,18 +451,22 @@ describe("definition", () => {
         },
       ];
 
-      const ticketContent = JSON.stringify({
-        version: "1.0",
-        source: "test.bp",
-        tickets,
-      }, null, 2);
+      const ticketContent = JSON.stringify(
+        {
+          version: "1.0",
+          source: "test.bp",
+          tickets,
+        },
+        null,
+        2
+      );
 
       const context = createContext(symbolIndex, tickets, ticketContent);
 
       const result = buildDefinition(target!, context);
       expect(result).not.toBeNull();
       expect(Array.isArray(result)).toBe(true);
-      
+
       const locations = result as Array<{ uri: string }>;
       expect(locations.length).toBe(2);
       expect(locations[0]!.uri).toBe("file:///test.tickets.json");
@@ -489,7 +496,7 @@ describe("definition", () => {
 
       const result = buildDefinition(target!, context);
       expect(result).not.toBeNull();
-      
+
       const location = result as { uri: string; range: { start: { line: number } } };
       // Should navigate to the requirement definition in the .bp file
       expect(location.uri).toBe("file:///test.bp");
@@ -521,7 +528,7 @@ describe("definition", () => {
 
       const result = buildDefinition(target!, context);
       expect(result).not.toBeNull();
-      
+
       const location = result as { uri: string; range: { start: { line: number } } };
       expect(location.uri).toBe("file:///test.bp");
       expect(location.range.start.line).toBe(5);

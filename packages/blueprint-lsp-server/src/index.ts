@@ -24,7 +24,12 @@ import type {
 import { semanticTokensLegend, buildSemanticTokens } from "./semantic-tokens";
 import { findHoverTarget, buildHover, type HoverContext } from "./hover";
 import { findDefinitionTarget, buildDefinition, type DefinitionContext } from "./definition";
-import { findReferencesTarget, buildReferences, type ReferencesContext, type TicketFileInfo } from "./references";
+import {
+  findReferencesTarget,
+  buildReferences,
+  type ReferencesContext,
+  type TicketFileInfo,
+} from "./references";
 import { buildDocumentSymbols } from "./document-symbol";
 import { buildWorkspaceSymbols } from "./workspace-symbol";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -35,7 +40,12 @@ import { WorkspaceManager } from "./workspace";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
 import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
-import { computeWorkspaceDiagnostics, computeOrphanedTicketDiagnostics, computeConstraintMismatchDiagnostics, mergeDiagnosticResults } from "./workspace-diagnostics";
+import {
+  computeWorkspaceDiagnostics,
+  computeOrphanedTicketDiagnostics,
+  computeConstraintMismatchDiagnostics,
+  mergeDiagnosticResults,
+} from "./workspace-diagnostics";
 import { buildCodeActions, type CodeActionsContext } from "./code-actions";
 import { ComputedDataCache } from "./computed-data-cache";
 import { readFile } from "node:fs/promises";
@@ -93,7 +103,7 @@ function scheduleWorkspaceDiagnostics(): void {
   if (workspaceDiagnosticsDebounceTimer !== null) {
     clearTimeout(workspaceDiagnosticsDebounceTimer);
   }
-  
+
   // Schedule new diagnostic computation
   workspaceDiagnosticsDebounceTimer = setTimeout(() => {
     workspaceDiagnosticsDebounceTimer = null;
@@ -104,32 +114,32 @@ function scheduleWorkspaceDiagnostics(): void {
 /**
  * Publish workspace-level diagnostics immediately (internal implementation).
  * For debounced publishing, use scheduleWorkspaceDiagnostics() instead.
- * 
+ *
  * This function computes diagnostics across all indexed files and publishes them.
  * It also clears diagnostics from files that no longer have issues.
  */
 function publishWorkspaceDiagnosticsImmediate(): void {
   // Get all tickets from the ticket document manager
-  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
+  const allTickets = ticketDocumentManager.getAllTickets().map((t) => t.ticket);
   const result = computeWorkspaceDiagnostics(symbolIndex, allTickets);
-  
+
   // Compute orphaned ticket diagnostics (tickets referencing removed requirements)
   const ticketFiles = ticketDocumentManager.getAllTicketFiles();
   const orphanedResult = computeOrphanedTicketDiagnostics(symbolIndex, ticketFiles);
-  
+
   // Compute constraint mismatch diagnostics (tickets claiming undefined constraints)
   const constraintMismatchResult = computeConstraintMismatchDiagnostics(symbolIndex, ticketFiles);
-  
+
   // Merge ticket file diagnostics (orphaned + constraint mismatch)
   const ticketFileDiagnostics = mergeDiagnosticResults(orphanedResult, constraintMismatchResult);
-  
+
   // Clear diagnostics from files that no longer have workspace-level issues
   for (const fileUri of filesWithWorkspaceDiagnostics) {
     if (!result.byFile.has(fileUri) && !ticketFileDiagnostics.byFile.has(fileUri)) {
       // This file no longer has workspace diagnostics, but we need to preserve
       // its document-level diagnostics. We send an empty array for workspace diagnostics
       // which will be merged with document diagnostics by the document manager.
-      // 
+      //
       // Actually, we need to re-publish the document's own diagnostics.
       // For now, we'll trigger a re-validation by getting the document state.
       const state = documentManager.getState(fileUri);
@@ -157,46 +167,45 @@ function publishWorkspaceDiagnosticsImmediate(): void {
       }
     }
   }
-  
+
   // Publish new workspace diagnostics for .bp files, merging with document diagnostics
   for (const [fileUri, workspaceDiagnostics] of result.byFile) {
     const state = documentManager.getState(fileUri);
     const documentDiagnostics = state?.diagnostics ?? [];
-    
+
     // Merge document and workspace diagnostics
     const allDiagnostics = [...documentDiagnostics, ...workspaceDiagnostics];
-    
+
     connection.sendDiagnostics({
       uri: fileUri,
       diagnostics: allDiagnostics,
     });
   }
-  
+
   // Publish ticket file diagnostics (orphaned + constraint mismatch), merging with ticket document diagnostics
   for (const [fileUri, workspaceDiagnostics] of ticketFileDiagnostics.byFile) {
     const ticketState = ticketDocumentManager.getState(fileUri);
     const ticketDocumentDiagnostics = ticketState?.diagnostics ?? [];
-    
+
     // Merge ticket document diagnostics with workspace diagnostics
     const allDiagnostics = [...ticketDocumentDiagnostics, ...workspaceDiagnostics];
-    
+
     connection.sendDiagnostics({
       uri: fileUri,
       diagnostics: allDiagnostics,
     });
   }
-  
+
   // Update the set of files with workspace diagnostics
   filesWithWorkspaceDiagnostics = new Set([
     ...result.filesWithDiagnostics,
     ...ticketFileDiagnostics.filesWithDiagnostics,
   ]);
-  
-  const totalFiles = result.filesWithDiagnostics.length + ticketFileDiagnostics.filesWithDiagnostics.length;
+
+  const totalFiles =
+    result.filesWithDiagnostics.length + ticketFileDiagnostics.filesWithDiagnostics.length;
   if (totalFiles > 0) {
-    connection.console.log(
-      `Published workspace diagnostics for ${totalFiles} files`
-    );
+    connection.console.log(`Published workspace diagnostics for ${totalFiles} files`);
   }
 }
 
@@ -204,15 +213,12 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   const capabilities = params.capabilities;
 
   // Check client capabilities
-  hasConfigurationCapability = !!(
-    capabilities.workspace && !!capabilities.workspace.configuration
-  );
+  hasConfigurationCapability = !!(capabilities.workspace && !!capabilities.workspace.configuration);
   hasWorkspaceFolderCapability = !!(
     capabilities.workspace && !!capabilities.workspace.workspaceFolders
   );
   hasDidChangeWatchedFilesCapability = !!(
-    capabilities.workspace &&
-    !!capabilities.workspace.didChangeWatchedFiles?.dynamicRegistration
+    capabilities.workspace && !!capabilities.workspace.didChangeWatchedFiles?.dynamicRegistration
   );
 
   // Store initial workspace folders
@@ -261,10 +267,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 connection.onInitialized(async () => {
   if (hasConfigurationCapability) {
     // Register for configuration changes
-    connection.client.register(
-      DidChangeConfigurationNotification.type,
-      undefined
-    );
+    connection.client.register(DidChangeConfigurationNotification.type, undefined);
   }
   if (hasWorkspaceFolderCapability) {
     connection.workspace.onDidChangeWorkspaceFolders(async (event) => {
@@ -310,16 +313,16 @@ connection.onInitialized(async () => {
     if (!parserInitialized) {
       return;
     }
-    
+
     // Index all discovered files
     for (const file of files) {
       await indexFile(file.uri, file.path);
     }
-    
+
     connection.console.log(
       `Symbol index updated: ${symbolIndex.getSymbolCount()} symbols from ${symbolIndex.getFileCount()} files`
     );
-    
+
     // Publish workspace-level diagnostics after indexing
     scheduleWorkspaceDiagnostics();
   });
@@ -364,9 +367,12 @@ function getFilePath(uri: string): string {
 connection.onDidChangeWatchedFiles(async (params) => {
   for (const change of params.changes) {
     const filePath = getFilePath(change.uri);
-    const changeTypeStr = 
-      change.type === FileChangeType.Created ? "created" : 
-      change.type === FileChangeType.Changed ? "changed" : "deleted";
+    const changeTypeStr =
+      change.type === FileChangeType.Created
+        ? "created"
+        : change.type === FileChangeType.Changed
+          ? "changed"
+          : "deleted";
 
     // Process .bp files
     if (isBlueprintFilePath(filePath)) {
@@ -426,9 +432,7 @@ connection.onDidChangeWatchedFiles(async (params) => {
             // no-ticket warnings and blocked requirement info
             scheduleWorkspaceDiagnostics();
           } catch (error) {
-            connection.console.error(
-              `Error reading ticket file ${filePath}: ${error}`
-            );
+            connection.console.error(`Error reading ticket file ${filePath}: ${error}`);
           }
           break;
         }
@@ -449,7 +453,7 @@ connection.onDidChangeWatchedFiles(async (params) => {
 // Document lifecycle events
 documents.onDidOpen((event) => {
   const filePath = getFilePath(event.document.uri);
-  
+
   // Handle .tickets.json files
   if (isTicketFilePath(filePath)) {
     ticketDocumentManager.onDocumentOpen(
@@ -464,7 +468,7 @@ documents.onDidOpen((event) => {
     scheduleWorkspaceDiagnostics();
     return;
   }
-  
+
   // Handle .bp files
   if (isBlueprintFilePath(filePath)) {
     if (!parserInitialized) {
@@ -486,7 +490,7 @@ documents.onDidOpen((event) => {
 
 documents.onDidChangeContent((event) => {
   const filePath = getFilePath(event.document.uri);
-  
+
   // Handle .tickets.json files
   if (isTicketFilePath(filePath)) {
     ticketDocumentManager.onDocumentChange(
@@ -501,7 +505,7 @@ documents.onDidChangeContent((event) => {
     scheduleWorkspaceDiagnostics();
     return;
   }
-  
+
   // Handle .bp files
   if (isBlueprintFilePath(filePath)) {
     if (!parserInitialized) {
@@ -522,13 +526,13 @@ documents.onDidChangeContent((event) => {
 
 documents.onDidClose((event) => {
   const filePath = getFilePath(event.document.uri);
-  
+
   // Handle .tickets.json files
   if (isTicketFilePath(filePath)) {
     ticketDocumentManager.onDocumentClose(event.document.uri);
     return;
   }
-  
+
   // Handle .bp files
   if (isBlueprintFilePath(filePath)) {
     documentManager.onDocumentClose(event.document.uri);
@@ -539,7 +543,7 @@ documents.onDidClose((event) => {
 
 documents.onDidSave((event) => {
   const filePath = getFilePath(event.document.uri);
-  
+
   // Handle .tickets.json files
   if (isTicketFilePath(filePath)) {
     ticketDocumentManager.onDocumentSave(
@@ -554,7 +558,7 @@ documents.onDidSave((event) => {
     scheduleWorkspaceDiagnostics();
     return;
   }
-  
+
   // Handle .bp files
   if (isBlueprintFilePath(filePath)) {
     if (!parserInitialized) {
@@ -632,12 +636,7 @@ connection.onHover((params: HoverParams) => {
   }
 
   // Find what we're hovering over
-  const target = findHoverTarget(
-    state.tree,
-    params.position,
-    symbolIndex,
-    params.textDocument.uri
-  );
+  const target = findHoverTarget(state.tree, params.position, symbolIndex, params.textDocument.uri);
 
   if (!target) {
     return null;
@@ -702,7 +701,10 @@ connection.onDefinition((params: DefinitionParams) => {
   const { map: ticketMap } = computedDataCache.getTicketMap();
 
   // Build the ticket files map for position lookup
-  const ticketFilesMap = new Map<string, { uri: string; content: string; tickets: import("./tickets").Ticket[] }>();
+  const ticketFilesMap = new Map<
+    string,
+    { uri: string; content: string; tickets: import("./tickets").Ticket[] }
+  >();
   for (const ticketFileInfo of ticketDocumentManager.getAllTicketFilesWithContent()) {
     ticketFilesMap.set(ticketFileInfo.uri, {
       uri: ticketFileInfo.uri,
@@ -823,7 +825,7 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) => {
 connection.onWorkspaceSymbol((params: WorkspaceSymbolParams) => {
   // Workspace symbols work even when no document is open
   // They search across all indexed .bp files in the workspace
-  
+
   if (!parserInitialized) {
     connection.console.warn("Parser not initialized, cannot provide workspace symbols");
     return null;
@@ -848,7 +850,7 @@ connection.onCodeAction((params: CodeActionParams) => {
 
   // Get the parse tree for dependency code actions
   const state = documentManager.getState(params.textDocument.uri);
-  
+
   // Use cached dependency graph for dependency-related actions
   const { graph: dependencyGraph } = computedDataCache.getDependencyGraph();
 
@@ -866,31 +868,31 @@ connection.onCodeAction((params: CodeActionParams) => {
 
 connection.onShutdown(() => {
   connection.console.log("Blueprint LSP server shutting down");
-  
+
   // Cancel any pending debounced diagnostics
   if (workspaceDiagnosticsDebounceTimer !== null) {
     clearTimeout(workspaceDiagnosticsDebounceTimer);
     workspaceDiagnosticsDebounceTimer = null;
   }
-  
+
   // Clean up document manager resources (syntax trees)
   documentManager.cleanup();
-  
+
   // Clean up ticket document manager resources
   ticketDocumentManager.cleanup();
-  
+
   // Clean up workspace manager resources
   workspaceManager.cleanup();
-  
+
   // Clean up symbol index
   symbolIndex.clear();
-  
+
   // Clean up computed data cache
   computedDataCache.cleanup();
-  
+
   // Clean up parser resources
   cleanupParser();
-  
+
   connection.console.log("Blueprint LSP server resources cleaned up");
 });
 

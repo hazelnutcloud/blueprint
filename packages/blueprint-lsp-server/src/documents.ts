@@ -1,7 +1,12 @@
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { DiagnosticSeverity, type Connection, type Diagnostic } from "vscode-languageserver/node";
 import { parseDocument, type Tree, type Node } from "./parser";
-import { transformToAST, buildSymbolTable, type DocumentNode, type DuplicateIdentifier } from "./ast";
+import {
+  transformToAST,
+  buildSymbolTable,
+  type DocumentNode,
+  type DuplicateIdentifier,
+} from "./ast";
 
 /**
  * Represents the parsed state of a Blueprint document.
@@ -111,7 +116,7 @@ export class DocumentManager {
   private parseAndCreateState(document: TextDocument): DocumentState {
     const text = document.getText();
     const tree = parseDocument(text);
-    
+
     // Check for parse errors in the tree
     const hasErrors = tree ? this.treeHasErrors(tree.rootNode) : true;
     const diagnostics = tree ? this.collectDiagnostics(tree) : [];
@@ -147,31 +152,28 @@ export class DocumentManager {
     const diagnostics: Diagnostic[] = [];
     this.collectErrorNodes(tree.rootNode, diagnostics);
     this.validateDescriptionPlacement(tree.rootNode, diagnostics);
-    
+
     // Transform to AST and check for duplicate identifiers
     const ast = transformToAST(tree);
     this.validateDuplicateIdentifiers(ast, diagnostics);
-    
+
     return diagnostics;
   }
 
   /**
    * Validate that there are no duplicate identifiers within the same scope.
-   * 
+   *
    * Per SPEC.md Section 5.8:
    * - Error | Duplicate identifier in scope
    */
-  private validateDuplicateIdentifiers(
-    ast: DocumentNode,
-    diagnostics: Diagnostic[]
-  ): void {
+  private validateDuplicateIdentifiers(ast: DocumentNode, diagnostics: Diagnostic[]): void {
     const { duplicates } = buildSymbolTable(ast);
-    
+
     for (const dup of duplicates) {
       const loc = dup.duplicate.location;
       const kindLabel = this.getDuplicateKindLabel(dup.kind);
       const originalLoc = dup.original.location;
-      
+
       diagnostics.push({
         severity: DiagnosticSeverity.Error,
         range: {
@@ -212,19 +214,16 @@ export class DocumentManager {
   /**
    * Validate that @description blocks appear before any @module declarations
    * and that there is at most one @description block.
-   * 
+   *
    * Per SPEC.md Section 3.2.1:
    * - @description may only appear once per .bp file
    * - @description must appear before any @module declaration
-   * 
+   *
    * Note: When the grammar encounters invalid ordering, it may wrap elements
    * in ERROR nodes. We need to look inside ERROR nodes to find the actual
    * description_block and module_block elements for validation.
    */
-  private validateDescriptionPlacement(
-    root: Node,
-    diagnostics: Diagnostic[]
-  ): void {
+  private validateDescriptionPlacement(root: Node, diagnostics: Diagnostic[]): void {
     // Track all description and module blocks with their positions
     // We use the index in the root.children array to determine order
     const descriptionBlocks: { node: Node; index: number }[] = [];
@@ -233,7 +232,7 @@ export class DocumentManager {
     // Scan top-level children, looking inside ERROR nodes too
     for (let i = 0; i < root.children.length; i++) {
       const child = root.children[i]!;
-      
+
       if (child.type === "description_block") {
         descriptionBlocks.push({ node: child, index: i });
       } else if (child.type === "module_block") {
@@ -254,7 +253,7 @@ export class DocumentManager {
     if (descriptionBlocks.length > 1) {
       // Sort by position to ensure we keep the first one
       descriptionBlocks.sort((a, b) => a.index - b.index);
-      
+
       // Report error on all but the first description block
       for (let i = 1; i < descriptionBlocks.length; i++) {
         const { node } = descriptionBlocks[i]!;
@@ -264,7 +263,8 @@ export class DocumentManager {
             start: { line: node.startPosition.row, character: node.startPosition.column },
             end: { line: node.endPosition.row, character: node.endPosition.column },
           },
-          message: "Multiple @description blocks in one file. Only one @description is allowed per file.",
+          message:
+            "Multiple @description blocks in one file. Only one @description is allowed per file.",
           source: "blueprint",
         });
       }
@@ -273,7 +273,7 @@ export class DocumentManager {
     // Check if any @description appears after a @module
     if (moduleBlocks.length > 0) {
       const firstModuleIndex = Math.min(...moduleBlocks.map((m) => m.index));
-      
+
       for (const { node: descNode, index: descIndex } of descriptionBlocks) {
         if (descIndex > firstModuleIndex) {
           diagnostics.push({
@@ -293,10 +293,7 @@ export class DocumentManager {
   /**
    * Recursively collect error nodes from the syntax tree.
    */
-  private collectErrorNodes(
-    node: Node,
-    diagnostics: Diagnostic[]
-  ): void {
+  private collectErrorNodes(node: Node, diagnostics: Diagnostic[]): void {
     // Check for ERROR nodes (parse errors) and MISSING nodes
     if (node.type === "ERROR" || node.isMissing) {
       diagnostics.push({
@@ -305,9 +302,7 @@ export class DocumentManager {
           start: { line: node.startPosition.row, character: node.startPosition.column },
           end: { line: node.endPosition.row, character: node.endPosition.column },
         },
-        message: node.isMissing
-          ? this.getMissingNodeMessage(node)
-          : this.getErrorNodeMessage(node),
+        message: node.isMissing ? this.getMissingNodeMessage(node) : this.getErrorNodeMessage(node),
         source: "blueprint",
       });
     }
@@ -323,7 +318,7 @@ export class DocumentManager {
    */
   private getMissingNodeMessage(node: Node): string {
     const nodeType = node.type;
-    
+
     // Handle specific missing node types
     switch (nodeType) {
       case "identifier":
@@ -368,34 +363,34 @@ export class DocumentManager {
   private getErrorNodeMessage(node: Node): string {
     const errorText = node.text.trim();
     const parent = node.parent;
-    
+
     // Check for common error patterns
-    
+
     // 1. Identifier starting with a digit
     if (/^\d/.test(errorText)) {
       return `Invalid identifier '${this.truncateText(errorText)}': identifiers cannot start with a digit`;
     }
-    
+
     // 2. Identifier with spaces
     if (/^[a-zA-Z_][a-zA-Z0-9_-]*\s+[a-zA-Z]/.test(errorText)) {
       return `Invalid identifier: identifiers cannot contain spaces. Use hyphens or underscores instead`;
     }
-    
+
     // 3. Orphaned @requirement at top level
     if (errorText.startsWith("@requirement") && parent?.type === "source_file") {
       return "@requirement must be inside a @feature or @module block";
     }
-    
+
     // 4. Orphaned @feature at top level
     if (errorText.startsWith("@feature") && parent?.type === "source_file") {
       return "@feature must be inside a @module block";
     }
-    
+
     // 5. Orphaned @constraint at top level
     if (errorText.startsWith("@constraint") && parent?.type === "source_file") {
       return "@constraint must be inside a @module, @feature, or @requirement block";
     }
-    
+
     // 6. @depends-on issues
     if (errorText.startsWith("@depends-on")) {
       if (parent?.type === "source_file") {
@@ -405,7 +400,7 @@ export class DocumentManager {
         return "@depends-on requires at least one reference";
       }
     }
-    
+
     // 7. Misplaced keyword
     if (errorText.startsWith("@") && !errorText.startsWith("@description")) {
       const keyword = errorText.split(/\s/)[0];
@@ -413,7 +408,7 @@ export class DocumentManager {
         return `Unexpected ${keyword} at this location`;
       }
     }
-    
+
     // 8. Check for common context-based errors
     if (parent) {
       const contextMessage = this.getContextualErrorMessage(node, parent, errorText);
@@ -421,12 +416,12 @@ export class DocumentManager {
         return contextMessage;
       }
     }
-    
+
     // 9. Generic message with context
     if (errorText.length > 0 && errorText.length <= 50) {
       return `Syntax error: unexpected '${errorText}'`;
     }
-    
+
     return "Syntax error: unexpected input";
   }
 
@@ -441,7 +436,7 @@ export class DocumentManager {
           return `Missing comma before reference '${this.truncateText(errorText)}'`;
         }
         return `Invalid reference in @depends-on: '${this.truncateText(errorText)}'`;
-        
+
       case "reference":
         if (errorText === ".") {
           return "Missing identifier after '.' in reference";
@@ -450,13 +445,13 @@ export class DocumentManager {
           return "Reference cannot start with '.'";
         }
         return `Invalid reference: '${this.truncateText(errorText)}'`;
-        
+
       case "code_block":
         if (errorText.includes("```")) {
           return "Nested code blocks are not allowed";
         }
         return null;
-        
+
       case "module_block":
       case "feature_block":
       case "requirement_block":
@@ -467,7 +462,7 @@ export class DocumentManager {
           return `Unexpected ${keyword} in ${parent.type.replace("_block", "").replace("_", " ")}`;
         }
         return null;
-        
+
       default:
         return null;
     }

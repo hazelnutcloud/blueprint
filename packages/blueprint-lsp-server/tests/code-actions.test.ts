@@ -25,13 +25,23 @@ import type { Ticket } from "../src/tickets";
 // Mock TicketDocumentManager for testing
 class MockTicketDocumentManager {
   private tickets: Array<{ ticket: Ticket; fileUri: string }> = [];
-  private ticketFiles: Array<{ uri: string; content: string; data: { version: string; source: string; tickets: Ticket[] } }> = [];
+  private ticketFiles: Array<{
+    uri: string;
+    content: string;
+    data: { version: string; source: string; tickets: Ticket[] };
+  }> = [];
 
   setTickets(tickets: Array<{ ticket: Ticket; fileUri: string }>) {
     this.tickets = tickets;
   }
 
-  setTicketFiles(files: Array<{ uri: string; content: string; data: { version: string; source: string; tickets: Ticket[] } }>) {
+  setTicketFiles(
+    files: Array<{
+      uri: string;
+      content: string;
+      data: { version: string; source: string; tickets: Ticket[] };
+    }>
+  ) {
     this.ticketFiles = files;
   }
 
@@ -187,28 +197,20 @@ describe("createTicket", () => {
 describe("findWorkspaceFolder", () => {
   test("finds matching workspace folder", () => {
     const fileUri = "file:///workspace/project/src/auth.bp";
-    const workspaceFolders = [
-      "file:///workspace/project",
-      "file:///workspace/other",
-    ];
+    const workspaceFolders = ["file:///workspace/project", "file:///workspace/other"];
     expect(findWorkspaceFolder(fileUri, workspaceFolders)).toBe("file:///workspace/project");
   });
 
   test("returns first matching folder when multiple match", () => {
     const fileUri = "file:///workspace/project/src/auth.bp";
-    const workspaceFolders = [
-      "file:///workspace",
-      "file:///workspace/project",
-    ];
+    const workspaceFolders = ["file:///workspace", "file:///workspace/project"];
     // Both match, but /workspace comes first
     expect(findWorkspaceFolder(fileUri, workspaceFolders)).toBe("file:///workspace");
   });
 
   test("returns undefined when no folder matches", () => {
     const fileUri = "file:///other/path/auth.bp";
-    const workspaceFolders = [
-      "file:///workspace/project",
-    ];
+    const workspaceFolders = ["file:///workspace/project"];
     expect(findWorkspaceFolder(fileUri, workspaceFolders)).toBeUndefined();
   });
 
@@ -498,10 +500,7 @@ describe("createNewTicketFileEdit", () => {
 });
 
 describe("buildCodeActions", () => {
-  function createMockParams(
-    uri: string,
-    diagnostics: Diagnostic[]
-  ): CodeActionParams {
+  function createMockParams(uri: string, diagnostics: Diagnostic[]): CodeActionParams {
     return {
       textDocument: { uri },
       range: {
@@ -551,10 +550,9 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: ["file:///workspace"],
     };
 
-    const params = createMockParams(
-      "file:///workspace/requirements/auth.bp",
-      [createNoTicketDiagnostic("auth.login.verify")]
-    );
+    const params = createMockParams("file:///workspace/requirements/auth.bp", [
+      createNoTicketDiagnostic("auth.login.verify"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -592,12 +590,16 @@ describe("buildCodeActions", () => {
     };
 
     const mockTicketManager = new MockTicketDocumentManager();
-    mockTicketManager.setTickets([{ ticket: existingTicket, fileUri: "file:///workspace/.blueprint/tickets/auth.tickets.json" }]);
-    mockTicketManager.setTicketFiles([{
-      uri: "file:///workspace/.blueprint/tickets/auth.tickets.json",
-      content: JSON.stringify({ version: "1.0", source: "auth.bp", tickets: [existingTicket] }),
-      data: { version: "1.0", source: "auth.bp", tickets: [existingTicket] },
-    }]);
+    mockTicketManager.setTickets([
+      { ticket: existingTicket, fileUri: "file:///workspace/.blueprint/tickets/auth.tickets.json" },
+    ]);
+    mockTicketManager.setTicketFiles([
+      {
+        uri: "file:///workspace/.blueprint/tickets/auth.tickets.json",
+        content: JSON.stringify({ version: "1.0", source: "auth.bp", tickets: [existingTicket] }),
+        data: { version: "1.0", source: "auth.bp", tickets: [existingTicket] },
+      },
+    ]);
 
     const context: CodeActionsContext = {
       symbolIndex,
@@ -605,10 +607,9 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: ["file:///workspace"],
     };
 
-    const params = createMockParams(
-      "file:///workspace/requirements/auth.bp",
-      [createNoTicketDiagnostic("auth.login.refresh")]
-    );
+    const params = createMockParams("file:///workspace/requirements/auth.bp", [
+      createNoTicketDiagnostic("auth.login.refresh"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -634,10 +635,7 @@ describe("buildCodeActions", () => {
       code: "circular-dependency",
     };
 
-    const params = createMockParams(
-      "file:///workspace/requirements/auth.bp",
-      [otherDiagnostic]
-    );
+    const params = createMockParams("file:///workspace/requirements/auth.bp", [otherDiagnostic]);
 
     const actions = buildCodeActions(params, context);
     expect(actions).toHaveLength(0);
@@ -673,14 +671,11 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: ["file:///workspace"],
     };
 
-    const params = createMockParams(
-      "file:///workspace/requirements/auth.bp",
-      [
-        createNoTicketDiagnostic("auth.login.verify"),
-        createNoTicketDiagnostic("auth.login.refresh"),
-        createNoTicketDiagnostic("auth.login.logout"),
-      ]
-    );
+    const params = createMockParams("file:///workspace/requirements/auth.bp", [
+      createNoTicketDiagnostic("auth.login.verify"),
+      createNoTicketDiagnostic("auth.login.refresh"),
+      createNoTicketDiagnostic("auth.login.logout"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -713,10 +708,9 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: ["file:///workspace"], // Different path
     };
 
-    const params = createMockParams(
-      "file:///other/path/auth.bp",
-      [createNoTicketDiagnostic("auth.login.verify")]
-    );
+    const params = createMockParams("file:///other/path/auth.bp", [
+      createNoTicketDiagnostic("auth.login.verify"),
+    ]);
 
     const actions = buildCodeActions(params, context);
     expect(actions).toHaveLength(0);
@@ -732,10 +726,9 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: undefined,
     };
 
-    const params = createMockParams(
-      "file:///workspace/auth.bp",
-      [createNoTicketDiagnostic("auth.login.verify")]
-    );
+    const params = createMockParams("file:///workspace/auth.bp", [
+      createNoTicketDiagnostic("auth.login.verify"),
+    ]);
 
     const actions = buildCodeActions(params, context);
     expect(actions).toHaveLength(0);
@@ -766,10 +759,9 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: ["file:///workspace"],
     };
 
-    const params = createMockParams(
-      "file:///workspace/requirements/auth.bp",
-      [createNoTicketDiagnostic("auth.login.verify")]
-    );
+    const params = createMockParams("file:///workspace/requirements/auth.bp", [
+      createNoTicketDiagnostic("auth.login.verify"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -803,10 +795,9 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: ["file:///workspace"],
     };
 
-    const params = createMockParams(
-      "file:///workspace/requirements/auth.bp",
-      [createNoTicketDiagnostic("auth.login.verify")]
-    );
+    const params = createMockParams("file:///workspace/requirements/auth.bp", [
+      createNoTicketDiagnostic("auth.login.verify"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -839,10 +830,7 @@ describe("buildCodeActions", () => {
     };
 
     const diagnostic = createNoTicketDiagnostic("auth.login.verify");
-    const params = createMockParams(
-      "file:///workspace/requirements/auth.bp",
-      [diagnostic]
-    );
+    const params = createMockParams("file:///workspace/requirements/auth.bp", [diagnostic]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1014,10 +1002,9 @@ describe("buildCodeActions", () => {
       workspaceFolderUris: ["file:///workspace"],
     };
 
-    const params = createMockParams(
-      "file:///workspace/.blueprint/tickets/auth.tickets.json",
-      [createOrphanedTicketDiagnostic("TKT-001", "auth.login.removed")]
-    );
+    const params = createMockParams("file:///workspace/.blueprint/tickets/auth.tickets.json", [
+      createOrphanedTicketDiagnostic("TKT-001", "auth.login.removed"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1168,10 +1155,9 @@ describe("buildCodeActions", () => {
     };
 
     // Typo: "verrify" instead of "verify"
-    const params = createMockParams(
-      "file:///workspace/requirements/other.bp",
-      [createUnresolvedReferenceDiagnostic("auth.login.verrify")]
-    );
+    const params = createMockParams("file:///workspace/requirements/other.bp", [
+      createUnresolvedReferenceDiagnostic("auth.login.verrify"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1210,10 +1196,9 @@ describe("buildCodeActions", () => {
     };
 
     // Typo that could match multiple requirements
-    const params = createMockParams(
-      "file:///workspace/requirements/other.bp",
-      [createUnresolvedReferenceDiagnostic("auth.login.verifiy")]
-    );
+    const params = createMockParams("file:///workspace/requirements/other.bp", [
+      createUnresolvedReferenceDiagnostic("auth.login.verifiy"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1250,10 +1235,9 @@ describe("buildCodeActions", () => {
     };
 
     // Completely different path
-    const params = createMockParams(
-      "file:///workspace/requirements/other.bp",
-      [createUnresolvedReferenceDiagnostic("payments.checkout.process")]
-    );
+    const params = createMockParams("file:///workspace/requirements/other.bp", [
+      createUnresolvedReferenceDiagnostic("payments.checkout.process"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1284,17 +1268,14 @@ describe("buildCodeActions", () => {
     };
 
     const diagnostic = createUnresolvedReferenceDiagnostic("auth.login.verrify");
-    const params = createMockParams(
-      "file:///workspace/requirements/other.bp",
-      [diagnostic]
-    );
+    const params = createMockParams("file:///workspace/requirements/other.bp", [diagnostic]);
 
     const actions = buildCodeActions(params, context);
 
     expect(actions.length).toBeGreaterThan(0);
     const edit = actions[0]!.edit!;
     expect(edit.changes).toBeDefined();
-    
+
     const changes = edit.changes!["file:///workspace/requirements/other.bp"];
     expect(changes).toBeDefined();
     expect(changes!.length).toBe(1);
@@ -1325,10 +1306,7 @@ describe("buildCodeActions", () => {
     };
 
     const diagnostic = createUnresolvedReferenceDiagnostic("auth.login.verrify");
-    const params = createMockParams(
-      "file:///workspace/requirements/other.bp",
-      [diagnostic]
-    );
+    const params = createMockParams("file:///workspace/requirements/other.bp", [diagnostic]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1359,10 +1337,9 @@ describe("buildCodeActions", () => {
     };
 
     // Typo in module name
-    const params = createMockParams(
-      "file:///workspace/requirements/other.bp",
-      [createUnresolvedReferenceDiagnostic("authentcation")]
-    );
+    const params = createMockParams("file:///workspace/requirements/other.bp", [
+      createUnresolvedReferenceDiagnostic("authentcation"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1398,10 +1375,9 @@ describe("buildCodeActions", () => {
     };
 
     // Typo in feature name
-    const params = createMockParams(
-      "file:///workspace/requirements/other.bp",
-      [createUnresolvedReferenceDiagnostic("auth.registraion")]
-    );
+    const params = createMockParams("file:///workspace/requirements/other.bp", [
+      createUnresolvedReferenceDiagnostic("auth.registraion"),
+    ]);
 
     const actions = buildCodeActions(params, context);
 
@@ -1691,8 +1667,8 @@ describe("findSimilarSymbols", () => {
 
     expect(results.length).toBeGreaterThan(0);
     // Should find the checkout feature or process requirement
-    const foundPaths = results.map(r => r.symbol.path);
-    expect(foundPaths.some(p => p.includes("payments.checkout"))).toBe(true);
+    const foundPaths = results.map((r) => r.symbol.path);
+    expect(foundPaths.some((p) => p.includes("payments.checkout"))).toBe(true);
   });
 });
 
@@ -1885,7 +1861,7 @@ describe("buildCodeActions - dependency actions", () => {
     const actions = buildCodeActions(params, context);
 
     // Should have a "Show dependencies" action
-    const dependencyAction = actions.find(a => a.title.includes("dependenc"));
+    const dependencyAction = actions.find((a) => a.title.includes("dependenc"));
     expect(dependencyAction).toBeDefined();
     expect(dependencyAction!.title).toContain("1 dependency");
     expect(dependencyAction!.title).toContain("storage.data.user-table");
@@ -1933,7 +1909,7 @@ describe("buildCodeActions - dependency actions", () => {
     const actions = buildCodeActions(params, context);
 
     // Should have a "Show dependents" action
-    const dependentAction = actions.find(a => a.title.includes("dependent"));
+    const dependentAction = actions.find((a) => a.title.includes("dependent"));
     expect(dependentAction).toBeDefined();
     expect(dependentAction!.title).toContain("1 dependent");
     expect(dependentAction!.title).toContain("auth.login.verify");
@@ -1973,8 +1949,8 @@ describe("buildCodeActions - dependency actions", () => {
     const actions = buildCodeActions(params, context);
 
     // Should have no dependency-related actions
-    const dependencyActions = actions.filter(a => 
-      a.title.includes("dependenc") || a.title.includes("dependent")
+    const dependencyActions = actions.filter(
+      (a) => a.title.includes("dependenc") || a.title.includes("dependent")
     );
     expect(dependencyActions).toHaveLength(0);
   });
@@ -2008,8 +1984,8 @@ describe("buildCodeActions - dependency actions", () => {
     const actions = buildCodeActions(params, context);
 
     // Should have no dependency-related actions
-    const dependencyActions = actions.filter(a => 
-      a.title.includes("dependenc") || a.title.includes("dependent")
+    const dependencyActions = actions.filter(
+      (a) => a.title.includes("dependenc") || a.title.includes("dependent")
     );
     expect(dependencyActions).toHaveLength(0);
   });
@@ -2054,9 +2030,11 @@ describe("buildCodeActions - dependency actions", () => {
     const actions = buildCodeActions(params, context);
 
     // Should have both dependency and dependent actions
-    const dependencyAction = actions.find(a => a.title.includes("dependenc") && !a.title.includes("dependent"));
-    const dependentAction = actions.find(a => a.title.includes("dependent"));
-    
+    const dependencyAction = actions.find(
+      (a) => a.title.includes("dependenc") && !a.title.includes("dependent")
+    );
+    const dependentAction = actions.find((a) => a.title.includes("dependent"));
+
     expect(dependencyAction).toBeDefined();
     expect(dependentAction).toBeDefined();
   });
@@ -2100,7 +2078,7 @@ describe("buildCodeActions - dependency actions", () => {
     const actions = buildCodeActions(params, context);
 
     // Should have "2 dependencies" (plural)
-    const dependencyAction = actions.find(a => a.title.includes("dependenc"));
+    const dependencyAction = actions.find((a) => a.title.includes("dependenc"));
     expect(dependencyAction).toBeDefined();
     expect(dependencyAction!.title).toContain("2 dependencies");
   });
@@ -2140,19 +2118,19 @@ describe("buildCodeActions - dependency actions", () => {
 
     const actions = buildCodeActions(params, context);
 
-    const dependencyAction = actions.find(a => a.title.includes("dependenc"));
+    const dependencyAction = actions.find((a) => a.title.includes("dependenc"));
     expect(dependencyAction).toBeDefined();
     expect(dependencyAction!.command).toBeDefined();
     expect(dependencyAction!.command!.arguments).toBeDefined();
     expect(dependencyAction!.command!.arguments!.length).toBe(2);
-    
+
     // First argument should be locations array
     const locations = dependencyAction!.command!.arguments![0] as any[];
     expect(locations).toBeInstanceOf(Array);
     expect(locations.length).toBe(1);
     expect(locations[0].uri).toBe("file:///workspace/auth.bp");
     expect(locations[0].range).toBeDefined();
-    
+
     // Second argument should be the title
     expect(dependencyAction!.command!.arguments![1]).toContain("Dependencies of");
   });

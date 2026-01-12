@@ -215,12 +215,8 @@ describe("workspace-diagnostics", () => {
       const diagsB = result.byFile.get("file:///b.bp")!;
 
       // Count circular-dependency diagnostics
-      const circularDiagsA = diagsA.filter(
-        (d) => d.code === "circular-dependency"
-      );
-      const circularDiagsB = diagsB.filter(
-        (d) => d.code === "circular-dependency"
-      );
+      const circularDiagsA = diagsA.filter((d) => d.code === "circular-dependency");
+      const circularDiagsB = diagsB.filter((d) => d.code === "circular-dependency");
 
       expect(circularDiagsA).toHaveLength(1);
       expect(circularDiagsB).toHaveLength(1);
@@ -642,12 +638,8 @@ describe("workspace-diagnostics", () => {
       const diagsA = result.byFile.get("file:///a.bp")!;
 
       // Should have both circular dependency and unresolved reference diagnostics
-      const circularDiags = diagsA.filter(
-        (d) => d.code === "circular-dependency"
-      );
-      const unresolvedDiags = diagsA.filter(
-        (d) => d.code === "unresolved-reference"
-      );
+      const circularDiags = diagsA.filter((d) => d.code === "circular-dependency");
+      const unresolvedDiags = diagsA.filter((d) => d.code === "unresolved-reference");
 
       expect(circularDiags.length).toBeGreaterThanOrEqual(1);
       expect(unresolvedDiags).toHaveLength(1);
@@ -860,13 +852,9 @@ describe("workspace-diagnostics", () => {
 
       const result = computeOrphanedTicketDiagnostics(index, ticketFiles);
 
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.severity).toBe(DiagnosticSeverity.Warning);
       expect(diags[0]!.message).toContain("TKT-002");
@@ -897,9 +885,7 @@ describe("workspace-diagnostics", () => {
 
       const result = computeOrphanedTicketDiagnostics(index, ticketFiles);
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(2);
 
       const messages = diags.map((d) => d.message);
@@ -941,22 +927,16 @@ describe("workspace-diagnostics", () => {
       const result = computeOrphanedTicketDiagnostics(index, ticketFiles);
 
       expect(result.filesWithDiagnostics).toHaveLength(2);
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
       expect(result.filesWithDiagnostics).toContain(
         "file:///.blueprint/tickets/storage.tickets.json"
       );
 
-      const authDiags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const authDiags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(authDiags).toHaveLength(1);
       expect(authDiags[0]!.message).toContain("TKT-002");
 
-      const storageDiags = result.byFile.get(
-        "file:///.blueprint/tickets/storage.tickets.json"
-      )!;
+      const storageDiags = result.byFile.get("file:///.blueprint/tickets/storage.tickets.json")!;
       expect(storageDiags).toHaveLength(1);
       expect(storageDiags[0]!.message).toContain("TKT-004");
     });
@@ -1001,13 +981,9 @@ describe("workspace-diagnostics", () => {
 
       const result = computeOrphanedTicketDiagnostics(index, ticketFiles);
 
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.message).toContain("auth.login.nonexistent");
     });
@@ -1043,13 +1019,9 @@ describe("workspace-diagnostics", () => {
       const result = computeOrphanedTicketDiagnostics(index, ticketFiles);
 
       // All tickets should be orphaned since there are no requirements
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.message).toContain("TKT-001");
     });
@@ -1075,13 +1047,9 @@ describe("workspace-diagnostics", () => {
 
       // Even obsolete tickets with invalid refs should warn
       // This helps users clean up their ticket files
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
     });
   });
@@ -1182,13 +1150,9 @@ describe("workspace-diagnostics", () => {
 
       const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
 
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.severity).toBe(DiagnosticSeverity.Warning);
       expect(diags[0]!.message).toContain("TKT-001");
@@ -1220,9 +1184,7 @@ describe("workspace-diagnostics", () => {
 
       const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(2);
 
       const messages = diags.map((d) => d.message);
@@ -1253,9 +1215,7 @@ describe("workspace-diagnostics", () => {
 
       const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.message).toContain("TKT-002");
       expect(diags[0]!.message).toContain("bad-constraint");
@@ -1307,13 +1267,9 @@ describe("workspace-diagnostics", () => {
 
       const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
 
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.message).toContain("some-constraint");
     });
@@ -1381,22 +1337,16 @@ describe("workspace-diagnostics", () => {
       const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
 
       expect(result.filesWithDiagnostics).toHaveLength(2);
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
       expect(result.filesWithDiagnostics).toContain(
         "file:///.blueprint/tickets/storage.tickets.json"
       );
 
-      const authDiags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const authDiags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(authDiags).toHaveLength(1);
       expect(authDiags[0]!.message).toContain("bad-auth-constraint");
 
-      const storageDiags = result.byFile.get(
-        "file:///.blueprint/tickets/storage.tickets.json"
-      )!;
+      const storageDiags = result.byFile.get("file:///.blueprint/tickets/storage.tickets.json")!;
       expect(storageDiags).toHaveLength(1);
       expect(storageDiags[0]!.message).toContain("bad-storage-constraint");
     });
@@ -1422,9 +1372,7 @@ describe("workspace-diagnostics", () => {
 
       const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.message).toContain("TKT-002");
       expect(diags[0]!.message).toContain("nonexistent");
@@ -1454,13 +1402,9 @@ describe("workspace-diagnostics", () => {
       const result = computeConstraintMismatchDiagnostics(index, ticketFiles);
 
       // Should warn because "bcrypt" !== "Bcrypt"
-      expect(result.filesWithDiagnostics).toContain(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      );
+      expect(result.filesWithDiagnostics).toContain("file:///.blueprint/tickets/auth.tickets.json");
 
-      const diags = result.byFile.get(
-        "file:///.blueprint/tickets/auth.tickets.json"
-      )!;
+      const diags = result.byFile.get("file:///.blueprint/tickets/auth.tickets.json")!;
       expect(diags).toHaveLength(1);
       expect(diags[0]!.message).toContain("bcrypt");
     });
@@ -1623,9 +1567,7 @@ describe("workspace-diagnostics", () => {
       index.addFile("file:///auth.bp", parseToAST(authCode));
 
       // Only auth has a ticket, storage does not
-      const tickets = [
-        createTicket("TKT-001", "auth.login.basic-auth", "pending"),
-      ];
+      const tickets = [createTicket("TKT-001", "auth.login.basic-auth", "pending")];
 
       const result = computeBlockingDiagnostics(index, tickets);
 
@@ -1705,8 +1647,8 @@ describe("workspace-diagnostics", () => {
       expect(diags.length).toBeGreaterThanOrEqual(2);
 
       // Check that step3's diagnostic mentions transitive blockers
-      const step3Diag = diags.find((d) =>
-        d.range.start.line >= 13 // step3 is at the bottom
+      const step3Diag = diags.find(
+        (d) => d.range.start.line >= 13 // step3 is at the bottom
       );
       if (step3Diag) {
         expect(step3Diag.message).toContain("transitively");

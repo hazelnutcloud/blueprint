@@ -5,6 +5,7 @@
 This document outlines the implementation plan for the Blueprint DSL Language Server Protocol (LSP) implementation. The LSP will provide IDE integration for `.bp` requirement files including syntax highlighting, diagnostics, hover information, navigation, and integration with ticket artifacts.
 
 **Tech Stack:**
+
 - Language/Runtime: TypeScript/Node
 - Package Manager: Bun
 - Parser: tree-sitter
@@ -18,6 +19,7 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 ## Phase 1: Project Setup & Infrastructure
 
 ### 1.1 Project Initialization
+
 - [x] Initialize monorepo structure with packages for `server`, `client`, and `tree-sitter-blueprint`
 - [x] Configure `package.json` with workspaces for monorepo management
 - [x] Set up TypeScript configuration (`tsconfig.json`) for each package
@@ -26,7 +28,8 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 - [x] Create `.gitignore` with appropriate exclusions
 
 ### 1.2 Development Environment
-- [ ] Configure ESLint and Prettier for code quality
+
+- [x] Configure ESLint and Prettier for code quality (Added ESLint 9 with flat config (`eslint.config.js`) using typescript-eslint, eslint-plugin-prettier, and eslint-config-prettier. Created `.prettierrc` with standard formatting rules and `.prettierignore`. Added `lint`, `lint:fix`, `format`, and `format:check` scripts to root `package.json`. Tree-sitter grammar folder is excluded from linting since it uses special DSL functions.)
 - [ ] Set up VS Code workspace settings for development
 - [x] Create launch configurations for debugging the LSP server and client (Added `.vscode/launch.json` with configurations for: "Launch Extension" using extensionHost, "Attach to LSP Server" on port 6009, "Debug LSP Server (Standalone)" with Bun, "Debug Current Test File", "Debug All LSP Server Tests", and compound "Extension + Server" configuration. Also added `.vscode/tasks.json` with build, watch, and test tasks.)
 - [x] Set up hot-reload for development iteration (Added npm scripts to `packages/blueprint-lsp-server/package.json`: `dev` uses `bun --watch`, `dev:debug` adds inspector, `test:watch` for continuous testing, `typecheck:watch` for continuous type checking. Updated `.vscode/tasks.json` with `watch-server`, `watch-server-debug`, `watch-tests`, and compound `dev` task that runs both server and typecheck watchers in parallel.)
@@ -36,6 +39,7 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 ## Phase 2: Tree-sitter Grammar Definition
 
 ### 2.1 Grammar Specification
+
 - [x] Create `tree-sitter-blueprint` package directory structure
 - [x] Define `grammar.js` with lexical rules:
   - [x] UTF-8 character set handling
@@ -46,34 +50,39 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
   - [x] Whitespace and indentation handling
 
 ### 2.2 Document-Level Rules
+
 - [x] Define `@description` keyword and block parsing
 - [x] Implement description-text capture (free-form prose until next keyword)
 
 ### 2.3 Hierarchy Keywords
+
 - [x] Define `@module` rule with identifier and description-text
 - [x] Define `@feature` rule with identifier and description-text
 - [x] Define `@requirement` rule with identifier and description-text
 - [x] Implement proper nesting validation (features in modules, requirements in features)
 
 ### 2.4 Annotation Keywords
+
 - [x] Define `@depends-on` rule with comma-separated reference list
 - [x] Implement reference parsing (dot-notation: `module.feature.requirement`)
 - [x] Define `@constraint` rule with identifier and description-text
 
 ### 2.5 Description Block Handling
+
 - [x] Parse free-form prose text
-- [x] Handle fenced code blocks (``` ... ```)
+- [x] Handle fenced code blocks (`...`)
 - [x] Preserve paragraph separation (blank lines)
 
 ### 2.6 Grammar Testing
+
 - [x] Write corpus tests for valid syntax cases
 - [x] Write corpus tests for edge cases (empty files, minimal documents)
 - [x] Write corpus tests for error recovery scenarios
 - [x] Generate and compile the tree-sitter parser
 
-Note: The LSP server will use web-tree-sitter (WASM bindings) instead of native Node.js bindings. 
-WASM is the standard approach for tree-sitter LSP servers (e.g., bash-language-server) because it's 
-easier to distribute and works across all platforms without native compilation. The existing 
+Note: The LSP server will use web-tree-sitter (WASM bindings) instead of native Node.js bindings.
+WASM is the standard approach for tree-sitter LSP servers (e.g., bash-language-server) because it's
+easier to distribute and works across all platforms without native compilation. The existing
 `tree-sitter build --wasm` script generates the required `.wasm` file.
 
 ---
@@ -81,6 +90,7 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 3: Core LSP Server Implementation
 
 ### 3.1 Server Initialization
+
 - [x] Create LSP server entry point using `vscode-languageserver/node`
 - [x] Implement `initialize` handler with capability negotiation
 - [x] Implement `initialized` handler for post-initialization setup
@@ -88,6 +98,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Set up connection and document manager
 
 ### 3.2 Document Management
+
 - [x] Implement `TextDocuments` manager for open `.bp` files
 - [x] Handle `textDocument/didOpen` - parse and index document
 - [x] Handle `textDocument/didChange` - re-parsing (full sync mode)
@@ -95,6 +106,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Handle `textDocument/didSave` - trigger full validation
 
 ### 3.3 Document Parsing & AST
+
 - [x] Integrate tree-sitter parser into server (via web-tree-sitter WASM)
 - [x] Create AST node types mirroring Blueprint hierarchy:
   - [x] `DescriptionNode`
@@ -108,6 +120,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Create document symbol table (identifier → node mapping)
 
 ### 3.4 Workspace Indexing
+
 - [x] Implement workspace folder scanning for `.bp` files (Added `WorkspaceManager` class in `workspace.ts` with recursive directory scanning, hidden directory filtering, and workspace folder change handling. 26 tests added in `workspace.test.ts`.)
 - [x] Build cross-file symbol index (Added `CrossFileSymbolIndex` class in `symbol-index.ts` with global symbol registry, cross-file reference resolution, dependency tracking, and conflict detection. Integrated with `WorkspaceManager` file discovery and document lifecycle events in `index.ts`. 37 tests added in `symbol-index.test.ts`.)
 - [x] Implement file watcher for `.bp` file changes (Added `**/*.bp` glob pattern to `DidChangeWatchedFilesNotification` registration in `onInitialized`. Handler in `onDidChangeWatchedFiles` processes Created/Changed/Deleted events: Created adds to `WorkspaceManager` and indexes file, Changed re-indexes if file not open in editor, Deleted removes from `WorkspaceManager` and `CrossFileSymbolIndex`.)
@@ -118,11 +131,13 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 4: Ticket Artifact Integration
 
 ### 4.1 Ticket File Discovery
+
 - [x] Implement ticket file path resolution (`requirements/foo.bp` → `.blueprint/tickets/foo.tickets.json`) (Completed: Added `tickets.ts` module with `resolveTicketFilePath()`, `resolveTicketFileUri()`, `ticketFileExists()`, `resolveBpFileBaseName()`, `getTicketFileName()`, `isTicketFilePath()`, and `isBlueprintFilePath()` functions. Supports configurable tickets path via parameter. 27 tests added in `tickets.test.ts`.)
 - [x] Handle configurable tickets path from settings (Completed: All ticket path functions accept an optional `ticketsPath` parameter that defaults to `.blueprint/tickets` per SPEC.md Section 5.9.)
 - [x] Set up file watcher for `.tickets.json` changes (Completed: Added `DidChangeWatchedFilesNotification` registration in `onInitialized` for `**/.blueprint/tickets/*.tickets.json` glob pattern. Added `connection.onDidChangeWatchedFiles` handler that processes `Created`, `Changed`, and `Deleted` events, reading file content and updating `TicketDocumentManager` state accordingly.)
 
 ### 4.2 Ticket Schema Validation
+
 - [x] Define TypeScript interfaces for ticket schema (Completed: Using valibot schemas in `tickets.ts` with types inferred via `v.InferOutput<>`. Full SPEC.md Section 4 compliance):
   - [x] `TicketFileSchema` / `TicketFile` (version, source, tickets array)
   - [x] `TicketSchema` / `Ticket` (id, ref, description, status, constraints_satisfied, implementation)
@@ -132,6 +147,7 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Report schema validation errors as diagnostics (Completed: Added `TicketDocumentManager` class in `ticket-documents.ts` that validates `.tickets.json` files and publishes diagnostics. Integrated with LSP server document lifecycle events in `index.ts`. Reports errors for invalid JSON, schema violations, and duplicate ticket IDs. Version mismatches are reported as warnings. 24 tests added in `ticket-documents.test.ts`.)
 
 ### 4.3 Requirement-Ticket Correlation
+
 - [x] Build mapping from requirement refs to tickets (Completed: Added `requirement-ticket-map.ts` module with `buildRequirementTicketMap()` and `buildRequirementTicketMapFromSymbols()` functions. 40 tests added in `requirement-ticket-map.test.ts`.)
 - [x] Handle one-to-many requirement-to-ticket relationships (Completed: `groupTicketsByRef()` groups tickets by their ref, `RequirementTicketInfo` stores array of tickets per requirement.)
 - [x] Aggregate constraint satisfaction across tickets sharing same ref (Completed: `computeConstraintStatuses()` aggregates `constraints_satisfied` from all tickets, tracks which ticket IDs satisfy each constraint.)
@@ -142,18 +158,21 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 5: Dependency Resolution
 
 ### 5.1 Reference Resolution
+
 - [x] Parse dot-notation references (`module.feature.requirement`) (Completed: `ReferenceNode` in `ast.ts` stores `parts` array and `path` string. `transformReference()` extracts parts from tree-sitter nodes.)
 - [x] Resolve references to target nodes (same file) (Completed: `CrossFileSymbolIndex.resolveReference()` in `symbol-index.ts` resolves references to `IndexedSymbol` objects.)
 - [x] Resolve cross-file references (Completed: `CrossFileSymbolIndex` maintains global symbol registry across all indexed files, enabling cross-file resolution.)
 - [x] Handle partial references (module-only, module.feature) (Completed: `resolveReference()` supports both exact and partial matching via prefix search in `globalSymbols`.)
 
 ### 5.2 Dependency Graph
+
 - [x] Build directed dependency graph from `@depends-on` declarations (Completed: Added `DependencyGraph` class in `dependency-graph.ts` with `build()` static method that constructs graph from `CrossFileSymbolIndex`. 27 tests in `dependency-graph.test.ts`.)
 - [x] Implement topological sort for dependency ordering (Completed: `topologicalSort()` uses Kahn's algorithm to produce ordering where dependencies come before dependents.)
 - [x] Detect circular dependencies using cycle detection algorithm (Completed: `detectCycles()` uses DFS-based cycle detection, returns `CircularDependency[]` with cycle paths and edges.)
 - [x] Compute transitive dependencies (Completed: `getTransitiveDependencies()` and `getTransitiveDependents()` methods compute transitive closures.)
 
 ### 5.3 Blocking Status Computation
+
 - [x] Determine if a requirement is blocked by incomplete dependencies (Completed: Added `blocking-status.ts` module with `computeBlockingInfo()` that checks direct and transitive dependencies against ticket status. Returns `BlockingInfo` with status (`not-blocked`, `blocked`, `in-cycle`) and lists of `BlockerInfo` objects. 27 tests added in `blocking-status.test.ts`.)
 - [x] Propagate blocking status through hierarchy (Completed: `propagateBlockingToHierarchy()` aggregates blocking status from requirements up to features and modules. In-cycle status takes precedence over blocked.)
 - [x] Cache and invalidate blocking status on changes (Completed: Added `BlockingStatusCache` type with `createBlockingStatusCache()`, `invalidateBlockingStatusCache()`, `updateBlockingStatusCache()`, and `shouldInvalidateCache()` functions for cache management.)
@@ -163,11 +182,13 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 6: Diagnostics
 
 ### 6.1 Syntax Errors
+
 - [x] Report tree-sitter parse errors as diagnostics (Completed: `DocumentManager.collectErrorNodes()` in `documents.ts` recursively scans tree-sitter parse trees for ERROR and MISSING nodes.)
 - [x] Provide meaningful error messages for common syntax mistakes (Completed: Added context-aware error messages in `documents.ts` via `getMissingNodeMessage()`, `getErrorNodeMessage()`, and `getContextualErrorMessage()` methods. Handles orphaned elements at wrong scope, invalid identifiers starting with digits, missing identifiers after keywords, and reference-related errors. 8 new tests added in `documents.test.ts`.)
 - [x] Include source location (line, column, range) (Completed: Error diagnostics include full range from `node.startPosition` to `node.endPosition`.)
 
 ### 6.2 Semantic Errors
+
 - [x] Detect circular dependencies (Error) (Completed: Added `workspace-diagnostics.ts` module with `computeCircularDependencyDiagnostics()` function that uses `DependencyGraph.build()` to detect cycles and generates diagnostics at each `@depends-on` location in the cycle. Diagnostics include the full cycle path in the error message. Integrated with LSP server in `index.ts` via `publishWorkspaceDiagnostics()` which is called after symbol index updates. 20 tests added in `workspace-diagnostics.test.ts`.)
 - [x] Detect references to non-existent requirements (Error) (Completed: Added `computeUnresolvedReferenceDiagnostics()` in `workspace-diagnostics.ts` that uses `CrossFileSymbolIndex.getUnresolvedReferences()` to find all unresolved `@depends-on` references and generates diagnostics with the unresolved path in the error message. Tests added in `workspace-diagnostics.test.ts`.)
 - [x] Detect duplicate identifiers in scope (Error) (Completed: `buildSymbolTable()` in `ast.ts` returns duplicates, `validateDuplicateIdentifiers()` in `documents.ts` creates diagnostics. Tests in `ast.test.ts` and `documents.test.ts`.)
@@ -175,14 +196,17 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Detect `@description` after `@module` (Error)
 
 ### 6.3 Warnings
+
 - [x] Warn when requirement has no ticket (Completed: Added `computeNoTicketDiagnostics()` in `workspace-diagnostics.ts` that compares requirements from `CrossFileSymbolIndex` against tickets. Integrated with `computeWorkspaceDiagnostics()` which now accepts optional tickets array. Updated `publishWorkspaceDiagnostics()` in `index.ts` to pass tickets from `TicketDocumentManager.getAllTickets()`. Added `getAllTicketFiles()` and `getAllTickets()` methods to `TicketDocumentManager`. 11 new tests in `workspace-diagnostics.test.ts`.)
 - [x] Warn when ticket references removed requirement (Completed: Added `computeOrphanedTicketDiagnostics()` in `workspace-diagnostics.ts` that checks ticket refs against valid requirement paths from `CrossFileSymbolIndex`. Diagnostics are reported on `.tickets.json` files with code `orphaned-ticket`. Integrated with `publishWorkspaceDiagnostics()` in `index.ts` to merge with ticket document diagnostics. 10 new tests in `workspace-diagnostics.test.ts`.)
 - [x] Warn on constraint identifier mismatch between `.bp` and ticket (Completed: Added `computeConstraintMismatchDiagnostics()` in `workspace-diagnostics.ts` that checks if ticket `constraints_satisfied` arrays contain constraint identifiers not defined in the corresponding requirement's `@constraint` list. Diagnostics are reported on `.tickets.json` files with code `constraint-mismatch`. Integrated with `publishWorkspaceDiagnostics()` in `index.ts` using `mergeDiagnosticResults()` to combine with orphaned ticket diagnostics. 12 new tests in `workspace-diagnostics.test.ts`.)
 
 ### 6.4 Informational
+
 - [x] Info diagnostic when requirement is blocked by pending dependencies
 
 ### 6.5 Diagnostic Publishing
+
 - [x] Implement debounced diagnostic publishing (Completed: Added `scheduleWorkspaceDiagnostics()` function with 150ms debounce delay in `index.ts`. Uses `setTimeout`/`clearTimeout` pattern to batch rapid changes. Timer is cancelled on shutdown to prevent callbacks after cleanup.)
 - [x] Clear diagnostics when document is closed (Already implemented: `DocumentManager.onDocumentClose()` in `documents.ts:65` and `TicketDocumentManager.onDocumentClose()` in `ticket-documents.ts:65` both call `connection.sendDiagnostics({ uri, diagnostics: [] })` to clear diagnostics when documents are closed.)
 - [x] Update diagnostics on ticket file changes (Completed: Added `scheduleWorkspaceDiagnostics()` calls to all ticket file lifecycle handlers in `index.ts`: `onDidOpen`, `onDidChangeContent`, `onDidSave` for open documents, and `onDidChangeWatchedFiles` for file system changes. This ensures workspace diagnostics like no-ticket warnings and blocked requirement info are updated when ticket status changes.)
@@ -192,6 +216,7 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 7: Semantic Tokens (Syntax Highlighting)
 
 ### 7.1 Token Type Registration
+
 - [x] Register semantic token types (Completed: Added `semantic-tokens.ts` module with `semanticTokensLegend` defining token types and modifiers. Integrated with LSP server in `index.ts` via `semanticTokensProvider` capability. 18 tests added in `semantic-tokens.test.ts`.):
   - [x] `keyword` (for @description, @module, @feature, @requirement, @depends-on, @constraint)
   - [x] `variable` (for identifiers)
@@ -200,11 +225,13 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Register semantic token modifiers (declaration, definition)
 
 ### 7.2 Token Generation
+
 - [x] Implement `textDocument/semanticTokens/full` handler (Completed: Added `connection.languages.semanticTokens.on()` handler in `index.ts` that calls `buildSemanticTokens()` from `semantic-tokens.ts`.)
 - [x] Walk AST and emit tokens for each element (Completed: `walkTree()` and `processNode()` functions recursively traverse the tree-sitter parse tree.)
 - [x] Handle token encoding (delta line, delta column, length, type, modifiers) (Completed: Uses `SemanticTokensBuilder` from vscode-languageserver with proper sorting of tokens before building.)
 
 ### 7.3 Progress-Based Highlighting
+
 - [x] Emit tokens with status-based modifiers for requirements (Completed: Added status-based token modifiers `noTicket`, `blocked`, `inProgress`, `complete`, `obsolete` to `semanticTokensLegend`. Updated `buildSemanticTokens()` to accept optional `statusMap` parameter. Added `buildRequirementStatusMap()` to combine ticket status and blocking status. Status modifiers are applied to both `@requirement` keywords and requirement identifier tokens. 13 new tests added in `semantic-tokens.test.ts`.):
   - [x] No ticket → noTicket modifier (dim styling)
   - [x] pending → no modifier (default styling)
@@ -218,10 +245,12 @@ easier to distribute and works across all platforms without native compilation. 
 ## Phase 8: Hover Information
 
 ### 8.1 Hover Handler
+
 - [x] Implement `textDocument/hover` handler (Completed: Added `hover.ts` module with `findHoverTarget()` and `buildHover()` functions. Integrated with LSP server in `index.ts` via `connection.onHover()` handler. Added `hoverProvider: true` to server capabilities.)
 - [x] Determine hovered element from position (Completed: `findNodeAtPosition()` uses tree-sitter to find the deepest node at cursor position. `findHoverTarget()` walks up the tree to identify module, feature, requirement, constraint, reference, or keyword targets.)
 
 ### 8.2 Requirement Hover
+
 - [x] Display ticket ID(s) associated with requirement (Completed: `buildRequirementHover()` shows all tickets associated with a requirement, including ticket ID and description.)
 - [x] Display aggregated status across all tickets (Completed: Shows aggregated status computed by `RequirementTicketMap` - complete, in-progress, pending, no-ticket, or obsolete.)
 - [x] Display constraint satisfaction (X/Y satisfied with checkmarks) (Completed: Shows "X/Y satisfied" with checkmark or empty circle icons for each constraint. Uses `computeConstraintStatuses()` from requirement-ticket-map.)
@@ -229,12 +258,14 @@ easier to distribute and works across all platforms without native compilation. 
 - [x] Display implementation files from tickets (Completed: Shows implementation files and test files from ticket data.)
 
 ### 8.3 Feature/Module Hover
+
 - [x] Compute aggregate progress (X/Y requirements complete) (Completed: `buildFeatureHover()` and `buildModuleHover()` use `getCompletionSummary()` and `filterByPathPrefix()` to compute progress.)
 - [x] Display progress bar visualization (Completed: `buildProgressBar()` creates a text-based progress bar with filled/empty blocks.)
 - [x] List requirements with their individual statuses (Completed: Feature hover lists direct child requirements with status icons. Module hover shows status breakdown and features list.)
 - [x] Show blocked requirements with blocking reason (Completed: Requirements in feature list show "blocked" or "in cycle" suffix when applicable.)
 
 ### 8.4 Reference Hover
+
 - [x] Show preview of referenced element's description (Completed: `buildReferenceHover()` shows the resolved symbol's kind and path, with status/progress info for requirements and features/modules.)
 - [x] Display reference target's status (Completed: Shows ticket status for requirements, progress for features/modules, or "Unresolved reference" warning if not found.)
 
@@ -245,6 +276,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ## Phase 9: Navigation Features
 
 ### 9.1 Go-to-Definition
+
 - [x] Implement `textDocument/definition` handler (Completed: Added `definition.ts` module with `findDefinitionTarget()` and `buildDefinition()` functions. Integrated with LSP server in `index.ts` via `connection.onDefinition()` handler. Added `definitionProvider: true` to server capabilities. 17 tests added in `definition.test.ts`.)
 - [x] Requirement identifier → ticket in `.tickets.json` (Completed: `buildRequirementDefinition()` navigates to ticket position in JSON file when tickets exist, falls back to symbol definition otherwise. Supports multiple tickets returning `Location[]`.)
 - [x] `@depends-on` reference → referenced requirement (Completed: `buildReferenceDefinition()` resolves cross-file references via `CrossFileSymbolIndex` and returns location of the referenced symbol.)
@@ -252,17 +284,20 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] File path in hover → source file (Completed: Added `formatFileLink()` helper in `hover.ts` that converts relative file paths to clickable Markdown links with `file://` URIs. Updated `buildRequirementHover()` to render implementation files and test files as clickable links when workspace folders are available. Added `getWorkspaceFolderUris()` method to `WorkspaceManager`. Hover context now includes `workspaceFolderUris` for path resolution. 11 new tests in `hover.test.ts`, 4 new tests in `workspace.test.ts`.)
 
 ### 9.2 Find References
+
 - [x] Implement `textDocument/references` handler (Completed: Added `references.ts` module with `findReferencesTarget()` and `buildReferences()` functions. Uses `DependencyGraph.edges` to find all `@depends-on` declarations that reference a symbol. Integrated with LSP server in `index.ts` via `connection.onReferences()` handler. Added `referencesProvider: true` to server capabilities. 21 tests added in `references.test.ts`.)
 - [x] Find all `@depends-on` declarations referencing an element (Completed: `findReferencingEdges()` searches dependency graph edges for exact matches and parent references that implicitly include children.)
 - [x] Find tickets tracking a requirement (Completed: Extended `ReferencesContext` to include optional `ticketMap` and `ticketFiles` fields. Added `findTicketReferences()` function in `references.ts` that finds all tickets tracking a requirement and returns their locations in `.tickets.json` files. Updated `buildReferences()` to include ticket locations for requirement targets. Updated `index.ts` to pass ticket context to references handler. 7 new tests added in `references.test.ts` covering single ticket, multiple tickets, combined @depends-on and ticket references, includeDeclaration behavior, and backward compatibility.)
 - [x] Find source files implementing a requirement (via ticket data) (Completed: Added `findImplementationFileReferences()` function in `references.ts` that reads `implementation.files` and `implementation.tests` arrays from tickets and converts relative paths to absolute file URIs using workspace folder. Added `workspaceFolderUris` to `ReferencesContext`. Updated `buildReferences()` to include implementation file locations for requirement targets. Updated `index.ts` to pass workspace folder URIs to references handler. 7 new tests added in `references.test.ts` covering single/multiple tickets, deduplication, missing workspace folders, missing implementation field, and combined reference types.)
 
 ### 9.3 Document Symbols
+
 - [x] Implement `textDocument/documentSymbol` handler (Completed: Added `document-symbol.ts` module with `buildDocumentSymbols()` function. Integrated with LSP server in `index.ts` via `connection.onDocumentSymbol()` handler. Added `documentSymbolProvider: true` to server capabilities. 26 tests added in `document-symbol.test.ts`.)
 - [x] Return hierarchical symbol tree (modules → features → requirements) (Completed: `buildModuleSymbol()`, `buildFeatureSymbol()`, `buildRequirementSymbol()` functions build nested `DocumentSymbol` hierarchy.)
 - [x] Include constraints as children of requirements (Completed: `buildConstraintSymbol()` creates `DocumentSymbol` for constraints, included as children at module, feature, and requirement levels.)
 
 ### 9.4 Workspace Symbols
+
 - [x] Implement `workspace/symbol` handler (Completed: Added `workspace-symbol.ts` module with `buildWorkspaceSymbols()` function. Integrated with LSP server in `index.ts` via `connection.onWorkspaceSymbol()` handler. Added `workspaceSymbolProvider: true` to server capabilities. 26 tests added in `workspace-symbol.test.ts`.)
 - [x] Enable searching across all `.bp` files in workspace (Completed: Uses `CrossFileSymbolIndex` to search across all indexed files. Supports prefix matching, substring matching, and fuzzy matching. Results are sorted by relevance with configurable max results.)
 
@@ -271,11 +306,13 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ## Phase 10: Code Actions & Quick Fixes
 
 ### 10.1 Quick Fix Suggestions
+
 - [x] Suggest creating ticket for requirement without ticket (Completed: Added `code-actions.ts` module with `buildCodeActions()` function. Handles "no-ticket" diagnostics by generating code actions that create tickets in existing or new `.tickets.json` files. Includes ticket ID generation, workspace folder resolution, and both edit types (add to existing file, create new file). Registered `codeActionProvider` capability and `onCodeAction` handler in `index.ts`. 31 tests added in `code-actions.test.ts`.)
 - [x] Suggest fixing typos in references (did-you-mean) (Completed: Added `levenshteinDistance()`, `stringSimilarity()`, `findSimilarSymbols()`, and `extractUnresolvedReferenceFromMessage()` functions in `code-actions.ts`. Handler for "unresolved-reference" diagnostics generates code actions with title "Did you mean 'X'?" that replace the typo with the correct reference. Uses Levenshtein distance with multiple similarity strategies (full path, per-part, suffix, and last-part matching). 34 new tests added in `code-actions.test.ts` covering Levenshtein distance, string similarity, message extraction, similar symbol finding, and code action generation.)
 - [x] Suggest removing obsolete ticket references (Completed: Extended `code-actions.ts` with `extractOrphanedTicketInfo()` to parse "orphaned-ticket" diagnostic messages and `createRemoveTicketEdit()` to generate edits that remove tickets from `.tickets.json` files. Handles comma removal for proper JSON formatting. Added handling for "orphaned-ticket" diagnostics in `buildCodeActions()`. 18 new tests added in `code-actions.test.ts`.)
 
 ### 10.2 Code Actions
+
 - [x] "Show all dependencies" action (Completed: Added `findSymbolAtPosition()`, `buildDependencyCodeActions()`, and `getDependencyLocations()` functions in `code-actions.ts`. When cursor is on a module, feature, or requirement that has dependencies, a source code action "Show N dependencies of 'path'" appears. The action includes a command with locations array for the client to display. Updated `CodeActionsContext` to include `dependencyGraph` and `tree`. Updated `index.ts` to build dependency graph and pass parse tree to code actions handler. 13 new tests added in `code-actions.test.ts`.)
 - [x] "Show all dependents" action (Completed: Implemented alongside "Show all dependencies" in the same commit. When a symbol has dependents, a source code action "Show N dependents of 'path'" appears with locations of symbols that depend on the current one. Uses `blueprint.showLocations` command for client-side handling.)
 
@@ -284,29 +321,34 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ## Phase 11: VS Code Extension (Client)
 
 ### 11.1 Extension Setup
+
 - [ ] Create VS Code extension package structure
 - [ ] Define `package.json` with extension manifest
 - [ ] Configure extension activation events (`.bp` files)
 - [ ] Set up language configuration for Blueprint
 
 ### 11.2 Language Client
+
 - [ ] Initialize `LanguageClient` with server options
 - [ ] Configure server module path and debug options
 - [ ] Set document selector for `.bp` files
 - [ ] Handle client lifecycle (start, stop, restart)
 
 ### 11.3 Language Configuration
+
 - [ ] Define bracket pairs and auto-closing
 - [ ] Configure comment toggling (`//` and `/* */`)
 - [ ] Set up word pattern for identifiers
 - [ ] Configure indentation rules
 
 ### 11.4 TextMate Grammar (Fallback)
+
 - [ ] Create `.tmLanguage.json` for basic syntax highlighting
 - [ ] Define scopes for keywords, identifiers, comments
 - [ ] Register grammar with VS Code
 
 ### 11.5 Extension Settings
+
 - [ ] Implement `blueprint.ticketsPath` setting
 - [ ] Implement highlighting color customization settings
 - [ ] Implement `blueprint.gotoModifier` setting
@@ -314,11 +356,13 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] Implement `blueprint.hoverDelay` setting
 
 ### 11.6 Progress Decorations
+
 - [ ] Create decoration types for each status
 - [ ] Apply decorations based on semantic tokens
 - [ ] Update decorations on document/ticket changes
 
 ### 11.7 Gutter Icons
+
 - [ ] Create icons for completion status (checkmark, progress, blocked)
 - [ ] Apply gutter decorations based on requirement status
 - [ ] Make gutter icons configurable
@@ -328,6 +372,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ## Phase 12: Testing
 
 ### 12.1 Unit Tests
+
 - [x] Test tree-sitter grammar with corpus files
 - [x] Test AST transformation
 - [x] Test dependency graph construction (27 tests in `dependency-graph.test.ts`)
@@ -342,6 +387,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Test workspace symbols (26 tests in `workspace-symbol.test.ts` covering empty index, single/multi-file index, query matching with prefix/substring/fuzzy, case-insensitive search, result sorting by relevance, result limiting, symbol kind mapping, container names, and edge cases)
 
 ### 12.2 Integration Tests
+
 - [ ] Test LSP initialization handshake
 - [ ] Test document synchronization
 - [ ] Test diagnostic publishing
@@ -351,6 +397,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] Test cross-file reference resolution
 
 ### 12.3 End-to-End Tests
+
 - [ ] Test full VS Code extension activation
 - [ ] Test syntax highlighting appearance
 - [ ] Test hover popup rendering
@@ -358,6 +405,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] Test settings application
 
 ### 12.4 Performance Tests
+
 - [ ] Benchmark parsing large `.bp` files
 - [ ] Benchmark workspace indexing time
 - [ ] Benchmark hover response latency
@@ -368,18 +416,21 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ## Phase 13: Documentation & Polish
 
 ### 13.1 User Documentation
+
 - [ ] Write README with installation instructions
 - [ ] Document all configuration options
 - [ ] Create usage guide with screenshots
 - [ ] Document keyboard shortcuts
 
 ### 13.2 Developer Documentation
+
 - [ ] Document architecture and code organization
 - [ ] Document AST node types and properties
 - [ ] Document contribution guidelines
 - [ ] Document release process
 
 ### 13.3 Polish
+
 - [ ] Add extension icon and branding
 - [ ] Write extension marketplace description
 - [ ] Create demo GIF/video
@@ -390,17 +441,20 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ## Phase 14: Packaging & Distribution
 
 ### 14.1 Build Pipeline
+
 - [ ] Configure zshy bundler for server
 - [ ] Configure zshy bundler for client extension
 - [ ] Set up tree-sitter WASM compilation for browser compatibility
 - [ ] Create production build scripts
 
 ### 14.2 VS Code Extension Packaging
+
 - [ ] Create `.vscodeignore` for extension
 - [ ] Package extension with `vsce package`
 - [ ] Test extension installation from `.vsix`
 
 ### 14.3 Distribution
+
 - [ ] Set up CI/CD pipeline for automated builds
 - [ ] Configure automated testing in CI
 - [ ] Publish to VS Code Marketplace
@@ -506,6 +560,8 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] **No test for empty constraint description** - `hover.ts:610-615` shows constraint description if available, but no test verifies behavior when description is empty or missing.
 
 ### Code Quality
+
+- [ ] **Fix unused variable errors detected by ESLint** - ESLint reports 41 unused variable/import errors across the codebase. These include unused imports (e.g., `Diagnostic`, `Command`, `TicketFile`, `mock`, `cleanupParser`), unused function parameters (e.g., `context`, `symbolIndex`, `fileUri`), and unused local variables (e.g., `closingIndent`, `hasTrailingComma`, `identifierNode`). Fix by either removing unused code or prefixing intentionally unused parameters with `_`. Run `bun run lint` to see the full list.
 
 - [ ] **Unused import in hover.ts** - `ReferenceNode` is imported in the type imports (`hover.ts:9`) but the `HoverTarget` interface uses `reference?: ReferenceNode` which is never actually populated - `buildReferenceTarget` doesn't set it. Either remove the field or populate it.
 

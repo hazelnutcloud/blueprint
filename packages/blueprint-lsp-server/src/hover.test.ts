@@ -42,10 +42,7 @@ describe("hover", () => {
     symbolIndex.addFile(fileUri, ast);
 
     const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
-    const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
-      requirementSymbols,
-      tickets
-    );
+    const { map: ticketMap } = buildRequirementTicketMapFromSymbols(requirementSymbols, tickets);
 
     const { graph: dependencyGraph, cycles } = DependencyGraph.build(symbolIndex);
 
@@ -121,7 +118,12 @@ describe("hover", () => {
   Authentication module.`;
       const { tree, context } = createHoverContext(source);
 
-      const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 0, character: 8 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("module");
       expect(target!.path).toBe("auth");
@@ -136,7 +138,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source);
 
       // Position on "login"
-      const target = findHoverTarget(tree!, { line: 3, character: 11 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 3, character: 11 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("feature");
       expect(target!.path).toBe("auth.login");
@@ -154,7 +161,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source);
 
       // Position on "basic-auth"
-      const target = findHoverTarget(tree!, { line: 6, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 6, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("requirement");
       expect(target!.path).toBe("auth.login.basic-auth");
@@ -175,7 +187,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source);
 
       // Position on "bcrypt-cost"
-      const target = findHoverTarget(tree!, { line: 9, character: 18 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 9, character: 18 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("constraint");
       expect(target!.path).toBe("auth.login.basic-auth.bcrypt-cost");
@@ -191,7 +208,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source);
 
       // Position on the reference "auth" in depends-on
-      const target = findHoverTarget(tree!, { line: 4, character: 16 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 4, character: 16 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("reference");
       expect(target!.path).toBe("auth");
@@ -202,7 +224,12 @@ describe("hover", () => {
   Authentication module.`;
       const { tree, context } = createHoverContext(source);
 
-      const target = findHoverTarget(tree!, { line: 0, character: 0 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 0, character: 0 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("keyword");
     });
@@ -217,7 +244,12 @@ describe("hover", () => {
       Basic authentication.`;
         const { tree, context } = createHoverContext(source);
 
-        const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 2, character: 17 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
 
         const content = buildHoverContent(target!, context);
@@ -251,7 +283,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 2, character: 17 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
 
         const content = buildHoverContent(target!, context);
@@ -289,7 +326,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 2, character: 17 },
+          context.symbolIndex,
+          context.fileUri
+        );
         const content = buildHoverContent(target!, context);
 
         expect(content!.value).toContain("1/2 satisfied");
@@ -323,7 +365,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 2, character: 17 },
+          context.symbolIndex,
+          context.fileUri
+        );
         const content = buildHoverContent(target!, context);
 
         expect(content!.value).toContain("src/auth/login.ts");
@@ -366,7 +413,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 1, character: 11 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 1, character: 11 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("feature");
 
@@ -402,7 +454,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 1, character: 11 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 1, character: 11 },
+          context.symbolIndex,
+          context.fileUri
+        );
         const content = buildHoverContent(target!, context);
 
         expect(content!.value).toContain("basic-auth");
@@ -439,7 +496,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 0, character: 8 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("module");
 
@@ -480,7 +542,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 0, character: 8 },
+          context.symbolIndex,
+          context.fileUri
+        );
         const content = buildHoverContent(target!, context);
 
         expect(content!.value).toContain("Complete: 1");
@@ -556,7 +623,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 0, character: 8 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("module");
 
@@ -598,7 +670,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 0, character: 8 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("module");
 
@@ -639,7 +716,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 5, character: 18 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 5, character: 18 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("constraint");
 
@@ -673,7 +755,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-        const target = findHoverTarget(tree!, { line: 5, character: 18 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 5, character: 18 },
+          context.symbolIndex,
+          context.fileUri
+        );
         const content = buildHoverContent(target!, context);
 
         expect(content!.value).toContain("Not satisfied");
@@ -692,7 +779,12 @@ describe("hover", () => {
         const { tree, context } = createHoverContext(source);
 
         // Position on "auth" in depends-on
-        const target = findHoverTarget(tree!, { line: 4, character: 14 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 4, character: 14 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("reference");
 
@@ -707,7 +799,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source);
 
-        const target = findHoverTarget(tree!, { line: 1, character: 14 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 1, character: 14 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("reference");
 
@@ -724,7 +821,12 @@ describe("hover", () => {
 
         const { tree, context } = createHoverContext(source);
 
-        const target = findHoverTarget(tree!, { line: 0, character: 0 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 0, character: 0 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("keyword");
 
@@ -746,7 +848,12 @@ describe("hover", () => {
         const { tree, context } = createHoverContext(source);
 
         // Position on "@depends-on" keyword (line 4, character 4 is the start of @depends-on)
-        const target = findHoverTarget(tree!, { line: 4, character: 4 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 4, character: 4 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("keyword");
 
@@ -768,7 +875,12 @@ describe("hover", () => {
         const { tree, context } = createHoverContext(source);
 
         // Position on "@constraint" keyword (line 5, character 6)
-        const target = findHoverTarget(tree!, { line: 5, character: 6 }, context.symbolIndex, context.fileUri);
+        const target = findHoverTarget(
+          tree!,
+          { line: 5, character: 6 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("keyword");
 
@@ -787,7 +899,12 @@ describe("hover", () => {
 
       const { tree, context } = createHoverContext(source);
 
-      const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 0, character: 8 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
 
       const hover = buildHover(target!, context);
@@ -850,14 +967,19 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
       // Hover over basic-auth requirement (which is in the cycle)
-      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 2, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("requirement");
       expect(target!.path).toBe("auth.login.basic-auth");
 
       const content = buildHoverContent(target!, context);
       expect(content).not.toBeNull();
-      
+
       // Should show circular dependency warning
       expect(content!.value).toContain("Part of circular dependency");
       // Should show the cycle path with arrow notation
@@ -914,8 +1036,17 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
       // All three requirements should show they're in a cycle
-      for (const [line, reqName] of [[2, "step-a"], [6, "step-b"], [10, "step-c"]] as const) {
-        const target = findHoverTarget(tree!, { line, character: 17 }, context.symbolIndex, context.fileUri);
+      for (const [line, reqName] of [
+        [2, "step-a"],
+        [6, "step-b"],
+        [10, "step-c"],
+      ] as const) {
+        const target = findHoverTarget(
+          tree!,
+          { line, character: 17 },
+          context.symbolIndex,
+          context.fileUri
+        );
         expect(target).not.toBeNull();
         expect(target!.kind).toBe("requirement");
 
@@ -959,7 +1090,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
       // Hover over oauth requirement
-      const target = findHoverTarget(tree!, { line: 5, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 5, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
 
       const content = buildHoverContent(target!, context);
@@ -1001,7 +1137,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
       // Hover over oauth requirement
-      const target = findHoverTarget(tree!, { line: 5, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 5, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content!.value).toContain("Dependencies");
@@ -1086,7 +1227,12 @@ describe("hover", () => {
 
       // Hover over final-step requirement
       // Line positions: step-1 at 2, step-2 at 5, step-3 at 8, step-4 at 11, mid-step at 14, final-step at 18
-      const target = findHoverTarget(tree!, { line: 18, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 18, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("requirement");
       expect(target!.path).toBe("auth.setup.final-step");
@@ -1174,7 +1320,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
       // Hover over final-step requirement (line 15)
-      const target = findHoverTarget(tree!, { line: 15, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 15, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.path).toBe("auth.setup.final-step");
 
@@ -1228,7 +1379,12 @@ describe("hover", () => {
 
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 2, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content!.value).toContain("TKT-001");
@@ -1272,7 +1428,12 @@ describe("hover", () => {
 
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 2, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content!.value).toContain("2/2 satisfied");
@@ -1347,10 +1508,7 @@ describe("hover", () => {
       symbolIndex.addFile(fileUri, ast);
 
       const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
-      const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
-        requirementSymbols,
-        tickets
-      );
+      const { map: ticketMap } = buildRequirementTicketMapFromSymbols(requirementSymbols, tickets);
 
       const { graph: dependencyGraph, cycles } = DependencyGraph.build(symbolIndex);
 
@@ -1398,7 +1556,12 @@ describe("hover", () => {
         ["file:///workspace"]
       );
 
-      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 2, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content!.value).toContain("[src/auth/login.ts]");
@@ -1436,7 +1599,12 @@ describe("hover", () => {
         ["file:///workspace"]
       );
 
-      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 2, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content!.value).toContain("[tests/auth/login.test.ts]");
@@ -1474,7 +1642,12 @@ describe("hover", () => {
         [] // No workspace folders
       );
 
-      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 2, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       // Should contain file paths but NOT as markdown links
@@ -1514,7 +1687,12 @@ describe("hover", () => {
         ["file:///workspace"]
       );
 
-      const target = findHoverTarget(tree!, { line: 2, character: 17 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 2, character: 17 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       // All files should be rendered as links
@@ -1535,7 +1713,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source);
 
       // Position on "@description"
-      const target = findHoverTarget(tree!, { line: 0, character: 0 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 0, character: 0 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("description");
     });
@@ -1549,7 +1732,12 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source);
 
       // Position on description text
-      const target = findHoverTarget(tree!, { line: 1, character: 10 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 1, character: 10 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("description");
       expect(target!.descriptionText).toContain("This is a test project");
@@ -1571,7 +1759,12 @@ describe("hover", () => {
       Basic authentication.`;
       const { tree, context } = createHoverContext(source);
 
-      const target = findHoverTarget(tree!, { line: 1, character: 5 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 1, character: 5 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content).not.toBeNull();
@@ -1615,7 +1808,12 @@ describe("hover", () => {
 
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
-      const target = findHoverTarget(tree!, { line: 0, character: 0 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 0, character: 0 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content!.value).toContain("Document Progress");
@@ -1635,7 +1833,12 @@ describe("hover", () => {
   Auth module.`;
       const { tree, context } = createHoverContext(source);
 
-      const target = findHoverTarget(tree!, { line: 1, character: 5 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 1, character: 5 },
+        context.symbolIndex,
+        context.fileUri
+      );
       expect(target).not.toBeNull();
       expect(target!.kind).toBe("description");
       expect(target!.descriptionText).toContain("Example configuration");
@@ -1650,7 +1853,12 @@ describe("hover", () => {
   Empty module with no requirements.`;
       const { tree, context } = createHoverContext(source);
 
-      const target = findHoverTarget(tree!, { line: 0, character: 5 }, context.symbolIndex, context.fileUri);
+      const target = findHoverTarget(
+        tree!,
+        { line: 0, character: 5 },
+        context.symbolIndex,
+        context.fileUri
+      );
       const content = buildHoverContent(target!, context);
 
       expect(content!.value).toContain("### @description");

@@ -244,22 +244,22 @@ describe("AST Transformation", () => {
       const ast = transformToAST(tree!);
       const req = ast.modules[0]!.features[0]!.requirements[0]!;
       expect(req.dependencies).toHaveLength(1);
-      
+
       const refs = req.dependencies[0]!.references;
       expect(refs).toHaveLength(4);
-      
+
       // 1-part reference
       expect(refs[0]!.parts).toEqual(["single"]);
       expect(refs[0]!.path).toBe("single");
-      
+
       // 2-part reference
       expect(refs[1]!.parts).toEqual(["two", "parts"]);
       expect(refs[1]!.path).toBe("two.parts");
-      
+
       // 3-part reference (valid per spec)
       expect(refs[2]!.parts).toEqual(["three", "part", "ref"]);
       expect(refs[2]!.path).toBe("three.part.ref");
-      
+
       // 4-part reference (beyond spec, but parsed gracefully)
       expect(refs[3]!.parts).toEqual(["deep", "nested", "ref", "path"]);
       expect(refs[3]!.path).toBe("deep.nested.ref.path");
@@ -311,7 +311,9 @@ describe("AST Transformation", () => {
         expect(symbolTable.modules.size).toBe(1);
         expect(symbolTable.modules.has("authentication")).toBe(true);
         // The last module wins (second one)
-        expect(symbolTable.modules.get("authentication")!.description).toContain("Second auth module");
+        expect(symbolTable.modules.get("authentication")!.description).toContain(
+          "Second auth module"
+        );
 
         // Duplicate should be reported
         expect(duplicates).toHaveLength(1);
@@ -367,7 +369,9 @@ describe("AST Transformation", () => {
         expect(symbolTable.features.size).toBe(2);
         expect(symbolTable.features.has("authentication.login")).toBe(true);
         expect(symbolTable.features.has("payments.login")).toBe(true);
-        expect(symbolTable.features.get("authentication.login")!.description).toContain("Auth login");
+        expect(symbolTable.features.get("authentication.login")!.description).toContain(
+          "Auth login"
+        );
         expect(symbolTable.features.get("payments.login")!.description).toContain("Payments login");
 
         // No duplicates because paths are different
@@ -492,7 +496,9 @@ describe("AST Transformation", () => {
         const ast = transformToAST(tree!);
         const { symbolTable, duplicates } = buildSymbolTable(ast);
 
-        expect(symbolTable.constraints.has("authentication.login.basic-auth.rate-limit")).toBe(true);
+        expect(symbolTable.constraints.has("authentication.login.basic-auth.rate-limit")).toBe(
+          true
+        );
         expect(symbolTable.constraints.has("authentication.login.oauth.rate-limit")).toBe(true);
         expect(
           symbolTable.constraints.get("authentication.login.basic-auth.rate-limit")!.description
@@ -521,9 +527,9 @@ describe("AST Transformation", () => {
 
         expect(symbolTable.requirements.size).toBe(1);
         expect(symbolTable.requirements.has("authentication.global-check")).toBe(true);
-        expect(
-          symbolTable.requirements.get("authentication.global-check")!.description
-        ).toContain("Second global check");
+        expect(symbolTable.requirements.get("authentication.global-check")!.description).toContain(
+          "Second global check"
+        );
 
         // Duplicate should be reported
         expect(duplicates).toHaveLength(1);
@@ -583,7 +589,7 @@ describe("AST Transformation", () => {
 
         // Should report 3 duplicates: module, feature, requirement
         expect(duplicates).toHaveLength(3);
-        expect(duplicates.map(d => d.kind)).toEqual(["module", "feature", "requirement"]);
+        expect(duplicates.map((d) => d.kind)).toEqual(["module", "feature", "requirement"]);
       });
     });
 
@@ -863,9 +869,7 @@ describe("AST Transformation", () => {
       expect(tree!.rootNode.hasError).toBe(true);
 
       // Verify an ERROR node exists in the parse tree
-      const hasErrorNode = tree!.rootNode.children.some(
-        (child) => child.type === "ERROR"
-      );
+      const hasErrorNode = tree!.rootNode.children.some((child) => child.type === "ERROR");
       expect(hasErrorNode).toBe(true);
 
       // transformToAST should still work for error recovery
@@ -904,9 +908,7 @@ describe("AST Transformation", () => {
       // 1. There's a description_block in the tree
       // 2. There's an ERROR node before it (indicating a module was wrapped in error)
       const children = tree!.rootNode.children;
-      const descriptionIndex = children.findIndex(
-        (child) => child.type === "description_block"
-      );
+      const descriptionIndex = children.findIndex((child) => child.type === "description_block");
       const errorIndex = children.findIndex((child) => child.type === "ERROR");
 
       // When @description comes after @module, the module gets wrapped in ERROR

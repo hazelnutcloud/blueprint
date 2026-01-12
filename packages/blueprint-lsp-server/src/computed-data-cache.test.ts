@@ -46,9 +46,9 @@ describe("ComputedDataCache", () => {
       symbolIndex.addFile("file:///test.bp", ast);
 
       expect(cache.isDependencyGraphCached()).toBe(false);
-      
+
       const result = cache.getDependencyGraph();
-      
+
       expect(cache.isDependencyGraphCached()).toBe(true);
       expect(result.graph).toBeDefined();
       expect(result.isAcyclic).toBe(true);
@@ -65,7 +65,7 @@ describe("ComputedDataCache", () => {
 
       const result1 = cache.getDependencyGraph();
       const result2 = cache.getDependencyGraph();
-      
+
       // Should be the exact same object (cached)
       expect(result1).toBe(result2);
     });
@@ -81,9 +81,9 @@ describe("ComputedDataCache", () => {
 
       cache.getDependencyGraph();
       expect(cache.isDependencyGraphCached()).toBe(true);
-      
+
       cache.invalidateDependencyGraph();
-      
+
       expect(cache.isDependencyGraphCached()).toBe(false);
     });
 
@@ -98,18 +98,18 @@ describe("ComputedDataCache", () => {
 
       cache.getTicketMap();
       expect(cache.isTicketMapCached()).toBe(true);
-      
+
       cache.invalidateDependencyGraph();
-      
+
       expect(cache.isTicketMapCached()).toBe(false);
     });
 
     test("increments symbol index version on invalidation", () => {
       expect(cache.getSymbolIndexVersion()).toBe(0);
-      
+
       cache.invalidateDependencyGraph();
       expect(cache.getSymbolIndexVersion()).toBe(1);
-      
+
       cache.invalidateDependencyGraph();
       expect(cache.getSymbolIndexVersion()).toBe(2);
     });
@@ -126,9 +126,9 @@ describe("ComputedDataCache", () => {
       symbolIndex.addFile("file:///test.bp", ast);
 
       expect(cache.isTicketMapCached()).toBe(false);
-      
+
       const result = cache.getTicketMap();
-      
+
       expect(cache.isTicketMapCached()).toBe(true);
       expect(result.map).toBeDefined();
     });
@@ -144,7 +144,7 @@ describe("ComputedDataCache", () => {
 
       const result1 = cache.getTicketMap();
       const result2 = cache.getTicketMap();
-      
+
       // Should be the exact same object (cached)
       expect(result1).toBe(result2);
     });
@@ -160,9 +160,9 @@ describe("ComputedDataCache", () => {
 
       cache.getTicketMap();
       expect(cache.isTicketMapCached()).toBe(true);
-      
+
       cache.invalidateTicketMap();
-      
+
       expect(cache.isTicketMapCached()).toBe(false);
     });
 
@@ -177,18 +177,18 @@ describe("ComputedDataCache", () => {
 
       cache.getDependencyGraph();
       expect(cache.isDependencyGraphCached()).toBe(true);
-      
+
       cache.invalidateTicketMap();
-      
+
       expect(cache.isDependencyGraphCached()).toBe(true);
     });
 
     test("increments tickets version on invalidation", () => {
       expect(cache.getTicketsVersion()).toBe(0);
-      
+
       cache.invalidateTicketMap();
       expect(cache.getTicketsVersion()).toBe(1);
-      
+
       cache.invalidateTicketMap();
       expect(cache.getTicketsVersion()).toBe(2);
     });
@@ -216,14 +216,10 @@ describe("ComputedDataCache", () => {
           },
         ],
       });
-      ticketDocumentManager.onDocumentOpen(
-        "file:///test.tickets.json",
-        1,
-        ticketContent
-      );
+      ticketDocumentManager.onDocumentOpen("file:///test.tickets.json", 1, ticketContent);
 
       const result = cache.getTicketMap();
-      
+
       const info = result.map.get("auth.login.basic-auth");
       expect(info).toBeDefined();
       expect(info?.tickets.length).toBe(1);
@@ -245,9 +241,9 @@ describe("ComputedDataCache", () => {
       cache.getTicketMap();
       expect(cache.isDependencyGraphCached()).toBe(true);
       expect(cache.isTicketMapCached()).toBe(true);
-      
+
       cache.invalidateAll();
-      
+
       expect(cache.isDependencyGraphCached()).toBe(false);
       expect(cache.isTicketMapCached()).toBe(false);
     });
@@ -255,9 +251,9 @@ describe("ComputedDataCache", () => {
     test("increments both versions", () => {
       const initialSymbolVersion = cache.getSymbolIndexVersion();
       const initialTicketsVersion = cache.getTicketsVersion();
-      
+
       cache.invalidateAll();
-      
+
       expect(cache.getSymbolIndexVersion()).toBe(initialSymbolVersion + 1);
       expect(cache.getTicketsVersion()).toBe(initialTicketsVersion + 1);
     });
@@ -278,12 +274,12 @@ describe("ComputedDataCache", () => {
       cache.getTicketMap();
       cache.invalidateDependencyGraph();
       cache.invalidateTicketMap();
-      
+
       expect(cache.getSymbolIndexVersion()).toBeGreaterThan(0);
       expect(cache.getTicketsVersion()).toBeGreaterThan(0);
-      
+
       cache.cleanup();
-      
+
       expect(cache.isDependencyGraphCached()).toBe(false);
       expect(cache.isTicketMapCached()).toBe(false);
       expect(cache.getSymbolIndexVersion()).toBe(0);
@@ -308,7 +304,7 @@ describe("ComputedDataCache", () => {
       symbolIndex.addFile("file:///test.bp", ast);
 
       const result = cache.getDependencyGraph();
-      
+
       expect(result.isAcyclic).toBe(false);
       expect(result.cycles.length).toBeGreaterThan(0);
     });
@@ -322,10 +318,10 @@ describe("ComputedDataCache", () => {
           User login
       `);
       symbolIndex.addFile("file:///test.bp", ast1);
-      
+
       const result1 = cache.getDependencyGraph();
       expect(result1.edges.length).toBe(0);
-      
+
       // Update with a dependency
       cache.invalidateDependencyGraph();
       const ast2 = await createAST(`
@@ -340,7 +336,7 @@ describe("ComputedDataCache", () => {
           Session requirement
       `);
       symbolIndex.addFile("file:///test.bp", ast2);
-      
+
       const result2 = cache.getDependencyGraph();
       expect(result2.edges.length).toBeGreaterThan(0);
     });

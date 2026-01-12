@@ -163,12 +163,7 @@ export class DependencyGraph {
   /**
    * Add an edge to the graph.
    */
-  private addEdge(
-    from: string,
-    to: string,
-    reference: ReferenceNode,
-    fileUri: string
-  ): void {
+  private addEdge(from: string, to: string, reference: ReferenceNode, fileUri: string): void {
     // Don't add self-loops (they're technically cycles but not very useful)
     if (from === to) {
       return;
@@ -279,10 +274,7 @@ export class DependencyGraph {
    * Cycles are equivalent if they contain the same nodes in the same order,
    * just starting from a different position.
    */
-  private hasDuplicateCycle(
-    existing: CircularDependency[],
-    newCycle: string[]
-  ): boolean {
+  private hasDuplicateCycle(existing: CircularDependency[], newCycle: string[]): boolean {
     // Remove the duplicate last element for comparison
     const cycleNodes = newCycle.slice(0, -1);
 

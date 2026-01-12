@@ -16,7 +16,7 @@ import {
 
 /**
  * LSP SymbolKind values for Blueprint elements.
- * 
+ *
  * Per LSP specification, SymbolKind is an enum:
  * - Module = 2 (used for @module)
  * - Class = 5 (used for @feature - represents a grouping of methods/functions)
@@ -24,10 +24,10 @@ import {
  * - Constant = 14 (used for @constraint - represents a fixed rule)
  */
 const SYMBOL_KIND = {
-  MODULE: 2 as SymbolKind,     // SymbolKind.Module
-  FEATURE: 5 as SymbolKind,    // SymbolKind.Class
+  MODULE: 2 as SymbolKind, // SymbolKind.Module
+  FEATURE: 5 as SymbolKind, // SymbolKind.Class
   REQUIREMENT: 12 as SymbolKind, // SymbolKind.Function
-  CONSTRAINT: 14 as SymbolKind,  // SymbolKind.Constant
+  CONSTRAINT: 14 as SymbolKind, // SymbolKind.Constant
 } as const;
 
 // ============================================================================
@@ -54,7 +54,7 @@ function locationToRange(location: SourceLocation): DocumentSymbol["range"] {
  * Create the selection range for a symbol.
  * The selection range is typically just the identifier/name portion,
  * while the full range includes the entire block.
- * 
+ *
  * For Blueprint, we use the first line of the block as the selection range
  * since identifiers appear on the same line as the keyword.
  */
@@ -79,17 +79,17 @@ function truncateDescription(description: string): string | undefined {
   if (!description) {
     return undefined;
   }
-  
+
   const lines = description.split("\n");
   const firstLine = (lines[0] ?? "").trim();
   if (!firstLine) {
     return undefined;
   }
-  
+
   if (firstLine.length <= 80) {
     return firstLine;
   }
-  
+
   return firstLine.slice(0, 77) + "...";
 }
 
@@ -115,12 +115,12 @@ function buildConstraintSymbol(constraint: ConstraintNode): DocumentSymbol {
  */
 function buildRequirementSymbol(requirement: RequirementNode): DocumentSymbol {
   const children: DocumentSymbol[] = [];
-  
+
   // Add constraints as children
   for (const constraint of requirement.constraints) {
     children.push(buildConstraintSymbol(constraint));
   }
-  
+
   return {
     name: requirement.name || "(unnamed)",
     kind: SYMBOL_KIND.REQUIREMENT,
@@ -136,17 +136,17 @@ function buildRequirementSymbol(requirement: RequirementNode): DocumentSymbol {
  */
 function buildFeatureSymbol(feature: FeatureNode): DocumentSymbol {
   const children: DocumentSymbol[] = [];
-  
+
   // Add feature-level constraints
   for (const constraint of feature.constraints) {
     children.push(buildConstraintSymbol(constraint));
   }
-  
+
   // Add requirements
   for (const requirement of feature.requirements) {
     children.push(buildRequirementSymbol(requirement));
   }
-  
+
   return {
     name: feature.name || "(unnamed)",
     kind: SYMBOL_KIND.FEATURE,
@@ -162,22 +162,22 @@ function buildFeatureSymbol(feature: FeatureNode): DocumentSymbol {
  */
 function buildModuleSymbol(module: ModuleNode): DocumentSymbol {
   const children: DocumentSymbol[] = [];
-  
+
   // Add module-level constraints
   for (const constraint of module.constraints) {
     children.push(buildConstraintSymbol(constraint));
   }
-  
+
   // Add module-level requirements (requirements directly in module, not in a feature)
   for (const requirement of module.requirements) {
     children.push(buildRequirementSymbol(requirement));
   }
-  
+
   // Add features
   for (const feature of module.features) {
     children.push(buildFeatureSymbol(feature));
   }
-  
+
   return {
     name: module.name || "(unnamed)",
     kind: SYMBOL_KIND.MODULE,
@@ -194,7 +194,7 @@ function buildModuleSymbol(module: ModuleNode): DocumentSymbol {
 
 /**
  * Build document symbols from a parsed Blueprint document.
- * 
+ *
  * Returns a hierarchical list of DocumentSymbol objects representing:
  * - Modules (top-level)
  *   - Features (children of modules)
@@ -203,7 +203,7 @@ function buildModuleSymbol(module: ModuleNode): DocumentSymbol {
  *   - Requirements (module-level, not in a feature)
  *     - Constraints
  *   - Constraints (module-level)
- * 
+ *
  * Per SPEC.md Section 3.3, the hierarchy is:
  * - @module: Major system boundaries
  * - @feature: User-facing capabilities within a module
@@ -221,12 +221,12 @@ export function buildDocumentSymbols(tree: Tree): DocumentSymbol[] {
  */
 export function buildDocumentSymbolsFromAST(doc: DocumentNode): DocumentSymbol[] {
   const symbols: DocumentSymbol[] = [];
-  
+
   // Add all modules as top-level symbols
   for (const module of doc.modules) {
     symbols.push(buildModuleSymbol(module));
   }
-  
+
   return symbols;
 }
 
@@ -236,7 +236,7 @@ export function buildDocumentSymbolsFromAST(doc: DocumentNode): DocumentSymbol[]
  */
 export function countSymbols(symbols: DocumentSymbol[]): number {
   let count = 0;
-  
+
   function countRecursive(syms: DocumentSymbol[]): void {
     for (const sym of syms) {
       count++;
@@ -245,7 +245,7 @@ export function countSymbols(symbols: DocumentSymbol[]): number {
       }
     }
   }
-  
+
   countRecursive(symbols);
   return count;
 }
@@ -256,7 +256,7 @@ export function countSymbols(symbols: DocumentSymbol[]): number {
  */
 export function flattenSymbols(symbols: DocumentSymbol[]): DocumentSymbol[] {
   const result: DocumentSymbol[] = [];
-  
+
   function flattenRecursive(syms: DocumentSymbol[]): void {
     for (const sym of syms) {
       result.push(sym);
@@ -265,7 +265,7 @@ export function flattenSymbols(symbols: DocumentSymbol[]): DocumentSymbol[] {
       }
     }
   }
-  
+
   flattenRecursive(symbols);
   return result;
 }

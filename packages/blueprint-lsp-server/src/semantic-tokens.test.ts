@@ -69,7 +69,8 @@ describe("semantic-tokens", () => {
     });
 
     test("status modifiers can be combined with declaration", () => {
-      const combined = TokenModifiers.declaration | TokenModifiers.definition | TokenModifiers.complete;
+      const combined =
+        TokenModifiers.declaration | TokenModifiers.definition | TokenModifiers.complete;
       expect(combined).toBe(1 | 2 | 32);
       expect(combined).toBe(35);
     });
@@ -169,16 +170,12 @@ describe("semantic-tokens", () => {
       const decoded = decodeTokens(tokens.data);
 
       // Find the @feature token
-      const featureToken = decoded.find(
-        (t) => t.line === 2 && t.tokenType === TokenTypes.keyword
-      );
+      const featureToken = decoded.find((t) => t.line === 2 && t.tokenType === TokenTypes.keyword);
       expect(featureToken).toBeDefined();
       expect(featureToken!.length).toBe(8); // "@feature"
 
       // Find the feature identifier
-      const featureId = decoded.find(
-        (t) => t.line === 2 && t.tokenType === TokenTypes.variable
-      );
+      const featureId = decoded.find((t) => t.line === 2 && t.tokenType === TokenTypes.variable);
       expect(featureId).toBeDefined();
       expect(featureId!.length).toBe(5); // "login"
 
@@ -186,17 +183,13 @@ describe("semantic-tokens", () => {
     });
 
     test("tokenizes @requirement keyword", () => {
-      const tree = parseDocument(
-        "@module m\n\n@feature f\n\n  @requirement basic-auth"
-      );
+      const tree = parseDocument("@module m\n\n@feature f\n\n  @requirement basic-auth");
       expect(tree).not.toBeNull();
       const tokens = buildSemanticTokens(tree!);
       const decoded = decodeTokens(tokens.data);
 
       // Find the @requirement token
-      const reqToken = decoded.find(
-        (t) => t.tokenType === TokenTypes.keyword && t.length === 12
-      );
+      const reqToken = decoded.find((t) => t.tokenType === TokenTypes.keyword && t.length === 12);
       expect(reqToken).toBeDefined();
       expect(reqToken!.length).toBe(12); // "@requirement"
 
@@ -204,9 +197,7 @@ describe("semantic-tokens", () => {
     });
 
     test("tokenizes @depends-on keyword and references", () => {
-      const tree = parseDocument(
-        "@module m\n\n@feature f\n  @depends-on other.module"
-      );
+      const tree = parseDocument("@module m\n\n@feature f\n  @depends-on other.module");
       expect(tree).not.toBeNull();
       const tokens = buildSemanticTokens(tree!);
       const decoded = decodeTokens(tokens.data);
@@ -268,9 +259,7 @@ describe("semantic-tokens", () => {
       const decoded = decodeTokens(tokens.data);
 
       // First token should be comment
-      const commentToken = decoded.find(
-        (t) => t.tokenType === TokenTypes.comment
-      );
+      const commentToken = decoded.find((t) => t.tokenType === TokenTypes.comment);
       expect(commentToken).toBeDefined();
       expect(commentToken!.line).toBe(0);
       expect(commentToken!.char).toBe(0);
@@ -289,9 +278,7 @@ describe("semantic-tokens", () => {
       const decoded = decodeTokens(tokens.data);
 
       // Should have comment tokens
-      const commentTokens = decoded.filter(
-        (t) => t.tokenType === TokenTypes.comment
-      );
+      const commentTokens = decoded.filter((t) => t.tokenType === TokenTypes.comment);
       expect(commentTokens.length).toBe(2);
 
       tree!.delete();
@@ -306,17 +293,13 @@ describe("semantic-tokens", () => {
       // Find the identifier token
       const idToken = decoded.find((t) => t.tokenType === TokenTypes.variable);
       expect(idToken).toBeDefined();
-      expect(idToken!.tokenModifiers).toBe(
-        TokenModifiers.declaration | TokenModifiers.definition
-      );
+      expect(idToken!.tokenModifiers).toBe(TokenModifiers.declaration | TokenModifiers.definition);
 
       tree!.delete();
     });
 
     test("reference identifiers have no modifiers", () => {
-      const tree = parseDocument(
-        "@module m\n\n@feature f\n  @depends-on other.ref"
-      );
+      const tree = parseDocument("@module m\n\n@feature f\n  @depends-on other.ref");
       expect(tree).not.toBeNull();
       const tokens = buildSemanticTokens(tree!);
       const decoded = decodeTokens(tokens.data);
@@ -378,18 +361,10 @@ describe("semantic-tokens", () => {
       const decoded = decodeTokens(tokens.data);
 
       // Count token types
-      const keywordCount = decoded.filter(
-        (t) => t.tokenType === TokenTypes.keyword
-      ).length;
-      const variableCount = decoded.filter(
-        (t) => t.tokenType === TokenTypes.variable
-      ).length;
-      const typeCount = decoded.filter(
-        (t) => t.tokenType === TokenTypes.type
-      ).length;
-      const commentCount = decoded.filter(
-        (t) => t.tokenType === TokenTypes.comment
-      ).length;
+      const keywordCount = decoded.filter((t) => t.tokenType === TokenTypes.keyword).length;
+      const variableCount = decoded.filter((t) => t.tokenType === TokenTypes.variable).length;
+      const typeCount = decoded.filter((t) => t.tokenType === TokenTypes.type).length;
+      const commentCount = decoded.filter((t) => t.tokenType === TokenTypes.comment).length;
 
       // Should have keywords: @description, @module, @feature, @depends-on, @requirement, @constraint
       expect(keywordCount).toBe(6);
@@ -408,11 +383,9 @@ describe("semantic-tokens", () => {
 
     describe("progress-based highlighting", () => {
       test("applies no-ticket modifier when status map provided but requirement not found", () => {
-        const tree = parseDocument(
-          "@module m\n\n@feature f\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module m\n\n@feature f\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         // Empty status map - requirement not found means no ticket
         const statusMap = new Map<string, RequirementHighlightStatus>();
         const tokens = buildSemanticTokens(tree!, statusMap);
@@ -438,14 +411,12 @@ describe("semantic-tokens", () => {
       });
 
       test("applies complete modifier for complete requirements", () => {
-        const tree = parseDocument(
-          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module auth\n\n@feature login\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         const statusMap = new Map<string, RequirementHighlightStatus>();
         statusMap.set("auth.login.basic-auth", "complete");
-        
+
         const tokens = buildSemanticTokens(tree!, statusMap);
         const decoded = decodeTokens(tokens.data);
 
@@ -460,14 +431,12 @@ describe("semantic-tokens", () => {
       });
 
       test("applies in-progress modifier for in-progress requirements", () => {
-        const tree = parseDocument(
-          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module auth\n\n@feature login\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         const statusMap = new Map<string, RequirementHighlightStatus>();
         statusMap.set("auth.login.basic-auth", "in-progress");
-        
+
         const tokens = buildSemanticTokens(tree!, statusMap);
         const decoded = decodeTokens(tokens.data);
 
@@ -482,14 +451,12 @@ describe("semantic-tokens", () => {
       });
 
       test("applies blocked modifier for blocked requirements", () => {
-        const tree = parseDocument(
-          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module auth\n\n@feature login\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         const statusMap = new Map<string, RequirementHighlightStatus>();
         statusMap.set("auth.login.basic-auth", "blocked");
-        
+
         const tokens = buildSemanticTokens(tree!, statusMap);
         const decoded = decodeTokens(tokens.data);
 
@@ -504,14 +471,12 @@ describe("semantic-tokens", () => {
       });
 
       test("applies obsolete modifier for obsolete requirements", () => {
-        const tree = parseDocument(
-          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module auth\n\n@feature login\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         const statusMap = new Map<string, RequirementHighlightStatus>();
         statusMap.set("auth.login.basic-auth", "obsolete");
-        
+
         const tokens = buildSemanticTokens(tree!, statusMap);
         const decoded = decodeTokens(tokens.data);
 
@@ -526,14 +491,12 @@ describe("semantic-tokens", () => {
       });
 
       test("applies no modifier for pending requirements (default)", () => {
-        const tree = parseDocument(
-          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module auth\n\n@feature login\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         const statusMap = new Map<string, RequirementHighlightStatus>();
         statusMap.set("auth.login.basic-auth", "pending");
-        
+
         const tokens = buildSemanticTokens(tree!, statusMap);
         const decoded = decodeTokens(tokens.data);
 
@@ -548,11 +511,9 @@ describe("semantic-tokens", () => {
       });
 
       test("without status map, no status modifiers are applied", () => {
-        const tree = parseDocument(
-          "@module auth\n\n@feature login\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module auth\n\n@feature login\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         // No status map passed
         const tokens = buildSemanticTokens(tree!);
         const decoded = decodeTokens(tokens.data);
@@ -578,11 +539,11 @@ describe("semantic-tokens", () => {
   @requirement oauth
     OAuth support`);
         expect(tree).not.toBeNull();
-        
+
         const statusMap = new Map<string, RequirementHighlightStatus>();
         statusMap.set("auth.login.basic-auth", "complete");
         statusMap.set("auth.login.oauth", "in-progress");
-        
+
         const tokens = buildSemanticTokens(tree!, statusMap);
         const decoded = decodeTokens(tokens.data);
 
@@ -594,7 +555,7 @@ describe("semantic-tokens", () => {
 
         // First requirement should be complete
         expect(reqKeywords[0]!.tokenModifiers).toBe(TokenModifiers.complete);
-        
+
         // Second requirement should be in-progress
         expect(reqKeywords[1]!.tokenModifiers).toBe(TokenModifiers.inProgress);
 
@@ -602,14 +563,12 @@ describe("semantic-tokens", () => {
       });
 
       test("handles requirement directly under module (no feature)", () => {
-        const tree = parseDocument(
-          "@module auth\n\n  @requirement basic-auth"
-        );
+        const tree = parseDocument("@module auth\n\n  @requirement basic-auth");
         expect(tree).not.toBeNull();
-        
+
         const statusMap = new Map<string, RequirementHighlightStatus>();
         statusMap.set("auth.basic-auth", "complete");
-        
+
         const tokens = buildSemanticTokens(tree!, statusMap);
         const decoded = decodeTokens(tokens.data);
 
@@ -667,11 +626,14 @@ describe("semantic-tokens", () => {
 
       const blockingStatus: BlockingStatusResult = {
         blockingInfo: new Map<string, BlockingInfo>([
-          ["auth.login.basic", {
-            status: "blocked",
-            directBlockers: [{ path: "storage.users", status: "pending" }],
-            transitiveBlockers: [],
-          }],
+          [
+            "auth.login.basic",
+            {
+              status: "blocked",
+              directBlockers: [{ path: "storage.users", status: "pending" }],
+              transitiveBlockers: [],
+            },
+          ],
         ]),
         blockedRequirements: ["auth.login.basic"],
         requirementsInCycles: [],
@@ -690,15 +652,18 @@ describe("semantic-tokens", () => {
 
       const blockingStatus: BlockingStatusResult = {
         blockingInfo: new Map<string, BlockingInfo>([
-          ["auth.a", {
-            status: "in-cycle",
-            directBlockers: [],
-            transitiveBlockers: [],
-            cycleInfo: {
-              cycle: { cycle: ["auth.a", "auth.b", "auth.a"], edges: [] },
-              cyclePeers: ["auth.b"],
+          [
+            "auth.a",
+            {
+              status: "in-cycle",
+              directBlockers: [],
+              transitiveBlockers: [],
+              cycleInfo: {
+                cycle: { cycle: ["auth.a", "auth.b", "auth.a"], edges: [] },
+                cyclePeers: ["auth.b"],
+              },
             },
-          }],
+          ],
         ]),
         blockedRequirements: [],
         requirementsInCycles: ["auth.a"],
@@ -716,11 +681,14 @@ describe("semantic-tokens", () => {
 
       const blockingStatus: BlockingStatusResult = {
         blockingInfo: new Map<string, BlockingInfo>([
-          ["auth.login.basic", {
-            status: "not-blocked",
-            directBlockers: [],
-            transitiveBlockers: [],
-          }],
+          [
+            "auth.login.basic",
+            {
+              status: "not-blocked",
+              directBlockers: [],
+              transitiveBlockers: [],
+            },
+          ],
         ]),
         blockedRequirements: [],
         requirementsInCycles: [],

@@ -434,11 +434,11 @@ describe("references", () => {
       expect(result).not.toBeNull();
       // Should include the declaration + the reference
       expect(result!.length).toBe(2);
-      
+
       // One of them should be the declaration (line 2)
       const hasDeclaration = result!.some((loc) => loc.range.start.line === 2);
       expect(hasDeclaration).toBe(true);
-      
+
       // One of them should be the reference (line 6)
       const hasReference = result!.some((loc) => loc.range.start.line === 6);
       expect(hasReference).toBe(true);
@@ -632,7 +632,7 @@ describe("references", () => {
       includeDeclaration: boolean = false
     ): ReferencesContext {
       const { graph, edges } = DependencyGraph.build(symbolIndex);
-      
+
       // Build ticket map
       const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
       const ticketFile: TicketFile = {
@@ -644,7 +644,7 @@ describe("references", () => {
         requirementSymbols,
         ticketFile
       );
-      
+
       // Build ticket files map
       const ticketFiles = new Map<string, TicketFileInfo>();
       ticketFiles.set(ticketFileUri, {
@@ -652,7 +652,7 @@ describe("references", () => {
         content: ticketFileContent,
         tickets,
       });
-      
+
       return {
         symbolIndex,
         dependencyGraph: graph,
@@ -838,15 +838,15 @@ describe("references", () => {
 
       expect(result).not.toBeNull();
       expect(result!.length).toBe(2);
-      
+
       // One should be the @depends-on reference in the .bp file
       const bpReference = result!.find((loc) => loc.uri === "file:///test.bp");
       expect(bpReference).toBeDefined();
       expect(bpReference!.range.start.line).toBe(6);
-      
+
       // One should be the ticket in the .tickets.json file
-      const ticketReference = result!.find((loc) => 
-        loc.uri === "file:///.blueprint/tickets/test.tickets.json"
+      const ticketReference = result!.find(
+        (loc) => loc.uri === "file:///.blueprint/tickets/test.tickets.json"
       );
       expect(ticketReference).toBeDefined();
     });
@@ -901,33 +901,33 @@ describe("references", () => {
       );
 
       const context = createContextWithTickets(
-        symbolIndex, 
-        tickets, 
+        symbolIndex,
+        tickets,
         ticketFileContent,
         "file:///.blueprint/tickets/test.tickets.json",
-        true  // includeDeclaration
+        true // includeDeclaration
       );
       const result = buildReferences(target!, context);
 
       expect(result).not.toBeNull();
       expect(result!.length).toBe(3);
-      
+
       // Should include:
       // 1. The declaration itself (line 2)
-      const declaration = result!.find((loc) => 
-        loc.uri === "file:///test.bp" && loc.range.start.line === 2
+      const declaration = result!.find(
+        (loc) => loc.uri === "file:///test.bp" && loc.range.start.line === 2
       );
       expect(declaration).toBeDefined();
-      
+
       // 2. The @depends-on reference (line 6)
-      const dependsOnRef = result!.find((loc) => 
-        loc.uri === "file:///test.bp" && loc.range.start.line === 6
+      const dependsOnRef = result!.find(
+        (loc) => loc.uri === "file:///test.bp" && loc.range.start.line === 6
       );
       expect(dependsOnRef).toBeDefined();
-      
+
       // 3. The ticket reference
-      const ticketRef = result!.find((loc) => 
-        loc.uri === "file:///.blueprint/tickets/test.tickets.json"
+      const ticketRef = result!.find(
+        (loc) => loc.uri === "file:///.blueprint/tickets/test.tickets.json"
       );
       expect(ticketRef).toBeDefined();
     });
@@ -1092,7 +1092,7 @@ describe("references", () => {
       includeDeclaration: boolean = false
     ): ReferencesContext {
       const { graph, edges } = DependencyGraph.build(symbolIndex);
-      
+
       // Build ticket map
       const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
       const ticketFile: TicketFile = {
@@ -1104,7 +1104,7 @@ describe("references", () => {
         requirementSymbols,
         ticketFile
       );
-      
+
       // Build ticket files map
       const ticketFiles = new Map<string, TicketFileInfo>();
       ticketFiles.set(ticketFileUri, {
@@ -1112,7 +1112,7 @@ describe("references", () => {
         content: ticketFileContent,
         tickets,
       });
-      
+
       return {
         symbolIndex,
         dependencyGraph: graph,
@@ -1187,19 +1187,15 @@ describe("references", () => {
       expect(result).not.toBeNull();
       // Should find: 1 ticket reference + 2 implementation files
       expect(result!.length).toBe(3);
-      
+
       // Should include the implementation file
-      const implFile = result!.find((loc) => 
-        loc.uri.includes("src/auth/login.ts")
-      );
+      const implFile = result!.find((loc) => loc.uri.includes("src/auth/login.ts"));
       expect(implFile).toBeDefined();
       expect(implFile!.range.start.line).toBe(0);
       expect(implFile!.range.start.character).toBe(0);
-      
+
       // Should include the test file
-      const testFile = result!.find((loc) => 
-        loc.uri.includes("tests/auth/login.test.ts")
-      );
+      const testFile = result!.find((loc) => loc.uri.includes("tests/auth/login.test.ts"));
       expect(testFile).toBeDefined();
     });
 
@@ -1285,11 +1281,9 @@ describe("references", () => {
       expect(result).not.toBeNull();
       // Should find: 2 ticket references + 3 implementation files
       expect(result!.length).toBe(5);
-      
+
       // Check all implementation files are present
-      const implFiles = result!.filter((loc) => 
-        loc.uri.includes("/workspace/")
-      );
+      const implFiles = result!.filter((loc) => loc.uri.includes("/workspace/"));
       expect(implFiles.length).toBe(3);
     });
 
@@ -1351,11 +1345,9 @@ describe("references", () => {
       const result = buildReferences(target!, context);
 
       expect(result).not.toBeNull();
-      
+
       // Count implementation file references (should be deduplicated)
-      const implFiles = result!.filter((loc) => 
-        loc.uri.includes("src/auth/login.ts")
-      );
+      const implFiles = result!.filter((loc) => loc.uri.includes("src/auth/login.ts"));
       expect(implFiles.length).toBe(1); // Should only appear once
     });
 
@@ -1556,31 +1548,27 @@ describe("references", () => {
       // 4. Implementation file (src/auth/login.ts)
       // 5. Test file (tests/auth/login.test.ts)
       expect(result!.length).toBe(5);
-      
+
       // Verify each type is present
-      const declaration = result!.find((loc) => 
-        loc.uri === "file:///test.bp" && loc.range.start.line === 2
+      const declaration = result!.find(
+        (loc) => loc.uri === "file:///test.bp" && loc.range.start.line === 2
       );
       expect(declaration).toBeDefined();
-      
-      const dependsOnRef = result!.find((loc) => 
-        loc.uri === "file:///test.bp" && loc.range.start.line === 6
+
+      const dependsOnRef = result!.find(
+        (loc) => loc.uri === "file:///test.bp" && loc.range.start.line === 6
       );
       expect(dependsOnRef).toBeDefined();
-      
-      const ticketRef = result!.find((loc) => 
-        loc.uri === "file:///.blueprint/tickets/test.tickets.json"
+
+      const ticketRef = result!.find(
+        (loc) => loc.uri === "file:///.blueprint/tickets/test.tickets.json"
       );
       expect(ticketRef).toBeDefined();
-      
-      const implFile = result!.find((loc) => 
-        loc.uri.includes("src/auth/login.ts")
-      );
+
+      const implFile = result!.find((loc) => loc.uri.includes("src/auth/login.ts"));
       expect(implFile).toBeDefined();
-      
-      const testFile = result!.find((loc) => 
-        loc.uri.includes("tests/auth/login.test.ts")
-      );
+
+      const testFile = result!.find((loc) => loc.uri.includes("tests/auth/login.test.ts"));
       expect(testFile).toBeDefined();
     });
   });

@@ -11,9 +11,9 @@ import type { RequirementTicketMap, RequirementStatus } from "./requirement-tick
  * should be reported as info diagnostics.
  */
 export type BlockingStatus =
-  | "not-blocked"      // All dependencies are complete
-  | "blocked"          // One or more dependencies are not complete
-  | "in-cycle";        // Part of a circular dependency (mutual blocking)
+  | "not-blocked" // All dependencies are complete
+  | "blocked" // One or more dependencies are not complete
+  | "in-cycle"; // Part of a circular dependency (mutual blocking)
 
 /**
  * Information about what is blocking a requirement.
@@ -70,7 +70,7 @@ export interface BlockingStatusResult {
 /**
  * Determines if a requirement status represents a completed state.
  * A requirement is considered "complete" only when its status is "complete".
- * 
+ *
  * Per SPEC.md, tickets track implementation progress. A requirement blocks
  * its dependents until all its constraints are satisfied and tickets are complete.
  */
@@ -88,12 +88,12 @@ export function isNonBlockingStatus(status: RequirementStatus): boolean {
 
 /**
  * Computes the blocking info for a single requirement.
- * 
+ *
  * A requirement is blocked if:
  * 1. Any of its direct dependencies is not complete, OR
  * 2. Any of its transitive dependencies is not complete, OR
  * 3. It is part of a circular dependency
- * 
+ *
  * @param requirementPath The path of the requirement to check
  * @param graph The dependency graph
  * @param ticketMap The requirement-ticket mapping with status info
@@ -175,10 +175,10 @@ function findCycleInfo(
 
 /**
  * Computes blocking status for all requirements in the ticket map.
- * 
+ *
  * This is the main entry point for blocking status computation. It analyzes
  * all requirements and categorizes them as blocked, in-cycle, or unblocked.
- * 
+ *
  * @param graph The dependency graph (built from symbol index)
  * @param ticketMap The requirement-ticket mapping
  * @param cycles Detected circular dependencies from the graph
@@ -221,11 +221,11 @@ export function computeAllBlockingStatus(
 
 /**
  * Propagates blocking status through the hierarchy.
- * 
+ *
  * This computes blocking status for modules and features based on their
  * contained requirements. A feature is considered blocked if any of its
  * requirements is blocked. A module is blocked if any of its features is blocked.
- * 
+ *
  * @param blockingResult The requirement-level blocking result
  * @param ticketMap The requirement-ticket mapping (for path prefix matching)
  * @returns Mapping from module/feature paths to their aggregated blocking status
@@ -282,7 +282,7 @@ export function propagateBlockingToHierarchy(
 /**
  * Gets all requirements that would be unblocked if a given requirement is completed.
  * Useful for showing the impact of completing a blocking requirement.
- * 
+ *
  * @param completedPath The path of the requirement that would be completed
  * @param graph The dependency graph
  * @param ticketMap The requirement-ticket mapping
@@ -382,10 +382,7 @@ export function updateBlockingStatusCache(
 /**
  * Checks if a file change should invalidate the cache.
  */
-export function shouldInvalidateCache(
-  cache: BlockingStatusCache,
-  changedFileUri: string
-): boolean {
+export function shouldInvalidateCache(cache: BlockingStatusCache, changedFileUri: string): boolean {
   // Invalidate if:
   // 1. Any tracked .bp file changed
   // 2. Any .tickets.json file changed
