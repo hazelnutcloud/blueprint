@@ -6,6 +6,7 @@ import {
   getAllRequirements,
   getAllConstraints,
   getRequirementPath,
+  type ReferenceNode,
 } from "../src/ast";
 
 describe("AST Transformation", () => {
@@ -214,13 +215,13 @@ describe("AST Transformation", () => {
       expect(req.dependencies).toHaveLength(2);
 
       // 4-part reference
-      const ref1 = req.dependencies[0]!.references[0]!;
+      const ref1: ReferenceNode = req.dependencies[0]!.references[0]!;
       expect(ref1.path).toBe("a.b.c.d");
       expect(ref1.parts).toEqual(["a", "b", "c", "d"]);
       expect(ref1.parts).toHaveLength(4);
 
       // 6-part reference
-      const ref2 = req.dependencies[1]!.references[0]!;
+      const ref2: ReferenceNode = req.dependencies[1]!.references[0]!;
       expect(ref2.path).toBe("one.two.three.four.five.six");
       expect(ref2.parts).toEqual(["one", "two", "three", "four", "five", "six"]);
       expect(ref2.parts).toHaveLength(6);
