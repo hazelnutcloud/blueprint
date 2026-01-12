@@ -53,7 +53,7 @@ export interface HoverContext {
  */
 export interface HoverTarget {
   /** The type of element being hovered */
-  kind: "module" | "feature" | "requirement" | "constraint" | "reference" | "keyword";
+  kind: "module" | "feature" | "requirement" | "constraint" | "reference" | "keyword" | "description";
   /** The symbol path if applicable */
   path?: string;
   /** The AST node if available */
@@ -62,6 +62,8 @@ export interface HoverTarget {
   reference?: ReferenceNode;
   /** The indexed symbol if resolved */
   symbol?: IndexedSymbol;
+  /** The description text if hovering a description block */
+  descriptionText?: string;
   /** The hover range */
   range: {
     startLine: number;
@@ -174,6 +176,11 @@ export function findHoverTarget(
       return buildConstraintTarget(current, identifierNode, symbolIndex, fileUri);
     }
 
+    // Check for description block
+    if (type === "description_block") {
+      return buildDescriptionTarget(current);
+    }
+
     // Check for keyword tokens
     if (isKeywordNode(current)) {
       return buildKeywordTarget(current);
@@ -187,6 +194,7 @@ export function findHoverTarget(
 
 /**
  * Check if a node is a keyword.
+ * Note: @description is excluded because description blocks get specialized hover content.
  */
 function isKeywordNode(node: Node): boolean {
   const text = node.text;
@@ -195,8 +203,8 @@ function isKeywordNode(node: Node): boolean {
     text === "@feature" ||
     text === "@requirement" ||
     text === "@constraint" ||
-    text === "@depends-on" ||
-    text === "@description"
+    text === "@depends-on"
+    // @description is handled by description_block hover
   );
 }
 
@@ -460,6 +468,31 @@ function buildReferenceTarget(
 }
 
 /**
+ * Build hover target for a description block.
+ */
+function buildDescriptionTarget(descriptionNode: Node): HoverTarget {
+  // Extract description text from the description block
+  const parts: string[] = [];
+  for (const child of descriptionNode.children) {
+    if (child.type === "description_text" || child.type === "code_block") {
+      parts.push(child.text);
+    }
+  }
+  const descriptionText = parts.join("\n").trim();
+
+  return {
+    kind: "description",
+    descriptionText,
+    range: {
+      startLine: descriptionNode.startPosition.row,
+      startColumn: descriptionNode.startPosition.column,
+      endLine: descriptionNode.endPosition.row,
+      endColumn: descriptionNode.endPosition.column,
+    },
+  };
+}
+
+/**
  * Build hover target for a keyword.
  */
 function buildKeywordTarget(keywordNode: Node): HoverTarget {
@@ -498,6 +531,8 @@ export function buildHoverContent(
       return buildReferenceHover(target, context);
     case "keyword":
       return buildKeywordHover(target);
+    case "description":
+      return buildDescriptionHover(target, context);
     default:
       return null;
   }
@@ -883,6 +918,49 @@ function buildKeywordHover(target: HoverTarget): MarkupContent | null {
   lines.push("- `@constraint` - Implementation requirements");
   lines.push("- `@depends-on` - Dependencies on other elements");
   lines.push("- `@description` - Document-level description");
+
+  return {
+    kind: MarkupKind.Markdown,
+    value: lines.join("\n"),
+  };
+}
+
+/**
+ * Build hover content for a description block.
+ * Shows the document-level description and overall project context.
+ */
+function buildDescriptionHover(
+  target: HoverTarget,
+  context: HoverContext
+): MarkupContent | null {
+  const lines: string[] = [];
+
+  // Header
+  lines.push("### @description");
+  lines.push("");
+  lines.push("Document-level description providing context for this requirements file.");
+  lines.push("");
+
+  // Show the description text if available
+  if (target.descriptionText) {
+    lines.push("**Content:**");
+    lines.push("");
+    lines.push(target.descriptionText);
+    lines.push("");
+  }
+
+  // Show overall document progress
+  const allReqs = context.ticketMap;
+  if (allReqs.size > 0) {
+    const summary = getCompletionSummary(allReqs);
+    lines.push("---");
+    lines.push("");
+    lines.push("**Document Progress:**");
+    lines.push(`${summary.complete}/${summary.total} requirements complete`);
+    lines.push("");
+    const progressBar = buildProgressBar(summary.percentComplete);
+    lines.push(`${progressBar} ${summary.percentComplete}%`);
+  }
 
   return {
     kind: MarkupKind.Markdown,

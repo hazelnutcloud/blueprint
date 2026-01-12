@@ -1062,4 +1062,138 @@ describe("hover", () => {
       expect(content!.value).toContain("[tests/auth/password.test.ts]");
     });
   });
+
+  describe("description hover", () => {
+    test("finds description target when hovering over @description keyword", () => {
+      const source = `@description
+  This is a test project for authentication.
+
+@module auth
+  Authentication module.`;
+      const { tree, context } = createHoverContext(source);
+
+      // Position on "@description"
+      const target = findHoverTarget(tree!, { line: 0, character: 0 }, context.symbolIndex, context.fileUri);
+      expect(target).not.toBeNull();
+      expect(target!.kind).toBe("description");
+    });
+
+    test("finds description target when hovering over description text", () => {
+      const source = `@description
+  This is a test project for authentication.
+
+@module auth
+  Authentication module.`;
+      const { tree, context } = createHoverContext(source);
+
+      // Position on description text
+      const target = findHoverTarget(tree!, { line: 1, character: 10 }, context.symbolIndex, context.fileUri);
+      expect(target).not.toBeNull();
+      expect(target!.kind).toBe("description");
+      expect(target!.descriptionText).toContain("This is a test project");
+    });
+
+    test("builds hover content for description block", () => {
+      const source = `@description
+  CloudVault Authentication System
+  
+  This document specifies the authentication requirements.
+
+@module auth
+  Authentication module.
+  
+  @feature login
+    Login feature.
+    
+    @requirement basic-auth
+      Basic authentication.`;
+      const { tree, context } = createHoverContext(source);
+
+      const target = findHoverTarget(tree!, { line: 1, character: 5 }, context.symbolIndex, context.fileUri);
+      const content = buildHoverContent(target!, context);
+
+      expect(content).not.toBeNull();
+      expect(content!.value).toContain("### @description");
+      expect(content!.value).toContain("Document-level description");
+      expect(content!.value).toContain("CloudVault Authentication System");
+      expect(content!.value).toContain("authentication requirements");
+    });
+
+    test("shows document progress in description hover", () => {
+      const source = `@description
+  Project overview.
+
+@module auth
+  @feature login
+    @requirement basic-auth
+      Basic auth.
+    @requirement oauth
+      OAuth login.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.login.basic-auth",
+            description: "Implement basic auth",
+            status: "complete",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-002",
+            ref: "auth.login.oauth",
+            description: "Implement OAuth",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+      const target = findHoverTarget(tree!, { line: 0, character: 0 }, context.symbolIndex, context.fileUri);
+      const content = buildHoverContent(target!, context);
+
+      expect(content!.value).toContain("Document Progress");
+      expect(content!.value).toContain("1/2 requirements complete");
+      expect(content!.value).toContain("50%");
+    });
+
+    test("handles description with code blocks", () => {
+      const source = `@description
+  Example configuration:
+  
+  \`\`\`
+  AUTH_SECRET=xxx
+  \`\`\`
+
+@module auth
+  Auth module.`;
+      const { tree, context } = createHoverContext(source);
+
+      const target = findHoverTarget(tree!, { line: 1, character: 5 }, context.symbolIndex, context.fileUri);
+      expect(target).not.toBeNull();
+      expect(target!.kind).toBe("description");
+      expect(target!.descriptionText).toContain("Example configuration");
+      expect(target!.descriptionText).toContain("AUTH_SECRET");
+    });
+
+    test("description hover with no requirements shows no progress", () => {
+      const source = `@description
+  Empty project description.
+
+@module empty
+  Empty module with no requirements.`;
+      const { tree, context } = createHoverContext(source);
+
+      const target = findHoverTarget(tree!, { line: 0, character: 5 }, context.symbolIndex, context.fileUri);
+      const content = buildHoverContent(target!, context);
+
+      expect(content!.value).toContain("### @description");
+      // Should not contain progress section when there are no requirements
+      expect(content!.value).not.toContain("Document Progress");
+    });
+  });
 });

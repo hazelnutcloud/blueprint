@@ -477,7 +477,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
   1. Update SPEC.md to explicitly allow module-level requirements, OR
   2. Add diagnostic errors for module-level requirements and remove this path handling
 
-- [ ] **Hover for @description block not implemented** - The `findHoverTarget` function (`hover.ts:108-158`) handles modules, features, requirements, constraints, references, and keywords, but does not handle hovering over `@description` blocks. SPEC.md Section 3.2.1 defines `@description` as a document-level keyword. Should show document-level context when hovering over description.
+- [x] **Hover for @description block not implemented** - The `findHoverTarget` function (`hover.ts:108-158`) handles modules, features, requirements, constraints, references, and keywords, but does not handle hovering over `@description` blocks. SPEC.md Section 3.2.1 defines `@description` as a document-level keyword. Should show document-level context when hovering over description. (Fixed: Added `buildDescriptionTarget()` and `buildDescriptionHover()` functions in `hover.ts`. Description hover shows the description text content and overall document progress. 6 tests added in `hover.test.ts`.)
 
 - [ ] **Missing file location in requirement hover** - SPEC.md Section 5.5 hover example shows ticket info with a "Files:" section listing implementation files like `src/auth/login.ts`. The implementation does include this (`hover.ts:470-476`), but the SPEC shows file paths without bullets in a clean format. Minor formatting difference.
 
