@@ -1437,3 +1437,380 @@ suite("File Associations", () => {
     assert.strictEqual(doc.languageId, "blueprint", "Document should have blueprint language ID");
   });
 });
+
+suite("Settings Application", () => {
+  /**
+   * Helper to update a configuration setting and wait for it to propagate.
+   */
+  async function updateSetting<T>(
+    section: string,
+    value: T,
+    target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global
+  ): Promise<void> {
+    const parts = section.split(".");
+    const key = parts.pop()!;
+    const configSection = parts.join(".");
+    const config = vscode.workspace.getConfiguration(configSection);
+    await config.update(key, value, target);
+    // Allow time for the setting change to propagate
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  /**
+   * Helper to reset a configuration setting to its default.
+   */
+  async function resetSetting(section: string): Promise<void> {
+    const parts = section.split(".");
+    const key = parts.pop()!;
+    const configSection = parts.join(".");
+    const config = vscode.workspace.getConfiguration(configSection);
+    await config.update(key, undefined, vscode.ConfigurationTarget.Global);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  test("gotoModifier setting updates editor.multiCursorModifier for blueprint", async () => {
+    // Open a Blueprint document to ensure language-specific settings are active
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: "@module test\n  Test module",
+    });
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for extension to initialize
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    try {
+      // Set gotoModifier to "ctrlCmd" (means Ctrl/Cmd+Click for definition)
+      await updateSetting("blueprint.gotoModifier", "ctrlCmd");
+
+      // Check that editor.multiCursorModifier is set to "alt" for Blueprint
+      // (inverse relationship: if gotoModifier is ctrlCmd, multiCursorModifier should be alt)
+      const editorConfig = vscode.workspace.getConfiguration("editor", {
+        languageId: "blueprint",
+      });
+      const multiCursorModifier = editorConfig.get<string>("multiCursorModifier");
+
+      // The setting should be "alt" when gotoModifier is "ctrlCmd"
+      assert.strictEqual(
+        multiCursorModifier,
+        "alt",
+        "multiCursorModifier should be 'alt' when gotoModifier is 'ctrlCmd'"
+      );
+
+      // Now set gotoModifier to "alt" (default)
+      await updateSetting("blueprint.gotoModifier", "alt");
+
+      // Check that editor.multiCursorModifier is set to "ctrlCmd" for Blueprint
+      const updatedConfig = vscode.workspace.getConfiguration("editor", {
+        languageId: "blueprint",
+      });
+      const updatedModifier = updatedConfig.get<string>("multiCursorModifier");
+      assert.strictEqual(
+        updatedModifier,
+        "ctrlCmd",
+        "multiCursorModifier should be 'ctrlCmd' when gotoModifier is 'alt'"
+      );
+    } finally {
+      // Reset to default
+      await resetSetting("blueprint.gotoModifier");
+    }
+  });
+
+  test("hoverDelay setting updates editor.hover.delay for blueprint", async () => {
+    // Open a Blueprint document
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: "@module test\n  Test module",
+    });
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for extension to initialize
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    try {
+      // Set a custom hover delay
+      const customDelay = 500;
+      await updateSetting("blueprint.hoverDelay", customDelay);
+
+      // Check that editor.hover.delay is updated for Blueprint
+      const editorConfig = vscode.workspace.getConfiguration("editor", {
+        languageId: "blueprint",
+      });
+      const hoverDelay = editorConfig.get<number>("hover.delay");
+
+      assert.strictEqual(
+        hoverDelay,
+        customDelay,
+        `hover.delay should be ${customDelay} after setting hoverDelay`
+      );
+
+      // Set a different delay
+      const anotherDelay = 150;
+      await updateSetting("blueprint.hoverDelay", anotherDelay);
+
+      const updatedConfig = vscode.workspace.getConfiguration("editor", {
+        languageId: "blueprint",
+      });
+      const updatedDelay = updatedConfig.get<number>("hover.delay");
+      assert.strictEqual(
+        updatedDelay,
+        anotherDelay,
+        `hover.delay should be ${anotherDelay} after updating hoverDelay`
+      );
+    } finally {
+      // Reset to default
+      await resetSetting("blueprint.hoverDelay");
+    }
+  });
+
+  test("highlighting color settings update semantic token customizations", async () => {
+    // Open a Blueprint document
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: "@module test\n  Test module",
+    });
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for extension to initialize
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    try {
+      // Set custom highlighting colors
+      const customCompleteColor = "#00ff00";
+      const customBlockedColor = "#ff0000";
+
+      await updateSetting("blueprint.highlighting.complete", customCompleteColor);
+      await updateSetting("blueprint.highlighting.blocked", customBlockedColor);
+
+      // Allow extra time for semantic token customizations to update
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Check that editor.semanticTokenColorCustomizations includes our rules
+      const editorConfig = vscode.workspace.getConfiguration("editor");
+      const tokenCustomizations = editorConfig.get<{ rules?: Record<string, unknown> }>(
+        "semanticTokenColorCustomizations"
+      );
+
+      assert.ok(tokenCustomizations, "semanticTokenColorCustomizations should exist");
+      assert.ok(tokenCustomizations.rules, "semanticTokenColorCustomizations.rules should exist");
+
+      // Verify the complete color rule
+      const completeRule = tokenCustomizations.rules["*.complete:blueprint"] as
+        | { foreground?: string }
+        | undefined;
+      assert.ok(completeRule, "Should have *.complete:blueprint rule");
+      assert.strictEqual(
+        completeRule.foreground,
+        customCompleteColor,
+        "complete rule foreground should match custom color"
+      );
+
+      // Verify the blocked color rule
+      const blockedRule = tokenCustomizations.rules["*.blocked:blueprint"] as
+        | { foreground?: string }
+        | undefined;
+      assert.ok(blockedRule, "Should have *.blocked:blueprint rule");
+      assert.strictEqual(
+        blockedRule.foreground,
+        customBlockedColor,
+        "blocked rule foreground should match custom color"
+      );
+    } finally {
+      // Reset to defaults
+      await resetSetting("blueprint.highlighting.complete");
+      await resetSetting("blueprint.highlighting.blocked");
+    }
+  });
+
+  test("showProgressInGutter setting can be toggled", async () => {
+    // This test verifies the setting can be changed without errors.
+    // We cannot easily verify decorations are applied in E2E tests,
+    // but we can verify the setting change is accepted.
+
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module test
+  Test module
+
+  @feature example
+    Example feature
+
+    @requirement sample
+      Sample requirement
+`,
+    });
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for extension to initialize
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    try {
+      // Disable gutter icons
+      await updateSetting("blueprint.showProgressInGutter", false);
+
+      // Verify the setting was applied
+      const config = vscode.workspace.getConfiguration("blueprint");
+      const gutterEnabled = config.get<boolean>("showProgressInGutter");
+      assert.strictEqual(gutterEnabled, false, "showProgressInGutter should be false");
+
+      // Re-enable gutter icons
+      await updateSetting("blueprint.showProgressInGutter", true);
+
+      const updatedConfig = vscode.workspace.getConfiguration("blueprint");
+      const updatedGutterEnabled = updatedConfig.get<boolean>("showProgressInGutter");
+      assert.strictEqual(updatedGutterEnabled, true, "showProgressInGutter should be true");
+    } finally {
+      // Reset to default
+      await resetSetting("blueprint.showProgressInGutter");
+    }
+  });
+
+  test("showProgressHighlighting setting can be toggled", async () => {
+    // This test verifies the setting can be changed without errors.
+
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module test
+  Test module
+
+  @feature example
+    Example feature
+
+    @requirement sample
+      Sample requirement
+`,
+    });
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for extension to initialize
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    try {
+      // Disable background highlighting
+      await updateSetting("blueprint.showProgressHighlighting", false);
+
+      // Verify the setting was applied
+      const config = vscode.workspace.getConfiguration("blueprint");
+      const highlightingEnabled = config.get<boolean>("showProgressHighlighting");
+      assert.strictEqual(highlightingEnabled, false, "showProgressHighlighting should be false");
+
+      // Re-enable background highlighting
+      await updateSetting("blueprint.showProgressHighlighting", true);
+
+      const updatedConfig = vscode.workspace.getConfiguration("blueprint");
+      const updatedHighlightingEnabled = updatedConfig.get<boolean>("showProgressHighlighting");
+      assert.strictEqual(
+        updatedHighlightingEnabled,
+        true,
+        "showProgressHighlighting should be true"
+      );
+    } finally {
+      // Reset to default
+      await resetSetting("blueprint.showProgressHighlighting");
+    }
+  });
+
+  test("ticketsPath setting is readable and can be changed", async () => {
+    try {
+      // Get the default value
+      const config = vscode.workspace.getConfiguration("blueprint");
+      const defaultPath = config.get<string>("ticketsPath");
+      assert.strictEqual(
+        defaultPath,
+        ".blueprint/tickets",
+        "Default ticketsPath should be .blueprint/tickets"
+      );
+
+      // Set a custom path
+      const customPath = "custom/tickets/path";
+      await updateSetting("blueprint.ticketsPath", customPath);
+
+      // Verify the setting was applied
+      const updatedConfig = vscode.workspace.getConfiguration("blueprint");
+      const updatedPath = updatedConfig.get<string>("ticketsPath");
+      assert.strictEqual(updatedPath, customPath, "ticketsPath should be updated to custom path");
+    } finally {
+      // Reset to default
+      await resetSetting("blueprint.ticketsPath");
+    }
+  });
+
+  test("trace.server setting accepts valid values", async () => {
+    try {
+      // Test each valid trace level
+      const validLevels = ["off", "messages", "verbose"] as const;
+
+      for (const level of validLevels) {
+        await updateSetting("blueprint.trace.server", level);
+
+        const config = vscode.workspace.getConfiguration("blueprint");
+        const traceLevel = config.get<string>("trace.server");
+        assert.strictEqual(traceLevel, level, `trace.server should be '${level}'`);
+      }
+    } finally {
+      // Reset to default
+      await resetSetting("blueprint.trace.server");
+    }
+  });
+
+  test("multiple highlighting colors can be updated together", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: "@module test\n  Test module",
+    });
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for extension to initialize
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    try {
+      // Set all highlighting colors at once
+      const customColors = {
+        complete: "#11aa11",
+        inProgress: "#aaaa11",
+        blocked: "#aa1111",
+        noTicket: "#555555",
+        obsolete: "#888888",
+      };
+
+      await updateSetting("blueprint.highlighting.complete", customColors.complete);
+      await updateSetting("blueprint.highlighting.inProgress", customColors.inProgress);
+      await updateSetting("blueprint.highlighting.blocked", customColors.blocked);
+      await updateSetting("blueprint.highlighting.noTicket", customColors.noTicket);
+      await updateSetting("blueprint.highlighting.obsolete", customColors.obsolete);
+
+      // Allow time for semantic token customizations to update
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Verify all colors in the configuration
+      const highlightConfig = vscode.workspace.getConfiguration("blueprint.highlighting");
+      assert.strictEqual(highlightConfig.get("complete"), customColors.complete);
+      assert.strictEqual(highlightConfig.get("inProgress"), customColors.inProgress);
+      assert.strictEqual(highlightConfig.get("blocked"), customColors.blocked);
+      assert.strictEqual(highlightConfig.get("noTicket"), customColors.noTicket);
+      assert.strictEqual(highlightConfig.get("obsolete"), customColors.obsolete);
+
+      // Verify semantic token rules were updated
+      const editorConfig = vscode.workspace.getConfiguration("editor");
+      const tokenCustomizations = editorConfig.get<{ rules?: Record<string, unknown> }>(
+        "semanticTokenColorCustomizations"
+      );
+
+      assert.ok(tokenCustomizations?.rules, "semanticTokenColorCustomizations.rules should exist");
+
+      const rules = tokenCustomizations.rules as Record<string, { foreground?: string }>;
+      assert.strictEqual(rules["*.complete:blueprint"]?.foreground, customColors.complete);
+      assert.strictEqual(rules["*.inProgress:blueprint"]?.foreground, customColors.inProgress);
+      assert.strictEqual(rules["*.blocked:blueprint"]?.foreground, customColors.blocked);
+      assert.strictEqual(rules["*.noTicket:blueprint"]?.foreground, customColors.noTicket);
+      assert.strictEqual(rules["*.obsolete:blueprint"]?.foreground, customColors.obsolete);
+    } finally {
+      // Reset all to defaults
+      await resetSetting("blueprint.highlighting.complete");
+      await resetSetting("blueprint.highlighting.inProgress");
+      await resetSetting("blueprint.highlighting.blocked");
+      await resetSetting("blueprint.highlighting.noTicket");
+      await resetSetting("blueprint.highlighting.obsolete");
+    }
+  });
+});
