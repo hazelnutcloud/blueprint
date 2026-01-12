@@ -6,3 +6,4 @@ coverage/
 bun.lock
 packages/tree-sitter-blueprint/src/
 packages/tree-sitter-blueprint/bindings/
+packages/blueprint-lsp-client/.vscode-test/

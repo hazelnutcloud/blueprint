@@ -13,7 +13,7 @@ import type { Ticket, TicketFile } from "./tickets";
 import { resolveTicketFileUri, TICKET_SCHEMA_VERSION } from "./tickets";
 import { URI } from "vscode-uri";
 import type { DependencyGraph } from "./dependency-graph";
-import type { Tree } from "./parser";
+import type { Node, Tree } from "./parser";
 
 /**
  * Context needed to build code actions.
@@ -901,7 +901,7 @@ export function findSymbolAtPosition(
   }
 
   // Walk up to find a module, feature, or requirement block
-  let current = node;
+  let current: Node | null = node;
   while (current) {
     if (current.type === "requirement_block") {
       return buildSymbolPath(current, "requirement", _symbolIndex, _fileUri);
@@ -921,16 +921,7 @@ export function findSymbolAtPosition(
 /**
  * Find the deepest node containing a position.
  */
-function findDeepestNodeAt(
-  node: {
-    startPosition: { row: number; column: number };
-    endPosition: { row: number; column: number };
-    children: any[];
-    type: string;
-  },
-  line: number,
-  column: number
-): any | null {
+function findDeepestNodeAt(node: Node, line: number, column: number): Node | null {
   const start = node.startPosition;
   const end = node.endPosition;
 
@@ -957,7 +948,7 @@ function findDeepestNodeAt(
  * Build the symbol path for a block node.
  */
 function buildSymbolPath(
-  blockNode: any,
+  blockNode: Node,
   kind: "module" | "feature" | "requirement",
   _symbolIndex: CrossFileSymbolIndex,
   _fileUri: string

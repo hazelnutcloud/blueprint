@@ -14,6 +14,7 @@ export default tseslint.config(
       "**/*.d.ts",
       "**/coverage/",
       "packages/tree-sitter-blueprint/",
+      "**/.vscode-test/",
     ],
   },
 

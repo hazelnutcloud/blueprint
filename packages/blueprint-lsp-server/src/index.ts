@@ -433,6 +433,21 @@ function getFilePath(uri: string): string {
   return URI.parse(uri).fsPath;
 }
 
+/**
+ * Checks if a document is a Blueprint document.
+ * This checks both the languageId and the file path.
+ * The languageId check is needed for untitled:// scheme documents which don't have a .bp extension.
+ */
+function isBlueprintDocument(document: TextDocument): boolean {
+  // Check languageId first (works for both file and untitled schemes)
+  if (document.languageId === "blueprint") {
+    return true;
+  }
+  // Fall back to file path check for documents without explicit languageId
+  const filePath = getFilePath(document.uri);
+  return isBlueprintFilePath(filePath);
+}
+
 // Handle file system changes for watched files (.bp and .tickets.json)
 connection.onDidChangeWatchedFiles(async (params) => {
   for (const change of params.changes) {
@@ -539,8 +554,8 @@ documents.onDidOpen((event) => {
     return;
   }
 
-  // Handle .bp files
-  if (isBlueprintFilePath(filePath)) {
+  // Handle .bp files (including untitled documents with blueprint languageId)
+  if (isBlueprintDocument(event.document)) {
     if (!parserInitialized) {
       connection.console.warn("Parser not initialized, skipping document parsing");
       return;
@@ -576,8 +591,8 @@ documents.onDidChangeContent((event) => {
     return;
   }
 
-  // Handle .bp files
-  if (isBlueprintFilePath(filePath)) {
+  // Handle .bp files (including untitled documents with blueprint languageId)
+  if (isBlueprintDocument(event.document)) {
     if (!parserInitialized) {
       return;
     }
@@ -603,8 +618,8 @@ documents.onDidClose((event) => {
     return;
   }
 
-  // Handle .bp files
-  if (isBlueprintFilePath(filePath)) {
+  // Handle .bp files (including untitled documents with blueprint languageId)
+  if (isBlueprintDocument(event.document)) {
     documentManager.onDocumentClose(event.document.uri);
     // Note: We don't remove from symbol index on close because the file still exists
     // The index should reflect the workspace state, not just open documents
@@ -629,8 +644,8 @@ documents.onDidSave((event) => {
     return;
   }
 
-  // Handle .bp files
-  if (isBlueprintFilePath(filePath)) {
+  // Handle .bp files (including untitled documents with blueprint languageId)
+  if (isBlueprintDocument(event.document)) {
     if (!parserInitialized) {
       return;
     }
@@ -654,8 +669,7 @@ connection.languages.semanticTokens.on((params: SemanticTokensParams) => {
     return { data: [] };
   }
 
-  const filePath = getFilePath(params.textDocument.uri);
-  if (!isBlueprintFilePath(filePath)) {
+  if (!isBlueprintDocument(document)) {
     return { data: [] };
   }
 
@@ -690,8 +704,7 @@ connection.onHover((params: HoverParams) => {
     return null;
   }
 
-  const filePath = getFilePath(params.textDocument.uri);
-  if (!isBlueprintFilePath(filePath)) {
+  if (!isBlueprintDocument(document)) {
     return null;
   }
 
@@ -739,8 +752,7 @@ connection.onDefinition((params: DefinitionParams) => {
     return null;
   }
 
-  const filePath = getFilePath(params.textDocument.uri);
-  if (!isBlueprintFilePath(filePath)) {
+  if (!isBlueprintDocument(document)) {
     return null;
   }
 
@@ -800,8 +812,7 @@ connection.onReferences((params: ReferenceParams) => {
     return null;
   }
 
-  const filePath = getFilePath(params.textDocument.uri);
-  if (!isBlueprintFilePath(filePath)) {
+  if (!isBlueprintDocument(document)) {
     return null;
   }
 
@@ -863,8 +874,7 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) => {
     return null;
   }
 
-  const filePath = getFilePath(params.textDocument.uri);
-  if (!isBlueprintFilePath(filePath)) {
+  if (!isBlueprintDocument(document)) {
     return null;
   }
 
@@ -913,8 +923,7 @@ connection.onCodeAction((params: CodeActionParams) => {
     return [];
   }
 
-  const filePath = getFilePath(params.textDocument.uri);
-  if (!isBlueprintFilePath(filePath)) {
+  if (!isBlueprintDocument(document)) {
     return [];
   }
 
@@ -1002,8 +1011,7 @@ connection.onRequest(
       return { requirements: [] };
     }
 
-    const filePath = getFilePath(params.uri);
-    if (!isBlueprintFilePath(filePath)) {
+    if (!isBlueprintDocument(document)) {
       return { requirements: [] };
     }
 

@@ -12,6 +12,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import type { ReadableStreamDefaultReader } from "node:stream/web";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -42,7 +43,7 @@ function decodeMessage(buffer: string): { message: object | null; bytesConsumed:
     return { message: null, bytesConsumed: 0 };
   }
 
-  const contentLength = parseInt(contentLengthMatch[1], 10);
+  const contentLength = parseInt(contentLengthMatch[1]!, 10);
   const contentStart = headerEndIndex + 4; // Skip \r\n\r\n
   const contentEnd = contentStart + contentLength;
 
@@ -65,12 +66,12 @@ function decodeMessage(buffer: string): { message: object | null; bytesConsumed:
  * Communicates with the server via subprocess stdio.
  */
 class TestLspClient {
-  private process: Subprocess | null = null;
+  private process: Subprocess<"pipe", "pipe", "pipe"> | null = null;
   private buffer = "";
   private messageQueue: object[] = [];
   private messageWaiters: Array<(message: object) => void> = [];
   private nextId = 1;
-  private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  private reader: ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>> | null = null;
   private isReading = false;
 
   /**
@@ -497,7 +498,7 @@ describe("LSP Server Integration Tests", () => {
 
       expect(symbols).toBeArray();
       expect(symbols.length).toBeGreaterThan(0);
-      expect(symbols[0].name).toBe("test");
+      expect(symbols[0]?.name).toBe("test");
     });
 
     test("accepts textDocument/didChange notification", async () => {
@@ -552,7 +553,7 @@ describe("LSP Server Integration Tests", () => {
 
       expect(symbols).toBeArray();
       expect(symbols.length).toBeGreaterThan(0);
-      expect(symbols[0].name).toBe("updated");
+      expect(symbols[0]?.name).toBe("updated");
     });
 
     test("accepts textDocument/didClose notification", async () => {

@@ -505,7 +505,12 @@ export function activate(context: ExtensionContext): void {
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for Blueprint documents
-    documentSelector: [{ scheme: "file", language: "blueprint" }],
+    // Include both 'file' scheme (saved files) and 'untitled' scheme (in-memory documents)
+    // The 'untitled' scheme is needed for E2E tests that create in-memory documents
+    documentSelector: [
+      { scheme: "file", language: "blueprint" },
+      { scheme: "untitled", language: "blueprint" },
+    ],
     synchronize: {
       // Notify the server about file changes to '.bp' and '.tickets.json' files in the workspace
       fileEvents: [
