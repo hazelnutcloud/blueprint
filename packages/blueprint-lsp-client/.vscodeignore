@@ -1,0 +1,55 @@
+# =============================================================================
+# VS Code Extension Ignore File for Monorepo
+# =============================================================================
+# This extension is part of a monorepo. The .vscodeignore uses glob patterns
+# similar to .gitignore to control what gets packaged.
+# =============================================================================
+
+# Source files - TypeScript sources are not needed (compiled to out/)
+src/**
+
+# Test files - both source and compiled
+tests/**
+out/tests/**
+
+# TypeScript configuration files
+tsconfig.json
+tsconfig.test.json
+
+# Source maps - not needed in production
+**/*.map
+
+# Type declaration files - not needed at runtime
+**/*.d.ts
+
+# VS Code test download directory
+.vscode-test/**
+
+# Node modules - vsce bundles dependencies automatically
+node_modules/**
+
+# Development artifacts
+.gitignore
+CLAUDE.md
+
+# Package manager lock files
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Editor/IDE directories
+.vscode/**
+.idea/**
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Linting/formatting config
+.eslintrc*
+.prettierrc*
+eslint.config.*
+
+# Changelog (README is kept for marketplace)
+CHANGELOG.md

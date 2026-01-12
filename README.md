@@ -105,19 +105,19 @@ Create a new file with the `.bp` extension:
 
 ### Hierarchy Keywords
 
-| Keyword | Purpose | Scope |
-|---------|---------|-------|
-| `@description` | Document-level description | File |
-| `@module` | Major system boundary | Top-level |
-| `@feature` | User-facing capability | Within module |
-| `@requirement` | Implementable unit | Within feature |
+| Keyword        | Purpose                    | Scope          |
+| -------------- | -------------------------- | -------------- |
+| `@description` | Document-level description | File           |
+| `@module`      | Major system boundary      | Top-level      |
+| `@feature`     | User-facing capability     | Within module  |
+| `@requirement` | Implementable unit         | Within feature |
 
 ### Annotation Keywords
 
-| Keyword | Purpose |
-|---------|---------|
+| Keyword       | Purpose                               |
+| ------------- | ------------------------------------- |
 | `@depends-on` | Declares dependency on other elements |
-| `@constraint` | Defines implementation requirements |
+| `@constraint` | Defines implementation requirements   |
 
 ### Comments
 
@@ -159,16 +159,16 @@ The Blueprint LSP provides:
 
 The VS Code extension supports the following settings:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `blueprint.ticketsPath` | `.blueprint/tickets` | Path to tickets directory |
-| `blueprint.showProgressInGutter` | `true` | Show status icons in gutter |
-| `blueprint.showProgressHighlighting` | `true` | Highlight lines by status |
-| `blueprint.gotoModifier` | `alt` | Modifier for go-to-definition |
-| `blueprint.hoverDelay` | `300` | Hover delay in milliseconds |
-| `blueprint.highlighting.complete` | `#2d5a27` | Color for complete requirements |
-| `blueprint.highlighting.inProgress` | `#8a6d3b` | Color for in-progress requirements |
-| `blueprint.highlighting.blocked` | `#a94442` | Color for blocked requirements |
+| Setting                              | Default              | Description                        |
+| ------------------------------------ | -------------------- | ---------------------------------- |
+| `blueprint.ticketsPath`              | `.blueprint/tickets` | Path to tickets directory          |
+| `blueprint.showProgressInGutter`     | `true`               | Show status icons in gutter        |
+| `blueprint.showProgressHighlighting` | `true`               | Highlight lines by status          |
+| `blueprint.gotoModifier`             | `alt`                | Modifier for go-to-definition      |
+| `blueprint.hoverDelay`               | `300`                | Hover delay in milliseconds        |
+| `blueprint.highlighting.complete`    | `#2d5a27`            | Color for complete requirements    |
+| `blueprint.highlighting.inProgress`  | `#8a6d3b`            | Color for in-progress requirements |
+| `blueprint.highlighting.blocked`     | `#a94442`            | Color for blocked requirements     |
 
 ## Development
 
@@ -212,10 +212,10 @@ bun run bench:all
 
 ## Monorepo Structure
 
-| Package | Description |
-|---------|-------------|
-| `packages/blueprint-lsp-server` | LSP server implementation |
-| `packages/blueprint-lsp-client` | VS Code extension client |
+| Package                          | Description                       |
+| -------------------------------- | --------------------------------- |
+| `packages/blueprint-lsp-server`  | LSP server implementation         |
+| `packages/blueprint-lsp-client`  | VS Code extension client          |
 | `packages/tree-sitter-blueprint` | Tree-sitter grammar for Blueprint |
 
 ## Specification

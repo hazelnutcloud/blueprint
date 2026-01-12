@@ -363,9 +363,9 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 11.7 Gutter Icons
 
-- [ ] Create icons for completion status (checkmark, progress, blocked)
-- [ ] Apply gutter decorations based on requirement status
-- [ ] Make gutter icons configurable
+- [x] Create icons for completion status (checkmark, progress, blocked) (Completed: SVG icons created in `packages/blueprint-lsp-client/icons/` for all 6 statuses: `complete.svg`, `in-progress.svg`, `blocked.svg`, `no-ticket.svg`, `obsolete.svg`, `pending.svg`.)
+- [x] Apply gutter decorations based on requirement status (Completed: `createGutterDecorationTypes()` and `updateDecorations()` in `extension.ts` apply gutter icons based on requirement status from server's `blueprint/requirementStatuses` request.)
+- [x] Make gutter icons configurable (Completed: `blueprint.showProgressInGutter` setting controls gutter icon display via `updateGutterIconsEnabled()` function.)
 
 ---
 
@@ -449,7 +449,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 14.2 VS Code Extension Packaging
 
-- [ ] Create `.vscodeignore` for extension
+- [x] Create `.vscodeignore` for extension (Created comprehensive `.vscodeignore` that excludes source files, tests, source maps, type declarations, and development artifacts. Added `package` and `package:ls` scripts to `package.json` using `--no-dependencies` flag to properly handle monorepo workspace. The extension package includes only: `package.json`, `README.md`, `language-configuration.json`, `syntaxes/blueprint.tmLanguage.json`, `out/extension.js`, `out/index.js`, and `icons/*.svg`.)
 - [ ] Package extension with `vsce package`
 - [ ] Test extension installation from `.vsix`
 

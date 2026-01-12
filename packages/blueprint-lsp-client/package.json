@@ -207,7 +207,9 @@
     "lint": "eslint src",
     "pretest": "bun run compile && bun run compile:tests",
     "test": "node ./out/tests/runTests.js",
-    "test:unit": "bun test"
+    "test:unit": "bun test",
+    "package": "bunx @vscode/vsce package --no-dependencies",
+    "package:ls": "bunx @vscode/vsce ls --no-dependencies"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
