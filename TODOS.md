@@ -557,7 +557,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [x] **No test for hover on @depends-on keyword itself** - Tests cover hovering on references within `@depends-on`, but not on the `@depends-on` keyword itself. Should verify it shows the generic keyword documentation. (Completed: Added tests for `@depends-on` and `@constraint` keyword hovers in `hover.test.ts`. Both tests verify the keyword hover shows the generic Blueprint DSL Keyword documentation including the specific keyword description.)
 
-- [ ] **No test for empty constraint description** - `hover.ts:610-615` shows constraint description if available, but no test verifies behavior when description is empty or missing.
+- [x] **No test for empty constraint description** - `hover.ts:610-615` shows constraint description if available, but no test verifies behavior when description is empty or missing. (Completed: Added 3 tests in `hover.test.ts` covering constraint description handling: "shows description when constraint has description" verifies description section appears with content, "does not show description section when constraint has no description text" verifies no description section for constraints without description, "does not show description section when constraint description is whitespace only" verifies whitespace-only descriptions are treated as empty.)
 
 ### Code Quality
 

@@ -900,6 +900,83 @@ describe("hover", () => {
 
         expect(content!.value).toContain("Not satisfied");
       });
+
+      test("shows description when constraint has description", () => {
+        const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic auth.
+      
+      @constraint bcrypt-cost
+        Use bcrypt with cost factor >= 12.`;
+
+        const { tree, context } = createHoverContext(source, "file:///test.bp");
+
+        const target = findHoverTarget(
+          tree!,
+          { line: 5, character: 18 },
+          context.symbolIndex,
+          context.fileUri
+        );
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("constraint");
+
+        const content = buildHoverContent(target!, context);
+        expect(content!.value).toContain("**Description:**");
+        expect(content!.value).toContain("Use bcrypt with cost factor >= 12.");
+      });
+
+      test("does not show description section when constraint has no description text", () => {
+        const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic auth.
+      
+      @constraint bcrypt-cost`;
+
+        const { tree, context } = createHoverContext(source, "file:///test.bp");
+
+        const target = findHoverTarget(
+          tree!,
+          { line: 5, character: 18 },
+          context.symbolIndex,
+          context.fileUri
+        );
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("constraint");
+
+        const content = buildHoverContent(target!, context);
+        // Should not contain description section when there's no description
+        expect(content!.value).not.toContain("**Description:**");
+      });
+
+      test("does not show description section when constraint description is whitespace only", () => {
+        const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic auth.
+      
+      @constraint bcrypt-cost
+        
+      @constraint another-constraint
+        Real description here.`;
+
+        const { tree, context } = createHoverContext(source, "file:///test.bp");
+
+        // Hover over bcrypt-cost which has only whitespace after it
+        const target = findHoverTarget(
+          tree!,
+          { line: 5, character: 18 },
+          context.symbolIndex,
+          context.fileUri
+        );
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("constraint");
+
+        const content = buildHoverContent(target!, context);
+        // Should not contain description section for whitespace-only description
+        expect(content!.value).not.toContain("**Description:**");
+      });
     });
 
     describe("reference hover", () => {
