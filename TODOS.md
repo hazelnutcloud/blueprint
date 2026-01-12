@@ -388,10 +388,10 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 12.2 Integration Tests
 
-- [ ] Test LSP initialization handshake
-- [ ] Test document synchronization
+- [x] Test LSP initialization handshake (9 tests in `tests/integration/lsp-server.test.ts` covering server capabilities, workspace folder support, semantic token legend, text document sync with didOpen/didChange/didClose, hover for modules and requirements, and graceful shutdown. Tests spawn LSP server as subprocess and communicate via stdio using LSP protocol.)
+- [x] Test document synchronization (Covered in `tests/integration/lsp-server.test.ts` - tests didOpen, didChange, didClose notifications and verifies server correctly processes document updates via documentSymbol requests)
 - [ ] Test diagnostic publishing
-- [ ] Test hover information content
+- [x] Test hover information content (Covered in `tests/integration/lsp-server.test.ts` - tests hover for @module keyword and requirement identifiers, verifies hover contains expected content)
 - [ ] Test go-to-definition navigation
 - [ ] Test find-references results
 - [ ] Test cross-file reference resolution
