@@ -303,12 +303,12 @@ export function buildRequirementTicketMap(
  * This is useful when you have symbols from the index rather than raw requirement maps.
  *
  * @param requirementSymbols Array of indexed requirement symbols
- * @param ticketFile The parsed ticket file
+ * @param ticketFile The parsed ticket file (or null, or just a tickets array)
  * @returns The mapping result
  */
 export function buildRequirementTicketMapFromSymbols(
   requirementSymbols: IndexedSymbol[],
-  ticketFile: TicketFile | null
+  ticketFile: TicketFile | Ticket[] | null
 ): RequirementTicketMapResult {
   // Convert indexed symbols to a requirement map
   const requirements = new Map<string, RequirementNode>();
@@ -319,7 +319,81 @@ export function buildRequirementTicketMapFromSymbols(
     }
   }
 
+  // Handle the case where ticketFile is just an array of tickets
+  // This avoids creating a mock TicketFile with invalid empty source
+  if (Array.isArray(ticketFile)) {
+    return buildRequirementTicketMapFromTickets(requirements, ticketFile);
+  }
+
   return buildRequirementTicketMap(requirements, ticketFile);
+}
+
+/**
+ * Builds requirement-ticket mapping from a raw tickets array.
+ * Use this when you have collected tickets from multiple sources
+ * and don't have a specific source file to attribute them to.
+ *
+ * Unlike buildRequirementTicketMap, this function sets orphaned ticket
+ * sources to "(aggregated)" to indicate they come from multiple files.
+ *
+ * @param requirements Map of requirement paths to their nodes
+ * @param tickets Array of tickets to map
+ * @returns The mapping result
+ */
+export function buildRequirementTicketMapFromTickets(
+  requirements: Map<string, RequirementNode>,
+  tickets: Ticket[]
+): RequirementTicketMapResult {
+  const map: RequirementTicketMap = new Map();
+  const orphanedTickets: OrphanedTicket[] = [];
+  const requirementsWithoutTickets: string[] = [];
+
+  // Group tickets by ref
+  const ticketsByRef = groupTicketsByRef(tickets);
+
+  // Build info for each requirement
+  for (const [path, requirement] of requirements) {
+    const reqTickets = ticketsByRef.get(path) ?? [];
+
+    if (reqTickets.length === 0) {
+      requirementsWithoutTickets.push(path);
+    }
+
+    const constraintStatuses = computeConstraintStatuses(requirement, reqTickets);
+    const constraintsSatisfied = constraintStatuses.filter((c) => c.satisfied).length;
+
+    const info: RequirementTicketInfo = {
+      requirementPath: path,
+      requirement,
+      tickets: reqTickets,
+      status: computeRequirementStatus(reqTickets),
+      constraintStatuses,
+      constraintsSatisfied,
+      constraintsTotal: requirement.constraints.length,
+      implementationFiles: collectImplementationFiles(reqTickets),
+      testFiles: collectTestFiles(reqTickets),
+    };
+
+    map.set(path, info);
+  }
+
+  // Find orphaned tickets (refs that don't match any requirement)
+  for (const ticket of tickets) {
+    if (!requirements.has(ticket.ref)) {
+      orphanedTickets.push({
+        ticket,
+        ref: ticket.ref,
+        // Use a placeholder source since tickets may come from multiple files
+        ticketFileSource: "(aggregated)",
+      });
+    }
+  }
+
+  return {
+    map,
+    orphanedTickets,
+    requirementsWithoutTickets,
+  };
 }
 
 /**

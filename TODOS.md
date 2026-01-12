@@ -569,7 +569,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [x] **Magic number for transitive blocker limit** - `hover.ts:499` uses `3` as the limit for showing transitive blockers before truncating. This should be a named constant for clarity. (Fixed: Extracted to `MAX_TRANSITIVE_BLOCKERS_DISPLAYED` constant in `hover.ts` with JSDoc documentation explaining its purpose.)
 
-- [ ] **Inconsistent ticket file creation for hover context** - In `index.ts:456-459`, a mock ticket file is created with `{ version: "1.0", source: "", tickets: allTickets }`. The empty `source` string is technically invalid per SPEC.md Section 4.5 which requires `source` to be "Path to the source `.bp` file". While this is internal, it could cause issues if validation is added later.
+- [x] **Inconsistent ticket file creation for hover context** - (Fixed: Refactored `buildRequirementTicketMapFromSymbols()` in `requirement-ticket-map.ts` to accept `TicketFile | Ticket[] | null` instead of just `TicketFile | null`. Added new `buildRequirementTicketMapFromTickets()` function that handles raw ticket arrays and uses `"(aggregated)"` as the source for orphaned tickets. Updated `computed-data-cache.ts` and `workspace-diagnostics.ts` to pass the tickets array directly instead of creating a mock `TicketFile` with an invalid empty `source` field.)
 
 ---
 

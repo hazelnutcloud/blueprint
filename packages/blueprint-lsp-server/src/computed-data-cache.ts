@@ -2,7 +2,6 @@ import type { DependencyGraphResult } from "./dependency-graph";
 import type { RequirementTicketMapResult } from "./requirement-ticket-map";
 import type { CrossFileSymbolIndex } from "./symbol-index";
 import type { TicketDocumentManager } from "./ticket-documents";
-import type { TicketFile } from "./tickets";
 import { DependencyGraph } from "./dependency-graph";
 import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
 
@@ -100,11 +99,12 @@ export class ComputedDataCache {
       const requirementSymbols = this.symbolIndex.getSymbolsByKind("requirement");
       const allTickets = this.ticketDocumentManager.getAllTickets().map((t) => t.ticket);
 
-      // Create a combined ticket file for the map builder
-      const ticketFile: TicketFile | null =
-        allTickets.length > 0 ? { version: "1.0", source: "", tickets: allTickets } : null;
-
-      this.ticketMapCache = buildRequirementTicketMapFromSymbols(requirementSymbols, ticketFile);
+      // Pass the tickets array directly to avoid creating a mock TicketFile
+      // with an invalid empty source field (per SPEC.md Section 4.5)
+      this.ticketMapCache = buildRequirementTicketMapFromSymbols(
+        requirementSymbols,
+        allTickets.length > 0 ? allTickets : null
+      );
     }
     return this.ticketMapCache;
   }

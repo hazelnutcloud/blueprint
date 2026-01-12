@@ -432,11 +432,12 @@ export function computeBlockingDiagnostics(
   const requirements = symbolIndex.getSymbolsByKind("requirement");
 
   // Build the requirement-ticket map
-  const ticketMapResult = buildRequirementTicketMapFromSymbols(requirements, {
-    version: "1.0",
-    source: "",
-    tickets,
-  });
+  // Pass tickets array directly to avoid creating a mock TicketFile
+  // with an invalid empty source field (per SPEC.md Section 4.5)
+  const ticketMapResult = buildRequirementTicketMapFromSymbols(
+    requirements,
+    tickets.length > 0 ? tickets : null
+  );
 
   // Compute blocking status for all requirements
   const blockingResult = computeAllBlockingStatus(
