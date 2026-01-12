@@ -49,8 +49,6 @@ export interface HoverTarget {
   path?: string;
   /** The AST node if available */
   node?: ModuleNode | FeatureNode | RequirementNode | ConstraintNode;
-  /** The reference node if hovering a reference */
-  reference?: ReferenceNode;
   /** The indexed symbol if resolved */
   symbol?: IndexedSymbol;
   /** The description text if hovering a description block */
