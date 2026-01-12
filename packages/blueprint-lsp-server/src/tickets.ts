@@ -1,6 +1,6 @@
 import { URI } from "vscode-uri";
-import { join, dirname, basename, relative } from "node:path";
-import { stat, readFile } from "node:fs/promises";
+import { join, basename } from "node:path";
+import { readFile } from "node:fs/promises";
 import * as v from "valibot";
 
 // ============================================================================

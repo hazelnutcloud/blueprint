@@ -561,7 +561,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### Code Quality
 
-- [ ] **Fix unused variable errors detected by ESLint** - ESLint reports 41 unused variable/import errors across the codebase. These include unused imports (e.g., `Diagnostic`, `Command`, `TicketFile`, `mock`, `cleanupParser`), unused function parameters (e.g., `context`, `symbolIndex`, `fileUri`), and unused local variables (e.g., `closingIndent`, `hasTrailingComma`, `identifierNode`). Fix by either removing unused code or prefixing intentionally unused parameters with `_`. Run `bun run lint` to see the full list.
+- [x] **Fix unused variable errors detected by ESLint** - ESLint reports 41 unused variable/import errors across the codebase. These include unused imports (e.g., `Diagnostic`, `Command`, `TicketFile`, `mock`, `cleanupParser`), unused function parameters (e.g., `context`, `symbolIndex`, `fileUri`), and unused local variables (e.g., `closingIndent`, `hasTrailingComma`, `identifierNode`). Fix by either removing unused code or prefixing intentionally unused parameters with `_`. Run `bun run lint` to see the full list. (Completed: Fixed all 41 unused variable/import errors by removing unused imports and prefixing intentionally unused parameters with `_`. ESLint now reports 0 errors.)
 
 - [ ] **Unused import in hover.ts** - `ReferenceNode` is imported in the type imports (`hover.ts:9`) but the `HoverTarget` interface uses `reference?: ReferenceNode` which is never actually populated - `buildReferenceTarget` doesn't set it. Either remove the field or populate it.
 

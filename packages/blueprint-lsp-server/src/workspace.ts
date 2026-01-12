@@ -1,6 +1,6 @@
 import { URI } from "vscode-uri";
 import type { Connection, WorkspaceFolder } from "vscode-languageserver/node";
-import { readdir, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
@@ -98,7 +98,7 @@ export class WorkspaceManager {
     let entries;
     try {
       entries = await readdir(dirPath, { withFileTypes: true });
-    } catch (error) {
+    } catch {
       // Skip directories we can't read (permission errors, etc.)
       return;
     }

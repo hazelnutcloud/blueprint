@@ -16,10 +16,6 @@ import {
   parseTicketFile,
   type Ticket,
   type TicketFile,
-  type TicketImplementation,
-  type TicketStatus,
-  type TicketValidationError,
-  type TicketValidationResult,
 } from "../src/tickets";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";

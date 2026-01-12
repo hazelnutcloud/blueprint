@@ -1,11 +1,7 @@
 import { test, expect, beforeAll, beforeEach, describe } from "bun:test";
 import { initializeParser, parseDocument } from "../src/parser";
 import { transformToAST } from "../src/ast";
-import {
-  CrossFileSymbolIndex,
-  type IndexedSymbol,
-  type UnresolvedReference,
-} from "../src/symbol-index";
+import { CrossFileSymbolIndex } from "../src/symbol-index";
 
 describe("CrossFileSymbolIndex", () => {
   let index: CrossFileSymbolIndex;

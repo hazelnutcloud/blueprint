@@ -1,10 +1,10 @@
-import { describe, test, expect, beforeEach, mock } from "bun:test";
+import { describe, test, expect, beforeEach } from "bun:test";
 import { ComputedDataCache } from "./computed-data-cache";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { TicketDocumentManager } from "./ticket-documents";
 import type { Connection } from "vscode-languageserver/node";
 import { transformToAST } from "./ast";
-import { parseDocument, initializeParser, cleanupParser } from "./parser";
+import { parseDocument, initializeParser } from "./parser";
 
 // Mock connection for TicketDocumentManager
 function createMockConnection(): Connection {

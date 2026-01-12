@@ -3,7 +3,7 @@ import type { Tree, Node } from "./parser";
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import type { SourceLocation } from "./ast";
 import type { RequirementTicketMap } from "./requirement-ticket-map";
-import type { Ticket, TicketFile } from "./tickets";
+import type { Ticket } from "./tickets";
 
 // ============================================================================
 // Types
@@ -508,7 +508,7 @@ export function buildDefinition(
  */
 function buildReferenceDefinition(
   target: DefinitionTarget,
-  context: DefinitionContext
+  _context: DefinitionContext
 ): Location | null {
   if (!target.symbol) {
     // Unresolved reference - no definition

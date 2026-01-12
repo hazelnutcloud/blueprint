@@ -249,7 +249,7 @@ export class TicketDocumentManager {
    */
   private parseJsonPath(path: string): (string | number)[] {
     const parts: (string | number)[] = [];
-    const regex = /([^.\[\]]+)|\[(\d+)\]/g;
+    const regex = /([^.[\]]+)|\[(\d+)\]/g;
     let match;
 
     while ((match = regex.exec(path)) !== null) {

@@ -462,8 +462,6 @@ export function computeBlockingDiagnostics(
     const node = symbol.node as RequirementNode;
 
     // Build the message with blocker information
-    const allBlockers = [...blockingInfo.directBlockers, ...blockingInfo.transitiveBlockers];
-
     let message: string;
     if (blockingInfo.directBlockers.length > 0 && blockingInfo.transitiveBlockers.length > 0) {
       message = `Requirement blocked by: ${formatBlockers(blockingInfo.directBlockers)}. Also transitively blocked by: ${formatBlockers(blockingInfo.transitiveBlockers)}`;

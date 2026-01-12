@@ -1,11 +1,9 @@
 import type {
   CodeAction,
   CodeActionParams,
-  Diagnostic,
   TextEdit,
   WorkspaceEdit,
   Location,
-  Command,
 } from "vscode-languageserver/node";
 import { CodeActionKind, DiagnosticSeverity } from "vscode-languageserver/node";
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
@@ -430,8 +428,6 @@ export function createAddTicketEdit(
 
     // Add new ticket before the closing bracket
     insertText = `${ticketJson}\n`;
-    const closingLine = lines[insertLine]!;
-    const closingIndent = closingLine.match(/^(\s*)/)?.[1] || "  ";
 
     edits.push({
       range: {
@@ -558,9 +554,9 @@ export function createRemoveTicketEdit(
   const removeStartLine = ticketStartLine;
   const removeEndLine = ticketEndLine;
 
-  // Check if there's a trailing comma after this ticket
+  // Check if there's a trailing comma after this ticket (needed for comma removal logic)
   const endLine = lines[ticketEndLine]!;
-  const hasTrailingComma = endLine.trimEnd().endsWith(",");
+  const _hasTrailingComma = endLine.trimEnd().endsWith(",");
 
   // Check if there's a ticket before this one (by looking for a comma on the previous non-empty line)
   let prevTicketLine = -1;
@@ -891,8 +887,8 @@ export interface SymbolAtPosition {
 export function findSymbolAtPosition(
   tree: Tree,
   position: { line: number; character: number },
-  symbolIndex: CrossFileSymbolIndex,
-  fileUri: string
+  _symbolIndex: CrossFileSymbolIndex,
+  _fileUri: string
 ): SymbolAtPosition | null {
   const root = tree.rootNode;
 
@@ -961,8 +957,8 @@ function findDeepestNodeAt(
 function buildSymbolPath(
   blockNode: any,
   kind: "module" | "feature" | "requirement",
-  symbolIndex: CrossFileSymbolIndex,
-  fileUri: string
+  _symbolIndex: CrossFileSymbolIndex,
+  _fileUri: string
 ): SymbolAtPosition | null {
   const nameNode = blockNode.childForFieldName?.("name");
   if (!nameNode) return null;

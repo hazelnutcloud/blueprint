@@ -128,14 +128,12 @@ export function findReferencesTarget(
 
   // Walk up to find a meaningful context
   let current: Node | null = node;
-  let identifierNode: Node | null = null;
 
   while (current) {
     const type = current.type;
 
-    // Check if we're on an identifier within a block
+    // Check if we're on an identifier within a block - skip to parent
     if (type === "identifier") {
-      identifierNode = current;
       current = current.parent;
       continue;
     }

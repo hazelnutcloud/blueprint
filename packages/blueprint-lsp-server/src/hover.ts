@@ -2,28 +2,12 @@ import type { Hover, Position, MarkupContent } from "vscode-languageserver/node"
 import { MarkupKind } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import type { Tree, Node } from "./parser";
-import type {
-  ModuleNode,
-  FeatureNode,
-  RequirementNode,
-  ConstraintNode,
-  ReferenceNode,
-} from "./ast";
+import type { ModuleNode, FeatureNode, RequirementNode, ConstraintNode } from "./ast";
 import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
-import type {
-  RequirementTicketInfo,
-  RequirementTicketMap,
-  ConstraintStatus,
-} from "./requirement-ticket-map";
-import {
-  buildRequirementTicketMapFromSymbols,
-  getCompletionSummary,
-  filterByPathPrefix,
-} from "./requirement-ticket-map";
-import type { BlockingInfo } from "./blocking-status";
+import type { RequirementTicketMap } from "./requirement-ticket-map";
+import { getCompletionSummary, filterByPathPrefix } from "./requirement-ticket-map";
 import { computeBlockingInfo } from "./blocking-status";
 import type { DependencyGraph, CircularDependency } from "./dependency-graph";
-import type { Ticket } from "./tickets";
 import { join, isAbsolute } from "node:path";
 
 // ============================================================================
@@ -887,7 +871,7 @@ function buildReferenceHover(target: HoverTarget, context: HoverContext): Markup
 /**
  * Build hover content for a keyword.
  */
-function buildKeywordHover(target: HoverTarget): MarkupContent | null {
+function buildKeywordHover(_target: HoverTarget): MarkupContent | null {
   const lines: string[] = [];
 
   // We don't have direct access to the keyword text in target,

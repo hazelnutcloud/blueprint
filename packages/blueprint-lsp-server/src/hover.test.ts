@@ -13,7 +13,6 @@ import {
   formatFileLink,
   type HoverContext,
 } from "./hover";
-import type { Position } from "vscode-languageserver/node";
 
 describe("hover", () => {
   beforeAll(async () => {
@@ -917,7 +916,7 @@ describe("hover", () => {
 
     test("returns null for unknown target types", () => {
       const source = `@module auth`;
-      const { tree, context } = createHoverContext(source);
+      const { context } = createHoverContext(source);
 
       // Create a target with an unknown kind
       const target = {
@@ -1036,7 +1035,7 @@ describe("hover", () => {
       const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
 
       // All three requirements should show they're in a cycle
-      for (const [line, reqName] of [
+      for (const [line, _reqName] of [
         [2, "step-a"],
         [6, "step-b"],
         [10, "step-c"],

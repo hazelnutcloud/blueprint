@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from "bun:test";
-import { initializeParser, parseDocument, cleanupParser } from "./parser";
+import { initializeParser, parseDocument } from "./parser";
 import {
   findNodeAtPosition,
   findDefinitionTarget,

@@ -2,11 +2,8 @@ import { describe, test, expect, beforeAll, beforeEach } from "bun:test";
 import { initializeParser, parseDocument } from "../src/parser";
 import { transformToAST } from "../src/ast";
 import { CrossFileSymbolIndex } from "../src/symbol-index";
-import { DependencyGraph, type CircularDependency } from "../src/dependency-graph";
-import {
-  buildRequirementTicketMap,
-  type RequirementTicketMap,
-} from "../src/requirement-ticket-map";
+import { DependencyGraph } from "../src/dependency-graph";
+import { buildRequirementTicketMap } from "../src/requirement-ticket-map";
 import type { RequirementNode, ConstraintNode, SourceLocation } from "../src/ast";
 import type { Ticket, TicketFile } from "../src/tickets";
 import {

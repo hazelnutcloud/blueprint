@@ -14,7 +14,7 @@ import {
   mergeDiagnosticResults,
   type TicketFileInfo,
 } from "../src/workspace-diagnostics";
-import type { Ticket, TicketFile } from "../src/tickets";
+import type { Ticket } from "../src/tickets";
 
 describe("workspace-diagnostics", () => {
   let index: CrossFileSymbolIndex;

@@ -5,7 +5,6 @@ import type {
   RequirementNode,
   ConstraintNode,
   ReferenceNode,
-  ASTNode,
   SymbolTable,
 } from "./ast";
 import { buildSymbolTable } from "./ast";

@@ -6,7 +6,7 @@ import {
 } from "./workspace-symbol";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
-import { initializeParser, parseDocument, cleanupParser } from "./parser";
+import { initializeParser, parseDocument } from "./parser";
 
 // ============================================================================
 // Test Setup

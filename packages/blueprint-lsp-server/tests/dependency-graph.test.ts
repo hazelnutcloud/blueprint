@@ -2,11 +2,7 @@ import { test, expect, beforeAll, beforeEach, describe } from "bun:test";
 import { initializeParser, parseDocument } from "../src/parser";
 import { transformToAST } from "../src/ast";
 import { CrossFileSymbolIndex } from "../src/symbol-index";
-import {
-  DependencyGraph,
-  type DependencyGraphResult,
-  type CircularDependency,
-} from "../src/dependency-graph";
+import { DependencyGraph, type DependencyGraphResult } from "../src/dependency-graph";
 
 describe("DependencyGraph", () => {
   let index: CrossFileSymbolIndex;
@@ -389,7 +385,6 @@ describe("DependencyGraph", () => {
   });
 
   describe("getDependencies and getDependents", () => {
-    let graph: DependencyGraph;
     let result: DependencyGraphResult;
 
     beforeEach(() => {
@@ -404,11 +399,6 @@ describe("DependencyGraph", () => {
 `;
       index.addFile("file:///test.bp", parseToAST(code));
       result = DependencyGraph.build(index);
-
-      // We need access to the graph instance, so rebuild manually
-      graph = new DependencyGraph();
-      // Use the static build which returns result, but we need internal graph
-      // For testing, we'll create a workaround
     });
 
     test("getDependencies returns direct dependencies via result edges", () => {
