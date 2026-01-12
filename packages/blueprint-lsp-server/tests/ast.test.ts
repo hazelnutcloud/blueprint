@@ -1188,4 +1188,138 @@ describe("AST Transformation", () => {
       ).toBe(true);
     });
   });
+
+  describe("comment collection", () => {
+    test("collects single-line comments at document level", () => {
+      const code = `// This is a comment
+@module authentication
+  Handles auth.
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+
+      expect(ast.comments).toHaveLength(1);
+      expect(ast.comments[0]!.type).toBe("comment");
+      expect(ast.comments[0]!.style).toBe("single-line");
+      expect(ast.comments[0]!.text).toBe("// This is a comment");
+    });
+
+    test("collects single-line comments inside modules", () => {
+      const code = `@module authentication
+  // Module comment
+  Handles auth.
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+
+      expect(ast.comments).toHaveLength(1);
+      expect(ast.comments[0]!.type).toBe("comment");
+      expect(ast.comments[0]!.style).toBe("single-line");
+      expect(ast.comments[0]!.text).toBe("// Module comment");
+    });
+
+    test("collects multiple single-line comments throughout document", () => {
+      const code = `// Header comment
+@module authentication
+  // Module comment
+  Handles auth.
+
+@feature login
+  // Feature comment
+  Login functionality.
+
+  @requirement basic-auth
+    // Requirement comment
+    Users can log in.
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+
+      // Should collect at least 4 single-line comments
+      expect(ast.comments.length).toBeGreaterThanOrEqual(4);
+
+      // All should be single-line comments
+      const singleLineComments = ast.comments.filter((c) => c.style === "single-line");
+      expect(singleLineComments.length).toBe(ast.comments.length);
+
+      // Verify comment texts
+      const texts = ast.comments.map((c) => c.text);
+      expect(texts).toContain("// Header comment");
+      expect(texts).toContain("// Module comment");
+      expect(texts).toContain("// Feature comment");
+      expect(texts).toContain("// Requirement comment");
+    });
+
+    test("returns empty comments array for document without comments", () => {
+      const code = `@module authentication
+  Handles auth.
+
+@feature login
+  Login functionality.
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+
+      expect(ast.comments).toHaveLength(0);
+    });
+
+    test("preserves comment source locations", () => {
+      const code = `// First line comment
+@module test
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+
+      expect(ast.comments).toHaveLength(1);
+      const comment = ast.comments[0]!;
+
+      expect(comment.location.startLine).toBe(0);
+      expect(comment.location.startColumn).toBe(0);
+      expect(comment.location.endLine).toBe(0);
+      expect(comment.location.endColumn).toBe(21); // "// First line comment"
+    });
+
+    test("comments are ordered by position in document", () => {
+      const code = `// Comment 1
+@module test
+  // Comment 2
+  Description.
+  // Comment 3
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+
+      expect(ast.comments.length).toBeGreaterThanOrEqual(3);
+
+      // Verify comments are in document order
+      for (let i = 1; i < ast.comments.length; i++) {
+        const prev = ast.comments[i - 1]!;
+        const curr = ast.comments[i]!;
+        expect(prev.location.startOffset).toBeLessThan(curr.location.startOffset);
+      }
+    });
+
+    test("collects comments inside constraints", () => {
+      const code = `@module test
+
+@feature login
+
+@requirement auth
+  // Comment before constraint
+  Authentication.
+
+  @constraint bcrypt
+    // Comment inside constraint
+    Use bcrypt.
+`;
+      const tree = parseDocument(code);
+      const ast = transformToAST(tree!);
+
+      expect(ast.comments.length).toBeGreaterThanOrEqual(2);
+
+      const texts = ast.comments.map((c) => c.text);
+      expect(texts).toContain("// Comment before constraint");
+      expect(texts).toContain("// Comment inside constraint");
+    });
+  });
 });

@@ -120,6 +120,19 @@ export interface DescriptionNode extends ASTNode {
 }
 
 /**
+ * A comment in the source file.
+ * Per SPEC.md Section 3.1.2, comments are "ignored by the parser but preserved
+ * for documentation purposes."
+ */
+export interface CommentNode extends ASTNode {
+  type: "comment";
+  /** The full comment text including delimiters (// or /* *\/) */
+  text: string;
+  /** Whether this is a single-line (//) or multi-line (/* *\/) comment */
+  style: "single-line" | "multi-line";
+}
+
+/**
  * The root document node representing a complete .bp file.
  */
 export interface DocumentNode extends ASTNode {
@@ -128,6 +141,8 @@ export interface DocumentNode extends ASTNode {
   description: DescriptionNode | null;
   /** The modules defined in this document */
   modules: ModuleNode[];
+  /** All comments in the document, preserved for documentation purposes */
+  comments: CommentNode[];
 }
 
 /**
@@ -334,6 +349,36 @@ function transformDescription(node: Node): DescriptionNode {
 }
 
 /**
+ * Transform a tree-sitter comment node into a CommentNode.
+ */
+function transformComment(node: Node): CommentNode {
+  const text = node.text;
+  const style: "single-line" | "multi-line" = text.startsWith("//") ? "single-line" : "multi-line";
+
+  return {
+    type: "comment",
+    text,
+    style,
+    location: getLocation(node),
+  };
+}
+
+/**
+ * Recursively collect all comment nodes from a tree-sitter tree.
+ * Comments are in the 'extras' array in tree-sitter, so they appear
+ * as children throughout the tree.
+ */
+function collectComments(node: Node, comments: CommentNode[]): void {
+  if (node.type === "comment") {
+    comments.push(transformComment(node));
+  }
+
+  for (const child of node.children) {
+    collectComments(child, comments);
+  }
+}
+
+/**
  * Transform a tree-sitter Tree into a Blueprint AST DocumentNode.
  *
  * @param tree The tree-sitter syntax tree to transform
@@ -343,6 +388,10 @@ export function transformToAST(tree: Tree): DocumentNode {
   const root = tree.rootNode;
   let description: DescriptionNode | null = null;
   const modules: ModuleNode[] = [];
+  const comments: CommentNode[] = [];
+
+  // Collect all comments from the entire tree
+  collectComments(root, comments);
 
   for (const child of root.children) {
     if (child.type === "description_block") {
@@ -356,6 +405,7 @@ export function transformToAST(tree: Tree): DocumentNode {
     type: "document",
     description,
     modules,
+    comments,
     location: getLocation(root),
   };
 }
