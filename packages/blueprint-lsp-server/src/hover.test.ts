@@ -839,6 +839,189 @@ describe("hover", () => {
       expect(content!.value).toContain("Dependencies");
       expect(content!.value).toContain("\u2713"); // checkmark for completed dep
     });
+
+    test("truncates transitive blockers when more than 3", () => {
+      // Create a chain: final-step depends on mid-step, which depends on 4 incomplete steps
+      // This creates 1 direct blocker (mid-step) and 4 transitive blockers (step-1 through step-4)
+      const source = `@module auth
+  @feature setup
+    @requirement step-1
+      Step 1.
+    
+    @requirement step-2
+      Step 2.
+    
+    @requirement step-3
+      Step 3.
+    
+    @requirement step-4
+      Step 4.
+    
+    @requirement mid-step
+      @depends-on auth.setup.step-1, auth.setup.step-2, auth.setup.step-3, auth.setup.step-4
+      Mid step depends on all setup steps.
+    
+    @requirement final-step
+      @depends-on auth.setup.mid-step
+      Final step depends on mid-step.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.setup.step-1",
+            description: "Step 1",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-002",
+            ref: "auth.setup.step-2",
+            description: "Step 2",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-003",
+            ref: "auth.setup.step-3",
+            description: "Step 3",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-004",
+            ref: "auth.setup.step-4",
+            description: "Step 4",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-005",
+            ref: "auth.setup.mid-step",
+            description: "Mid step",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-006",
+            ref: "auth.setup.final-step",
+            description: "Final step",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+      // Hover over final-step requirement
+      // Line positions: step-1 at 2, step-2 at 5, step-3 at 8, step-4 at 11, mid-step at 14, final-step at 18
+      const target = findHoverTarget(tree!, { line: 18, character: 17 }, context.symbolIndex, context.fileUri);
+      expect(target).not.toBeNull();
+      expect(target!.kind).toBe("requirement");
+      expect(target!.path).toBe("auth.setup.final-step");
+
+      const content = buildHoverContent(target!, context);
+      expect(content).not.toBeNull();
+
+      // Should show blocked status
+      expect(content!.value).toContain("Blocked");
+
+      // Should show direct blocker
+      expect(content!.value).toContain("auth.setup.mid-step");
+
+      // Should show "Transitive blockers" section
+      expect(content!.value).toContain("Transitive blockers");
+
+      // Should show exactly 3 transitive blockers and truncation message
+      // The truncation message should say "... and 1 more" (4 total - 3 shown = 1 more)
+      expect(content!.value).toContain("... and 1 more");
+    });
+
+    test("shows all transitive blockers when 3 or fewer", () => {
+      // Create a chain with exactly 3 transitive blockers
+      const source = `@module auth
+  @feature setup
+    @requirement step-1
+      Step 1.
+    
+    @requirement step-2
+      Step 2.
+    
+    @requirement step-3
+      Step 3.
+    
+    @requirement mid-step
+      @depends-on auth.setup.step-1, auth.setup.step-2, auth.setup.step-3
+      Mid step depends on setup steps.
+    
+    @requirement final-step
+      @depends-on auth.setup.mid-step
+      Final step depends on mid-step.`;
+
+      const tickets: TicketFile = {
+        version: "1.0",
+        source: "auth.bp",
+        tickets: [
+          {
+            id: "TKT-001",
+            ref: "auth.setup.step-1",
+            description: "Step 1",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-002",
+            ref: "auth.setup.step-2",
+            description: "Step 2",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-003",
+            ref: "auth.setup.step-3",
+            description: "Step 3",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-004",
+            ref: "auth.setup.mid-step",
+            description: "Mid step",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+          {
+            id: "TKT-005",
+            ref: "auth.setup.final-step",
+            description: "Final step",
+            status: "pending",
+            constraints_satisfied: [],
+          },
+        ],
+      };
+
+      const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+      // Hover over final-step requirement (line 15)
+      const target = findHoverTarget(tree!, { line: 15, character: 17 }, context.symbolIndex, context.fileUri);
+      expect(target).not.toBeNull();
+      expect(target!.path).toBe("auth.setup.final-step");
+
+      const content = buildHoverContent(target!, context);
+      expect(content).not.toBeNull();
+
+      // Should show all 3 transitive blockers
+      expect(content!.value).toContain("auth.setup.step-1");
+      expect(content!.value).toContain("auth.setup.step-2");
+      expect(content!.value).toContain("auth.setup.step-3");
+
+      // Should NOT show truncation message
+      expect(content!.value).not.toContain("... and");
+      expect(content!.value).not.toContain("more");
+    });
   });
 
   describe("multiple tickets per requirement", () => {

@@ -495,7 +495,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [x] **No test for circular dependency display in hover** - While `hover.ts:488-492` handles `blockingInfo.status === "in-cycle"` and displays cycle information, there's no test case in `hover.test.ts` that creates an actual circular dependency and verifies the hover output shows the cycle. (Completed: Added two tests in `hover.test.ts` - one for a 2-node cycle (A ↔ B) and one for a 3-node cycle (A → B → C → A). Tests verify that "Part of circular dependency" warning is shown and the cycle path is displayed.)
 
-- [ ] **No test for transitive blockers truncation** - `hover.ts:499-501` shows "... and N more" when there are more than 3 transitive blockers, but no test verifies this truncation behavior.
+- [x] **No test for transitive blockers truncation** - `hover.ts:499-501` shows "... and N more" when there are more than 3 transitive blockers, but no test verifies this truncation behavior. (Completed: Added two tests in `hover.test.ts` - "truncates transitive blockers when more than 3" tests with 4 transitive blockers showing "... and 1 more", and "shows all transitive blockers when 3 or fewer" verifies no truncation occurs with exactly 3 blockers.)
 
 - [ ] **No test for feature list in module hover** - `hover.ts:564-573` shows a "Features:" list in module hover, but only when `target.node` is available and has features. No test verifies this feature list is displayed correctly.
 
