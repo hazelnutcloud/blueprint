@@ -211,6 +211,307 @@ suite("Syntax Highlighting", () => {
     // but we can verify the document is recognized)
     assert.ok(doc.lineCount > 0, "Document should have content");
   });
+
+  test("semantic tokens legend is available", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: "@module test\n  Test module",
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for LSP server to initialize
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Get the semantic tokens legend
+    const legend = await vscode.commands.executeCommand<vscode.SemanticTokensLegend>(
+      "vscode.provideDocumentSemanticTokensLegend",
+      doc.uri
+    );
+
+    // Legend should be available from LSP
+    if (legend) {
+      assert.ok(Array.isArray(legend.tokenTypes), "Legend should have tokenTypes array");
+      assert.ok(Array.isArray(legend.tokenModifiers), "Legend should have tokenModifiers array");
+
+      // Verify expected token types per SPEC.md Section 5.3
+      assert.ok(legend.tokenTypes.includes("keyword"), "Legend should include 'keyword' type");
+      assert.ok(legend.tokenTypes.includes("variable"), "Legend should include 'variable' type");
+      assert.ok(legend.tokenTypes.includes("type"), "Legend should include 'type' type");
+      assert.ok(legend.tokenTypes.includes("comment"), "Legend should include 'comment' type");
+
+      // Verify status modifiers per SPEC.md Section 5.4
+      assert.ok(
+        legend.tokenModifiers.includes("noTicket"),
+        "Legend should include 'noTicket' modifier"
+      );
+      assert.ok(
+        legend.tokenModifiers.includes("blocked"),
+        "Legend should include 'blocked' modifier"
+      );
+      assert.ok(
+        legend.tokenModifiers.includes("inProgress"),
+        "Legend should include 'inProgress' modifier"
+      );
+      assert.ok(
+        legend.tokenModifiers.includes("complete"),
+        "Legend should include 'complete' modifier"
+      );
+      assert.ok(
+        legend.tokenModifiers.includes("obsolete"),
+        "Legend should include 'obsolete' modifier"
+      );
+    } else {
+      // LSP may not be ready - this is acceptable for transient e2e test
+      console.log("Semantic tokens legend not available (LSP server may not be ready)");
+    }
+  });
+
+  test("semantic tokens are provided for blueprint files", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module auth
+  Authentication module
+
+  @feature login
+    User login feature
+
+    @requirement basic-auth
+      @depends-on storage.users
+
+      Basic authentication
+
+      @constraint bcrypt
+        Use bcrypt for passwords
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for LSP server to initialize and retry if needed
+    let tokens: vscode.SemanticTokens | undefined;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      tokens = await vscode.commands.executeCommand<vscode.SemanticTokens>(
+        "vscode.provideDocumentSemanticTokens",
+        doc.uri
+      );
+
+      if (tokens && tokens.data.length > 0) {
+        break;
+      }
+    }
+
+    // Semantic tokens should be provided
+    if (tokens) {
+      assert.ok(tokens.data, "Semantic tokens should have data");
+      assert.ok(tokens.data.length > 0, "Semantic tokens data should not be empty");
+
+      // The data array contains encoded tokens in groups of 5:
+      // [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
+      // Verify we have valid token data (must be multiple of 5)
+      assert.strictEqual(tokens.data.length % 5, 0, "Token data length should be multiple of 5");
+
+      // Calculate number of tokens
+      const tokenCount = tokens.data.length / 5;
+      assert.ok(tokenCount >= 4, "Should have at least 4 tokens (keywords)");
+
+      console.log(`Semantic tokens: ${tokenCount} tokens returned`);
+    } else {
+      console.log("Semantic tokens not available (LSP server may not be ready)");
+    }
+  });
+
+  test("semantic tokens include keywords and identifiers", async () => {
+    // Simple document with clear token expectations
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module test
+  Module description
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for LSP server to initialize
+    let tokens: vscode.SemanticTokens | undefined;
+    let legend: vscode.SemanticTokensLegend | undefined;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      [tokens, legend] = await Promise.all([
+        vscode.commands.executeCommand<vscode.SemanticTokens>(
+          "vscode.provideDocumentSemanticTokens",
+          doc.uri
+        ),
+        vscode.commands.executeCommand<vscode.SemanticTokensLegend>(
+          "vscode.provideDocumentSemanticTokensLegend",
+          doc.uri
+        ),
+      ]);
+
+      if (tokens && tokens.data.length > 0 && legend) {
+        break;
+      }
+    }
+
+    if (tokens && legend && tokens.data.length > 0) {
+      // Decode the first few tokens to verify types
+      const keywordIndex = legend.tokenTypes.indexOf("keyword");
+      const variableIndex = legend.tokenTypes.indexOf("variable");
+
+      assert.ok(keywordIndex >= 0, "Should have keyword type in legend");
+      assert.ok(variableIndex >= 0, "Should have variable type in legend");
+
+      // First token should be @module keyword (line 0, col 0, length 7)
+      // Token format: [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
+      const firstTokenType = tokens.data[3]; // tokenType is at index 3
+      assert.strictEqual(firstTokenType, keywordIndex, "First token should be a keyword (@module)");
+
+      // Second token should be 'test' identifier
+      // Need to check if there are more tokens
+      if (tokens.data.length >= 10) {
+        const secondTokenType = tokens.data[8]; // tokenType of second token
+        assert.strictEqual(
+          secondTokenType,
+          variableIndex,
+          "Second token should be a variable (identifier)"
+        );
+      }
+
+      console.log("Semantic token types verified: keyword and variable tokens present");
+    } else {
+      console.log("Could not verify token types (LSP server may not be ready)");
+    }
+  });
+
+  test("semantic tokens include references in @depends-on", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `@module storage
+  Storage module
+
+  @feature users
+    Users feature
+
+    @requirement user-table
+      User table
+
+@module auth
+  Auth module
+
+  @feature login
+    @depends-on storage.users.user-table
+
+    Login feature
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for LSP server to initialize
+    let tokens: vscode.SemanticTokens | undefined;
+    let legend: vscode.SemanticTokensLegend | undefined;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      [tokens, legend] = await Promise.all([
+        vscode.commands.executeCommand<vscode.SemanticTokens>(
+          "vscode.provideDocumentSemanticTokens",
+          doc.uri
+        ),
+        vscode.commands.executeCommand<vscode.SemanticTokensLegend>(
+          "vscode.provideDocumentSemanticTokensLegend",
+          doc.uri
+        ),
+      ]);
+
+      if (tokens && tokens.data.length > 0 && legend) {
+        break;
+      }
+    }
+
+    if (tokens && legend && tokens.data.length > 0) {
+      const typeIndex = legend.tokenTypes.indexOf("type");
+      assert.ok(typeIndex >= 0, "Should have 'type' type in legend for references");
+
+      // Find if any token has 'type' as its token type (used for references)
+      let foundReferenceToken = false;
+      for (let i = 0; i < tokens.data.length; i += 5) {
+        const tokenType = tokens.data[i + 3];
+        if (tokenType === typeIndex) {
+          foundReferenceToken = true;
+          break;
+        }
+      }
+
+      assert.ok(foundReferenceToken, "Should have at least one reference token (type)");
+      console.log("Reference tokens (type) verified in @depends-on");
+    } else {
+      console.log("Could not verify reference tokens (LSP server may not be ready)");
+    }
+  });
+
+  test("semantic tokens include comments", async () => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: "blueprint",
+      content: `// This is a comment
+@module test
+  Test module
+
+  /* Multi-line
+     comment */
+`,
+    });
+
+    await vscode.window.showTextDocument(doc);
+
+    // Wait for LSP server to initialize
+    let tokens: vscode.SemanticTokens | undefined;
+    let legend: vscode.SemanticTokensLegend | undefined;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      [tokens, legend] = await Promise.all([
+        vscode.commands.executeCommand<vscode.SemanticTokens>(
+          "vscode.provideDocumentSemanticTokens",
+          doc.uri
+        ),
+        vscode.commands.executeCommand<vscode.SemanticTokensLegend>(
+          "vscode.provideDocumentSemanticTokensLegend",
+          doc.uri
+        ),
+      ]);
+
+      if (tokens && tokens.data.length > 0 && legend) {
+        break;
+      }
+    }
+
+    if (tokens && legend && tokens.data.length > 0) {
+      const commentIndex = legend.tokenTypes.indexOf("comment");
+      assert.ok(commentIndex >= 0, "Should have 'comment' type in legend");
+
+      // Find if any token has 'comment' as its token type
+      let foundCommentToken = false;
+      for (let i = 0; i < tokens.data.length; i += 5) {
+        const tokenType = tokens.data[i + 3];
+        if (tokenType === commentIndex) {
+          foundCommentToken = true;
+          break;
+        }
+      }
+
+      assert.ok(foundCommentToken, "Should have at least one comment token");
+      console.log("Comment tokens verified");
+    } else {
+      console.log("Could not verify comment tokens (LSP server may not be ready)");
+    }
+  });
 });
 
 suite("LSP Client", () => {

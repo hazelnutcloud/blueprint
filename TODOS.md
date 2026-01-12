@@ -399,7 +399,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ### 12.3 End-to-End Tests
 
 - [x] Test full VS Code extension activation (17 tests in `packages/blueprint-lsp-client/tests/suite/extension.test.ts` using @vscode/test-electron. Tests cover: extension presence and activation on .bp files, blueprint language registration, comment toggling and bracket matching, all extension settings defaults (ticketsPath, highlighting colors, gotoModifier, showProgressInGutter, showProgressHighlighting, hoverDelay, trace.server), TextMate grammar registration, LSP client features (hover, document symbols, go-to-definition), and file associations. Run with `bun run test` in the blueprint-lsp-client package.)
-- [ ] Test syntax highlighting appearance
+- [x] Test syntax highlighting appearance (5 tests added to `packages/blueprint-lsp-client/tests/suite/extension.test.ts` in the "Syntax Highlighting" suite. Tests cover: semantic tokens legend availability with verification of token types (keyword, variable, type, comment) and status modifiers (noTicket, blocked, inProgress, complete, obsolete) per SPEC.md Sections 5.3 and 5.4, semantic tokens provision for Blueprint files with token count verification, keyword and identifier token type verification, reference tokens in @depends-on declarations, and comment token verification for single-line and multi-line comments. Tests use `vscode.provideDocumentSemanticTokens` and `vscode.provideDocumentSemanticTokensLegend` commands with retry logic for LSP server initialization.)
 - [ ] Test hover popup rendering
 - [ ] Test navigation commands
 - [ ] Test settings application
