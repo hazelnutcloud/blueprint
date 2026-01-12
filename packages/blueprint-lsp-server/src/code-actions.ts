@@ -904,13 +904,13 @@ export function findSymbolAtPosition(
   let current = node;
   while (current) {
     if (current.type === "requirement_block") {
-      return buildSymbolPath(current, "requirement", symbolIndex, fileUri);
+      return buildSymbolPath(current, "requirement", _symbolIndex, _fileUri);
     }
     if (current.type === "feature_block") {
-      return buildSymbolPath(current, "feature", symbolIndex, fileUri);
+      return buildSymbolPath(current, "feature", _symbolIndex, _fileUri);
     }
     if (current.type === "module_block") {
-      return buildSymbolPath(current, "module", symbolIndex, fileUri);
+      return buildSymbolPath(current, "module", _symbolIndex, _fileUri);
     }
     current = current.parent;
   }
