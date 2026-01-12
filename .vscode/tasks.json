@@ -5,7 +5,7 @@
       "label": "build-server",
       "type": "shell",
       "command": "bun",
-      "args": ["run", "tsc", "--noEmit"],
+      "args": ["run", "typecheck"],
       "options": {
         "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
       },
@@ -33,10 +33,10 @@
       "problemMatcher": []
     },
     {
-      "label": "watch-server",
+      "label": "watch-server-typecheck",
       "type": "shell",
       "command": "bun",
-      "args": ["run", "tsc", "--noEmit", "--watch"],
+      "args": ["run", "typecheck:watch"],
       "options": {
         "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
       },
@@ -45,10 +45,74 @@
       "problemMatcher": ["$tsc-watch"]
     },
     {
+      "label": "watch-server",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
+      },
+      "isBackground": true,
+      "group": "build",
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[.*\\] Reloading",
+          "endsPattern": "^\\[.*\\] (Reloaded|Watching)"
+        }
+      }
+    },
+    {
+      "label": "watch-server-debug",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "dev:debug"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
+      },
+      "isBackground": true,
+      "group": "build",
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[.*\\] Reloading",
+          "endsPattern": "^\\[.*\\] (Reloaded|Watching)"
+        }
+      }
+    },
+    {
+      "label": "watch-tests",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "test:watch"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
+      },
+      "isBackground": true,
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
       "label": "test-server",
       "type": "shell",
       "command": "bun",
-      "args": ["test"],
+      "args": ["run", "test"],
       "options": {
         "cwd": "${workspaceFolder}/packages/blueprint-lsp-server"
       },
@@ -75,6 +139,12 @@
         "cwd": "${workspaceFolder}/packages/tree-sitter-blueprint"
       },
       "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "dev",
+      "dependsOn": ["watch-server", "watch-server-typecheck"],
+      "group": "build",
       "problemMatcher": []
     }
   ]

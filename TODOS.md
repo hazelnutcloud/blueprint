@@ -29,7 +29,7 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 - [ ] Configure ESLint and Prettier for code quality
 - [ ] Set up VS Code workspace settings for development
 - [x] Create launch configurations for debugging the LSP server and client (Added `.vscode/launch.json` with configurations for: "Launch Extension" using extensionHost, "Attach to LSP Server" on port 6009, "Debug LSP Server (Standalone)" with Bun, "Debug Current Test File", "Debug All LSP Server Tests", and compound "Extension + Server" configuration. Also added `.vscode/tasks.json` with build, watch, and test tasks.)
-- [ ] Set up hot-reload for development iteration
+- [x] Set up hot-reload for development iteration (Added npm scripts to `packages/blueprint-lsp-server/package.json`: `dev` uses `bun --watch`, `dev:debug` adds inspector, `test:watch` for continuous testing, `typecheck:watch` for continuous type checking. Updated `.vscode/tasks.json` with `watch-server`, `watch-server-debug`, `watch-tests`, and compound `dev` task that runs both server and typecheck watchers in parallel.)
 
 ---
 
