@@ -398,7 +398,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 12.3 End-to-End Tests
 
-- [ ] Test full VS Code extension activation
+- [x] Test full VS Code extension activation (17 tests in `packages/blueprint-lsp-client/tests/suite/extension.test.ts` using @vscode/test-electron. Tests cover: extension presence and activation on .bp files, blueprint language registration, comment toggling and bracket matching, all extension settings defaults (ticketsPath, highlighting colors, gotoModifier, showProgressInGutter, showProgressHighlighting, hoverDelay, trace.server), TextMate grammar registration, LSP client features (hover, document symbols, go-to-definition), and file associations. Run with `bun run test` in the blueprint-lsp-client package.)
 - [ ] Test syntax highlighting appearance
 - [ ] Test hover popup rendering
 - [ ] Test navigation commands
