@@ -417,7 +417,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 13.1 User Documentation
 
-- [ ] Write README with installation instructions
+- [x] Write README with installation instructions (Created comprehensive README.md at project root with: overview and key principles, prerequisites and build-from-source instructions for all 3 packages, quick start example showing Blueprint syntax, language syntax reference table, project structure diagram, LSP features list, configuration options table, development commands for testing/linting/benchmarks, monorepo structure table, and link to SPEC.md.)
 - [ ] Document all configuration options
 - [ ] Create usage guide with screenshots
 - [ ] Document keyboard shortcuts
