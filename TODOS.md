@@ -609,7 +609,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [ ] **Import `ReferenceNode` type in ast.test.ts** - The test file tests `ReferenceNode` properties but doesn't import the type. Add to imports for type safety.
 
-- [ ] **Add JSDoc for `SymbolTable` interface fields** - The `SymbolTable` interface lacks documentation for what each map contains. Add JSDoc comments explaining the key format and value type for each map.
+- [x] **Add JSDoc for `SymbolTable` interface fields** - The `SymbolTable` interface lacks documentation for what each map contains. Add JSDoc comments explaining the key format and value type for each map. (Completed: Added comprehensive JSDoc comments to `SymbolTable` interface in `ast.ts` including interface-level documentation with `@example` showing key formats, and field-level JSDoc for each map explaining the key format patterns for modules, features, requirements, and constraints.)
 
 ---
 

@@ -411,13 +411,43 @@ export function transformToAST(tree: Tree): DocumentNode {
 }
 
 /**
- * Build a symbol table mapping fully-qualified names to AST nodes.
- * Keys use dot notation: "module", "module.feature", "module.feature.requirement"
+ * Symbol table mapping fully-qualified names to AST nodes.
+ * Keys use dot notation to represent the hierarchical path to each element.
+ *
+ * @example
+ * // Key formats:
+ * modules.get("auth")                     // ModuleNode for @module auth
+ * features.get("auth.login")              // FeatureNode for @feature login in auth module
+ * requirements.get("auth.login.basic")    // RequirementNode for @requirement basic
+ * constraints.get("auth.login.basic.bcrypt") // ConstraintNode for @constraint bcrypt
  */
 export interface SymbolTable {
+  /**
+   * Map of module name to ModuleNode.
+   * Keys are simple identifiers (e.g., "auth", "payments").
+   */
   modules: Map<string, ModuleNode>;
+
+  /**
+   * Map of fully-qualified feature path to FeatureNode.
+   * Keys use the format "module.feature" (e.g., "auth.login", "payments.checkout").
+   */
   features: Map<string, FeatureNode>;
+
+  /**
+   * Map of fully-qualified requirement path to RequirementNode.
+   * Keys use the format "module.feature.requirement" (e.g., "auth.login.basic-auth").
+   * For module-level requirements (no parent feature), the format is "module.requirement".
+   */
   requirements: Map<string, RequirementNode>;
+
+  /**
+   * Map of fully-qualified constraint path to ConstraintNode.
+   * Keys include the full path to the constraint, which varies by parent:
+   * - Module constraint: "module.constraint"
+   * - Feature constraint: "module.feature.constraint"
+   * - Requirement constraint: "module.feature.requirement.constraint"
+   */
   constraints: Map<string, ConstraintNode>;
 }
 
