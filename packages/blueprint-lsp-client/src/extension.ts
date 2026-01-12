@@ -284,6 +284,35 @@ function updateSemanticTokenColors(): void {
 }
 
 /**
+ * Updates the VS Code editor.hover.delay setting for Blueprint files
+ * based on the blueprint.hoverDelay setting.
+ *
+ * This allows users to configure a custom hover delay specifically for
+ * Blueprint files without affecting other languages.
+ */
+function updateHoverDelay(): void {
+  const config = workspace.getConfiguration("blueprint");
+  const hoverDelay = config.get<number>("hoverDelay") ?? 300;
+
+  // Get the current language-specific settings for Blueprint
+  const editorConfig = workspace.getConfiguration("editor", {
+    languageId: "blueprint",
+  });
+
+  // Only update if the value differs from current setting
+  const currentValue = editorConfig.get<number>("hover.delay");
+  if (currentValue !== hoverDelay) {
+    // Update the language-specific setting for Blueprint files
+    editorConfig.update(
+      "hover.delay",
+      hoverDelay,
+      ConfigurationTarget.Global,
+      true // overrideInLanguage
+    );
+  }
+}
+
+/**
  * Initializes or disposes gutter decorations based on the showProgressInGutter setting.
  */
 function updateGutterIconsEnabled(context: ExtensionContext): void {
@@ -360,6 +389,7 @@ export function activate(context: ExtensionContext): void {
   // Apply initial settings
   updateSemanticTokenColors();
   updateGotoModifier();
+  updateHoverDelay();
 
   // Listen for configuration changes to update settings dynamically
   context.subscriptions.push(
@@ -372,6 +402,9 @@ export function activate(context: ExtensionContext): void {
       }
       if (e.affectsConfiguration("blueprint.showProgressInGutter")) {
         updateGutterIconsEnabled(context);
+      }
+      if (e.affectsConfiguration("blueprint.hoverDelay")) {
+        updateHoverDelay();
       }
     })
   );

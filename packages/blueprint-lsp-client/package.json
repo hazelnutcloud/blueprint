@@ -103,6 +103,14 @@
           "type": "boolean",
           "default": true,
           "description": "Show progress icons in the editor gutter for requirements. Icons indicate completion status: checkmark for complete, spinner for in-progress, blocked icon for blocked requirements, etc."
+        },
+        "blueprint.hoverDelay": {
+          "scope": "language-overridable",
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Delay in milliseconds after which the hover is shown for Blueprint files"
         }
       }
     },
@@ -158,7 +166,8 @@
     "configurationDefaults": {
       "[blueprint]": {
         "editor.semanticHighlighting.enabled": true,
-        "editor.multiCursorModifier": "ctrlCmd"
+        "editor.multiCursorModifier": "ctrlCmd",
+        "editor.hover.delay": 300
       },
       "editor.semanticTokenColorCustomizations": {
         "rules": {
