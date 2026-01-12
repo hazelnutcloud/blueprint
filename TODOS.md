@@ -418,7 +418,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ### 13.1 User Documentation
 
 - [x] Write README with installation instructions (Created comprehensive README.md at project root with: overview and key principles, prerequisites and build-from-source instructions for all 3 packages, quick start example showing Blueprint syntax, language syntax reference table, project structure diagram, LSP features list, configuration options table, development commands for testing/linting/benchmarks, monorepo structure table, and link to SPEC.md.)
-- [ ] Document all configuration options
+- [x] Document all configuration options (Moved VS Code extension documentation to `packages/blueprint-lsp-client/README.md`. Root README now references subpackage. Extension README includes: categorized settings tables (General, Progress Visualization, Highlighting Colors, Debugging), keyboard shortcuts table, type information for each setting, detailed descriptions, complete JSON example. Documents all 12 configuration options.)
 - [ ] Create usage guide with screenshots
 - [ ] Document keyboard shortcuts
 

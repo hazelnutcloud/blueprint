@@ -155,20 +155,7 @@ The Blueprint LSP provides:
 - **Diagnostics** for syntax errors, circular dependencies, and missing tickets
 - **Code actions** for creating tickets and fixing typos in references
 
-### Configuration
-
-The VS Code extension supports the following settings:
-
-| Setting                              | Default              | Description                        |
-| ------------------------------------ | -------------------- | ---------------------------------- |
-| `blueprint.ticketsPath`              | `.blueprint/tickets` | Path to tickets directory          |
-| `blueprint.showProgressInGutter`     | `true`               | Show status icons in gutter        |
-| `blueprint.showProgressHighlighting` | `true`               | Highlight lines by status          |
-| `blueprint.gotoModifier`             | `alt`                | Modifier for go-to-definition      |
-| `blueprint.hoverDelay`               | `300`                | Hover delay in milliseconds        |
-| `blueprint.highlighting.complete`    | `#2d5a27`            | Color for complete requirements    |
-| `blueprint.highlighting.inProgress`  | `#8a6d3b`            | Color for in-progress requirements |
-| `blueprint.highlighting.blocked`     | `#a94442`            | Color for blocked requirements     |
+For VS Code extension configuration, keyboard shortcuts, and detailed usage, see the [VS Code Extension README](./packages/blueprint-lsp-client/README.md).
 
 ## Development
 
