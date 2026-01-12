@@ -486,6 +486,131 @@ describe("hover", () => {
         expect(content!.value).toContain("Complete: 1");
         expect(content!.value).toContain("In progress: 1");
       });
+
+      test("shows features list with per-feature progress", () => {
+        const source = `@module auth
+  Auth module.
+  
+  @feature login
+    Login feature.
+    
+    @requirement basic-auth
+      Basic auth.
+    
+    @requirement oauth
+      OAuth login.
+  
+  @feature session
+    Session management.
+    
+    @requirement create-token
+      Create session token.
+    
+    @requirement refresh-token
+      Refresh session token.
+    
+    @requirement logout
+      Logout and invalidate session.`;
+
+        const tickets: TicketFile = {
+          version: "1.0",
+          source: "auth.bp",
+          tickets: [
+            {
+              id: "TKT-001",
+              ref: "auth.login.basic-auth",
+              description: "Implement basic auth",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+            {
+              id: "TKT-002",
+              ref: "auth.login.oauth",
+              description: "Implement OAuth",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+            {
+              id: "TKT-003",
+              ref: "auth.session.create-token",
+              description: "Create token",
+              status: "complete",
+              constraints_satisfied: [],
+            },
+            {
+              id: "TKT-004",
+              ref: "auth.session.refresh-token",
+              description: "Refresh token",
+              status: "in-progress",
+              constraints_satisfied: [],
+            },
+            {
+              id: "TKT-005",
+              ref: "auth.session.logout",
+              description: "Logout",
+              status: "pending",
+              constraints_satisfied: [],
+            },
+          ],
+        };
+
+        const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+        const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("module");
+
+        const content = buildHoverContent(target!, context);
+        expect(content).not.toBeNull();
+
+        // Should show Features section
+        expect(content!.value).toContain("**Features:**");
+
+        // Should list both features with their progress
+        // login: 2/2 complete (basic-auth and oauth both complete)
+        expect(content!.value).toContain("login: 2/2 complete");
+
+        // session: 1/3 complete (only create-token is complete)
+        expect(content!.value).toContain("session: 1/3 complete");
+      });
+
+      test("does not show features section when module has no features", () => {
+        // A module with only module-level requirements (no features)
+        const source = `@module config
+  Configuration module.
+  
+  @requirement load-config
+    Load configuration from file.`;
+
+        const tickets: TicketFile = {
+          version: "1.0",
+          source: "config.bp",
+          tickets: [
+            {
+              id: "TKT-001",
+              ref: "config.load-config",
+              description: "Load config",
+              status: "pending",
+              constraints_satisfied: [],
+            },
+          ],
+        };
+
+        const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+        const target = findHoverTarget(tree!, { line: 0, character: 8 }, context.symbolIndex, context.fileUri);
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("module");
+
+        const content = buildHoverContent(target!, context);
+        expect(content).not.toBeNull();
+
+        // Should NOT show Features section
+        expect(content!.value).not.toContain("**Features:**");
+
+        // Should still show progress for the module-level requirement
+        expect(content!.value).toContain("0/1 requirements complete");
+      });
     });
 
     describe("constraint hover", () => {

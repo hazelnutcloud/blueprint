@@ -497,7 +497,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [x] **No test for transitive blockers truncation** - `hover.ts:499-501` shows "... and N more" when there are more than 3 transitive blockers, but no test verifies this truncation behavior. (Completed: Added two tests in `hover.test.ts` - "truncates transitive blockers when more than 3" tests with 4 transitive blockers showing "... and 1 more", and "shows all transitive blockers when 3 or fewer" verifies no truncation occurs with exactly 3 blockers.)
 
-- [ ] **No test for feature list in module hover** - `hover.ts:564-573` shows a "Features:" list in module hover, but only when `target.node` is available and has features. No test verifies this feature list is displayed correctly.
+- [x] **No test for feature list in module hover** - `hover.ts:564-573` shows a "Features:" list in module hover, but only when `target.node` is available and has features. No test verifies this feature list is displayed correctly. (Completed: Added two tests in `hover.test.ts` - "shows features list with per-feature progress" tests a module with two features showing per-feature completion counts, and "does not show features section when module has no features" verifies the Features section is omitted for modules with only module-level requirements.)
 
 - [ ] **No test for module-level requirements in hover** - The code handles requirements that may exist directly under modules (no parent feature), but no test covers this edge case.
 
