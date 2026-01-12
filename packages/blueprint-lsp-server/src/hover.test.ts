@@ -718,7 +718,7 @@ describe("hover", () => {
     });
 
     describe("keyword hover", () => {
-      test("shows keyword documentation", () => {
+      test("shows keyword documentation for @module", () => {
         const source = `@module auth
   Auth module.`;
 
@@ -733,6 +733,49 @@ describe("hover", () => {
         expect(content!.value).toContain("@module");
         expect(content!.value).toContain("@feature");
         expect(content!.value).toContain("@requirement");
+      });
+
+      test("shows keyword documentation for @depends-on", () => {
+        const source = `@module auth
+  Auth module.
+  
+  @feature login
+    @depends-on auth
+    Login feature.`;
+
+        const { tree, context } = createHoverContext(source);
+
+        // Position on "@depends-on" keyword (line 4, character 4 is the start of @depends-on)
+        const target = findHoverTarget(tree!, { line: 4, character: 4 }, context.symbolIndex, context.fileUri);
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("keyword");
+
+        const content = buildHoverContent(target!, context);
+        expect(content!.value).toContain("Blueprint DSL Keyword");
+        expect(content!.value).toContain("@depends-on");
+        expect(content!.value).toContain("Dependencies on other elements");
+      });
+
+      test("shows keyword documentation for @constraint", () => {
+        const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic auth.
+      
+      @constraint bcrypt-cost
+        Use bcrypt.`;
+
+        const { tree, context } = createHoverContext(source);
+
+        // Position on "@constraint" keyword (line 5, character 6)
+        const target = findHoverTarget(tree!, { line: 5, character: 6 }, context.symbolIndex, context.fileUri);
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("keyword");
+
+        const content = buildHoverContent(target!, context);
+        expect(content!.value).toContain("Blueprint DSL Keyword");
+        expect(content!.value).toContain("@constraint");
+        expect(content!.value).toContain("Implementation requirements");
       });
     });
   });

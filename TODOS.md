@@ -501,7 +501,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [ ] **No test for module-level requirements in hover** - The code handles requirements that may exist directly under modules (no parent feature), but no test covers this edge case.
 
-- [ ] **No test for hover on @depends-on keyword itself** - Tests cover hovering on references within `@depends-on`, but not on the `@depends-on` keyword itself. Should verify it shows the generic keyword documentation.
+- [x] **No test for hover on @depends-on keyword itself** - Tests cover hovering on references within `@depends-on`, but not on the `@depends-on` keyword itself. Should verify it shows the generic keyword documentation. (Completed: Added tests for `@depends-on` and `@constraint` keyword hovers in `hover.test.ts`. Both tests verify the keyword hover shows the generic Blueprint DSL Keyword documentation including the specific keyword description.)
 
 - [ ] **No test for empty constraint description** - `hover.ts:610-615` shows constraint description if available, but no test verifies behavior when description is empty or missing.
 
