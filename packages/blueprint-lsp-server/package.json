@@ -22,7 +22,9 @@
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
     "clean": "rm -rf dist",
-    "bench": "bun run benchmarks/parsing.bench.ts"
+    "bench": "bun run benchmarks/parsing.bench.ts",
+    "bench:workspace": "bun run benchmarks/workspace-indexing.bench.ts",
+    "bench:all": "bun run bench && bun run bench:workspace"
   },
   "devDependencies": {
     "@types/bun": "latest",
