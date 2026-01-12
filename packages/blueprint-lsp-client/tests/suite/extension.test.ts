@@ -32,10 +32,12 @@ function findBlueprintExtension(): vscode.Extension<unknown> | undefined {
 }
 
 suite("Extension Activation", () => {
-
   test("extension is present in the extensions list", () => {
     const extension = findBlueprintExtension();
-    assert.ok(extension, `Extension should be installed (tried ${extensionId} and blueprint-lsp-client)`);
+    assert.ok(
+      extension,
+      `Extension should be installed (tried ${extensionId} and blueprint-lsp-client)`
+    );
   });
 
   test("extension activates on .bp file open", async () => {
@@ -65,7 +67,11 @@ suite("Extension Activation", () => {
     // Wait for extension to activate
     await extension.activate();
 
-    assert.strictEqual(extension.isActive, true, "Extension should be active after opening .bp file");
+    assert.strictEqual(
+      extension.isActive,
+      true,
+      "Extension should be active after opening .bp file"
+    );
   });
 
   test("blueprint language is registered", async () => {
@@ -114,7 +120,11 @@ suite("Extension Settings", () => {
   test("ticketsPath setting has correct default", () => {
     const config = vscode.workspace.getConfiguration("blueprint");
     const ticketsPath = config.get<string>("ticketsPath");
-    assert.strictEqual(ticketsPath, ".blueprint/tickets", "Default ticketsPath should be .blueprint/tickets");
+    assert.strictEqual(
+      ticketsPath,
+      ".blueprint/tickets",
+      "Default ticketsPath should be .blueprint/tickets"
+    );
   });
 
   test("highlighting color settings have defaults", () => {
@@ -148,7 +158,11 @@ suite("Extension Settings", () => {
   test("showProgressHighlighting setting has correct default", () => {
     const config = vscode.workspace.getConfiguration("blueprint");
     const showProgressHighlighting = config.get<boolean>("showProgressHighlighting");
-    assert.strictEqual(showProgressHighlighting, true, "Default showProgressHighlighting should be true");
+    assert.strictEqual(
+      showProgressHighlighting,
+      true,
+      "Default showProgressHighlighting should be true"
+    );
   });
 
   test("hoverDelay setting has correct default", () => {

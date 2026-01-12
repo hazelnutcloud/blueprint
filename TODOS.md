@@ -406,7 +406,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 12.4 Performance Tests
 
-- [ ] Benchmark parsing large `.bp` files
+- [x] Benchmark parsing large `.bp` files (Added `packages/blueprint-lsp-server/benchmarks/parsing.bench.ts` with comprehensive benchmarks for tree-sitter parsing, AST transformation, and symbol table construction. Tests small (3KB), medium (39KB), large (320KB), and XLarge (1.3MB) files. Includes scaling analysis showing O(n^1.00) linear performance. Run with `bun run bench` in the blueprint-lsp-server package.)
 - [ ] Benchmark workspace indexing time
 - [ ] Benchmark hover response latency
 - [ ] Profile memory usage with many open files
