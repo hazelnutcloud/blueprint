@@ -393,8 +393,8 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Test diagnostic publishing (6 tests in `tests/integration/lsp-server.test.ts` covering syntax error diagnostics, unresolved reference diagnostics, no-ticket warnings, circular dependency errors, diagnostics clearing on document close, and diagnostics updating on content changes. Tests verify correct severity levels, diagnostic codes, and message content.)
 - [x] Test hover information content (Covered in `tests/integration/lsp-server.test.ts` - tests hover for @module keyword and requirement identifiers, verifies hover contains expected content)
 - [x] Test go-to-definition navigation (8 tests in `tests/integration/lsp-server.test.ts` covering: @depends-on reference navigation within same file, requirement identifier definition without ticket, constraint identifier definition, keyword returns null, unresolved reference returns null, cross-file reference navigation between storage.bp and auth.bp, feature identifier definition, and module identifier definition. Tests verify correct URI and range.start.line for all navigation targets.)
-- [ ] Test find-references results
-- [ ] Test cross-file reference resolution
+- [x] Test find-references results (8 tests in `tests/integration/lsp-server.test.ts` covering: @depends-on references to requirements, includeDeclaration flag behavior, cross-file references between multiple .bp files, references to features, references to modules, null for symbols with no references, null for keyword positions, and references from within @depends-on position.)
+- [x] Test cross-file reference resolution (Covered in find-references tests: "finds cross-file references" test opens two files and verifies references from storage.bp symbol are found in payments.bp file.)
 
 ### 12.3 End-to-End Tests
 

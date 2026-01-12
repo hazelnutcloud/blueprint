@@ -1614,6 +1614,484 @@ describe("LSP Server Integration Tests", () => {
     });
   });
 
+  describe("find-references", () => {
+    test("finds @depends-on references to a requirement", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            references: {
+              dynamicRegistration: false,
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "ref-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  @feature login
+    @requirement basic-auth
+      Users can log in with email and password.
+
+  @feature session
+    @depends-on auth.login.basic-auth
+
+    @requirement create-token
+      Create session tokens after login.
+
+  @feature logout
+    @depends-on auth.login.basic-auth
+
+    @requirement invalidate-token
+      Invalidate tokens on logout.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references to basic-auth requirement (line 2)
+      // Line 2: "    @requirement basic-auth"
+      const references = await client.sendRequest<
+        Array<{
+          uri: string;
+          range: { start: { line: number; character: number } };
+        }>
+      >("textDocument/references", {
+        textDocument: { uri: testFileUri },
+        position: { line: 2, character: 18 },
+        context: { includeDeclaration: false },
+      });
+
+      expect(references).not.toBeNull();
+      expect(references.length).toBe(2);
+
+      // Both references should be in the same file
+      expect(references.every((ref) => ref.uri === testFileUri)).toBe(true);
+
+      // Should find references on lines 6 and 12 (the @depends-on lines)
+      const lines = references.map((ref) => ref.range.start.line).sort((a, b) => a - b);
+      expect(lines).toEqual([6, 12]);
+    });
+
+    test("includes declaration when includeDeclaration is true", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "ref-incl-decl.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module payments
+  @feature cart
+    @requirement add-item
+      Add items to shopping cart.
+
+  @feature checkout
+    @depends-on payments.cart.add-item
+
+    @requirement process-payment
+      Process the payment.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references with includeDeclaration: true
+      const references = await client.sendRequest<
+        Array<{
+          uri: string;
+          range: { start: { line: number; character: number } };
+        }>
+      >("textDocument/references", {
+        textDocument: { uri: testFileUri },
+        position: { line: 2, character: 18 },
+        context: { includeDeclaration: true },
+      });
+
+      expect(references).not.toBeNull();
+      expect(references.length).toBe(2);
+
+      // Should include the declaration (line 2) and the reference (line 6)
+      const lines = references.map((ref) => ref.range.start.line).sort((a, b) => a - b);
+      expect(lines).toEqual([2, 6]);
+    });
+
+    test("finds cross-file references", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Create two files: storage.bp and payments.bp
+      const storageFilePath = join(workspaceDir, "storage-refs.bp");
+      const storageFileUri = `file://${storageFilePath}`;
+      const storageContent = `@module storage
+  @feature inventory
+    @requirement stock-levels
+      Track product stock levels.
+`;
+
+      const paymentsFilePath = join(workspaceDir, "payments-refs.bp");
+      const paymentsFileUri = `file://${paymentsFilePath}`;
+      const paymentsContent = `@module payments
+  @depends-on storage.inventory.stock-levels
+
+  @feature checkout
+    Checkout feature.
+
+    @requirement verify-stock
+      @depends-on storage.inventory.stock-levels
+
+      Verify stock before checkout.
+`;
+
+      // Open storage.bp first
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: storageFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: storageContent,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Open payments.bp
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: paymentsFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: paymentsContent,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references to stock-levels from storage.bp (line 2)
+      const references = await client.sendRequest<
+        Array<{
+          uri: string;
+          range: { start: { line: number; character: number } };
+        }>
+      >("textDocument/references", {
+        textDocument: { uri: storageFileUri },
+        position: { line: 2, character: 18 },
+        context: { includeDeclaration: false },
+      });
+
+      expect(references).not.toBeNull();
+      expect(references.length).toBe(2);
+
+      // Both references should be in payments.bp
+      expect(references.every((ref) => ref.uri === paymentsFileUri)).toBe(true);
+
+      // Should find references on lines 1 and 7 in payments.bp
+      const lines = references.map((ref) => ref.range.start.line).sort((a, b) => a - b);
+      expect(lines).toEqual([1, 7]);
+    });
+
+    test("finds references to a feature", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "ref-feature.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module core
+  @feature user-management
+    @requirement create-user
+      Create new users.
+
+@module admin
+  @depends-on core.user-management
+
+  @feature admin-panel
+    Admin panel functionality.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references to user-management feature (line 1)
+      const references = await client.sendRequest<
+        Array<{
+          uri: string;
+          range: { start: { line: number; character: number } };
+        }>
+      >("textDocument/references", {
+        textDocument: { uri: testFileUri },
+        position: { line: 1, character: 12 },
+        context: { includeDeclaration: false },
+      });
+
+      expect(references).not.toBeNull();
+      expect(references.length).toBe(1);
+      expect(references[0]!.uri).toBe(testFileUri);
+      expect(references[0]!.range.start.line).toBe(6);
+    });
+
+    test("finds references to a module", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "ref-module.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module database
+  @feature connections
+    @requirement pool-management
+      Manage database connection pool.
+
+@module api
+  @depends-on database
+
+  @feature endpoints
+    API endpoints.
+
+@module workers
+  @depends-on database
+
+  @feature background-jobs
+    Background job processing.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references to database module (line 0)
+      const references = await client.sendRequest<
+        Array<{
+          uri: string;
+          range: { start: { line: number; character: number } };
+        }>
+      >("textDocument/references", {
+        textDocument: { uri: testFileUri },
+        position: { line: 0, character: 8 },
+        context: { includeDeclaration: false },
+      });
+
+      expect(references).not.toBeNull();
+      expect(references.length).toBe(2);
+
+      // Both references should be in the same file
+      expect(references.every((ref) => ref.uri === testFileUri)).toBe(true);
+
+      // Should find references on lines 6 and 12 (the @depends-on lines)
+      const lines = references.map((ref) => ref.range.start.line).sort((a, b) => a - b);
+      expect(lines).toEqual([6, 12]);
+    });
+
+    test("returns null for symbol with no references", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "ref-none.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module standalone
+  @feature isolated
+    @requirement unreferenced
+      This requirement is not referenced anywhere.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references to unreferenced requirement (line 2)
+      const references = await client.sendRequest<Array<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      }> | null>("textDocument/references", {
+        textDocument: { uri: testFileUri },
+        position: { line: 2, character: 18 },
+        context: { includeDeclaration: false },
+      });
+
+      // Should return null or empty array for symbol with no references
+      expect(references === null || references.length === 0).toBe(true);
+    });
+
+    test("returns null for keyword position", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "ref-keyword.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module test
+  A test module.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references on the @module keyword (line 0, character 3)
+      const references = await client.sendRequest<Array<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      }> | null>("textDocument/references", {
+        textDocument: { uri: testFileUri },
+        position: { line: 0, character: 3 },
+        context: { includeDeclaration: false },
+      });
+
+      // Keywords don't have references
+      expect(references).toBeNull();
+    });
+
+    test("finds references from position within @depends-on reference", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "ref-from-dep.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  @feature login
+    @requirement basic-auth
+      Email/password login.
+
+  @feature session
+    @depends-on auth.login.basic-auth
+
+    @requirement tokens
+      Session tokens.
+
+  @feature logout
+    @depends-on auth.login.basic-auth
+
+    @requirement cleanup
+      Cleanup on logout.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request references from WITHIN the @depends-on reference (line 6)
+      // Line 6: "    @depends-on auth.login.basic-auth"
+      const references = await client.sendRequest<
+        Array<{
+          uri: string;
+          range: { start: { line: number; character: number } };
+        }>
+      >("textDocument/references", {
+        textDocument: { uri: testFileUri },
+        position: { line: 6, character: 25 },
+        context: { includeDeclaration: false },
+      });
+
+      expect(references).not.toBeNull();
+      // Should find both @depends-on references (lines 6 and 12)
+      expect(references.length).toBe(2);
+
+      const lines = references.map((ref) => ref.range.start.line).sort((a, b) => a - b);
+      expect(lines).toEqual([6, 12]);
+    });
+  });
+
   describe("shutdown", () => {
     test("handles shutdown and exit gracefully", async () => {
       // Initialize first
