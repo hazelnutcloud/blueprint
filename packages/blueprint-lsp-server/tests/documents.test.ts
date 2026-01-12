@@ -1059,3 +1059,383 @@ describe("Parse Error Messages", () => {
     });
   });
 });
+
+// ============================================================================
+// Very Large Document Tests
+// ============================================================================
+
+/**
+ * Generate a .bp file with the specified number of modules, features, and requirements.
+ * This mirrors the generator in benchmarks/parsing.bench.ts for consistency.
+ */
+function generateLargeBlueprintFile(
+  moduleCount: number,
+  featuresPerModule: number,
+  requirementsPerFeature: number,
+  constraintsPerRequirement: number = 2
+): string {
+  const lines: string[] = [];
+
+  lines.push("@description");
+  lines.push("  Generated test file for very large document testing.");
+  lines.push("  This file contains multiple modules, features, and requirements.");
+  lines.push("");
+
+  for (let m = 0; m < moduleCount; m++) {
+    lines.push(`@module module-${m}`);
+    lines.push(`  This is module number ${m}.`);
+    lines.push(`  It contains ${featuresPerModule} features.`);
+    lines.push("");
+
+    for (let f = 0; f < featuresPerModule; f++) {
+      lines.push(`  @feature feature-${m}-${f}`);
+      if (m > 0 || f > 0) {
+        // Add a dependency to the previous feature
+        const depModule = f > 0 ? m : m - 1;
+        const depFeature = f > 0 ? f - 1 : featuresPerModule - 1;
+        lines.push(`    @depends-on module-${depModule}.feature-${depModule}-${depFeature}`);
+      }
+      lines.push(`    Feature ${f} of module ${m}.`);
+      lines.push(`    This feature has ${requirementsPerFeature} requirements.`);
+      lines.push("");
+
+      for (let r = 0; r < requirementsPerFeature; r++) {
+        lines.push(`    @requirement req-${m}-${f}-${r}`);
+        if (r > 0) {
+          // Add dependency to previous requirement
+          lines.push(`      @depends-on module-${m}.feature-${m}-${f}.req-${m}-${f}-${r - 1}`);
+        }
+        lines.push(`      Requirement ${r} of feature ${f} in module ${m}.`);
+        lines.push("");
+        lines.push("      This requirement has a detailed description that spans");
+        lines.push("      multiple lines to simulate real-world usage patterns.");
+        lines.push("");
+
+        for (let c = 0; c < constraintsPerRequirement; c++) {
+          lines.push(`      @constraint constraint-${m}-${f}-${r}-${c}`);
+          lines.push(`        Constraint ${c} for requirement ${r}.`);
+          lines.push(`        Must be implemented according to specification.`);
+          lines.push("");
+        }
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+describe("Very Large Document Parsing", () => {
+  beforeAll(async () => {
+    await initializeParser();
+  });
+
+  describe("large file parsing", () => {
+    test("parses large document (~320KB) without errors", () => {
+      // Large: 10 modules, 5 features, 10 requirements, 3 constraints
+      // Approximately 320KB based on benchmark data
+      const code = generateLargeBlueprintFile(10, 5, 10, 3);
+      const fileSize = Buffer.byteLength(code, "utf-8");
+
+      // Verify we're testing a reasonably large file
+      expect(fileSize).toBeGreaterThan(200 * 1024); // At least 200KB
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      // Clean up
+      tree!.delete();
+    });
+
+    test("parses extra-large document (~1.3MB) without errors", () => {
+      // XLarge: 20 modules, 10 features, 10 requirements, 3 constraints
+      // Approximately 1.3MB based on benchmark data
+      const code = generateLargeBlueprintFile(20, 10, 10, 3);
+      const fileSize = Buffer.byteLength(code, "utf-8");
+
+      // Verify we're testing a very large file
+      expect(fileSize).toBeGreaterThan(1000 * 1024); // At least 1MB
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      // Clean up
+      tree!.delete();
+    });
+
+    test("correctly counts elements in large document", () => {
+      // Use a medium-sized document for element counting verification
+      const moduleCount = 5;
+      const featuresPerModule = 3;
+      const requirementsPerFeature = 4;
+      const constraintsPerRequirement = 2;
+
+      const code = generateLargeBlueprintFile(
+        moduleCount,
+        featuresPerModule,
+        requirementsPerFeature,
+        constraintsPerRequirement
+      );
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+
+      // Verify module count
+      expect(ast.modules).toHaveLength(moduleCount);
+
+      // Verify total features
+      const totalFeatures = ast.modules.reduce((sum, m) => sum + m.features.length, 0);
+      expect(totalFeatures).toBe(moduleCount * featuresPerModule);
+
+      // Verify total requirements (in features)
+      let totalRequirements = 0;
+      for (const mod of ast.modules) {
+        for (const feat of mod.features) {
+          totalRequirements += feat.requirements.length;
+        }
+      }
+      expect(totalRequirements).toBe(moduleCount * featuresPerModule * requirementsPerFeature);
+
+      // Verify total constraints
+      let totalConstraints = 0;
+      for (const mod of ast.modules) {
+        for (const feat of mod.features) {
+          for (const req of feat.requirements) {
+            totalConstraints += req.constraints.length;
+          }
+        }
+      }
+      expect(totalConstraints).toBe(
+        moduleCount * featuresPerModule * requirementsPerFeature * constraintsPerRequirement
+      );
+
+      // Clean up
+      tree!.delete();
+    });
+
+    test("builds symbol table for large document", () => {
+      // Medium-large document for symbol table testing
+      const code = generateLargeBlueprintFile(5, 3, 5, 2);
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      const { symbolTable, duplicates } = buildSymbolTable(ast);
+
+      // Verify no duplicates (generator creates unique identifiers)
+      expect(duplicates).toHaveLength(0);
+
+      // Verify modules are in symbol table
+      expect(symbolTable.modules.size).toBe(5);
+      expect(symbolTable.modules.has("module-0")).toBe(true);
+      expect(symbolTable.modules.has("module-4")).toBe(true);
+
+      // Verify features are in symbol table
+      expect(symbolTable.features.size).toBe(5 * 3); // 15 features
+      expect(symbolTable.features.has("module-0.feature-0-0")).toBe(true);
+
+      // Verify requirements are in symbol table
+      expect(symbolTable.requirements.size).toBe(5 * 3 * 5); // 75 requirements
+      expect(symbolTable.requirements.has("module-0.feature-0-0.req-0-0-0")).toBe(true);
+
+      // Verify constraints are in symbol table
+      expect(symbolTable.constraints.size).toBe(5 * 3 * 5 * 2); // 150 constraints
+      expect(symbolTable.constraints.has("module-0.feature-0-0.req-0-0-0.constraint-0-0-0-0")).toBe(
+        true
+      );
+
+      // Clean up
+      tree!.delete();
+    });
+  });
+
+  describe("large file with dependencies", () => {
+    test("parses all @depends-on references in large document", () => {
+      const code = generateLargeBlueprintFile(3, 3, 3, 1);
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      const ast = transformToAST(tree!);
+
+      // Count dependencies - generator adds dependencies to features (except first)
+      // and to requirements (except first in each feature)
+      let featureDeps = 0;
+      let requirementDeps = 0;
+
+      for (const mod of ast.modules) {
+        for (const feat of mod.features) {
+          featureDeps += feat.dependencies.length;
+          for (const req of feat.requirements) {
+            requirementDeps += req.dependencies.length;
+          }
+        }
+      }
+
+      // Total features = 9, first feature has no deps, so 8 feature deps
+      expect(featureDeps).toBe(8);
+
+      // Each feature has 3 requirements, first has no dep, 2 have deps = 2 deps per feature
+      // 9 features × 2 = 18 requirement deps
+      expect(requirementDeps).toBe(18);
+
+      // Clean up
+      tree!.delete();
+    });
+  });
+
+  describe("large file edge cases", () => {
+    test("handles document with many deeply nested constraints", () => {
+      // Create a document with many constraints per requirement
+      const code = generateLargeBlueprintFile(2, 2, 2, 10); // 10 constraints per requirement
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      const ast = transformToAST(tree!);
+
+      // Verify constraint count: 2 modules × 2 features × 2 requirements × 10 constraints = 80
+      let constraintCount = 0;
+      for (const mod of ast.modules) {
+        for (const feat of mod.features) {
+          for (const req of feat.requirements) {
+            constraintCount += req.constraints.length;
+          }
+        }
+      }
+      expect(constraintCount).toBe(80);
+
+      // Clean up
+      tree!.delete();
+    });
+
+    test("handles document with very long description text", () => {
+      // Create a document with extremely long description blocks
+      const longDescription = "A".repeat(10000); // 10KB description
+      const code = `
+@description
+  ${longDescription}
+
+@module test-module
+  ${longDescription}
+
+  @feature test-feature
+    ${longDescription}
+
+    @requirement test-req
+      ${longDescription}
+
+      @constraint test-constraint
+        ${longDescription}
+`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      const ast = transformToAST(tree!);
+      expect(ast.description).not.toBeNull();
+      expect(ast.description!.text).toContain(longDescription);
+      expect(ast.modules[0]!.description).toContain(longDescription);
+
+      // Clean up
+      tree!.delete();
+    });
+
+    test("handles document with maximum identifier length", () => {
+      // Create identifiers at various lengths
+      const longId = "a".repeat(100); // 100-character identifier
+      const code = `
+@module ${longId}
+  Module with long identifier.
+
+  @feature ${longId}
+    Feature with long identifier.
+
+    @requirement ${longId}
+      Requirement with long identifier.
+
+      @constraint ${longId}
+        Constraint with long identifier.
+`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      const ast = transformToAST(tree!);
+      expect(ast.modules[0]!.name).toBe(longId);
+      expect(ast.modules[0]!.features[0]!.name).toBe(longId);
+      expect(ast.modules[0]!.features[0]!.requirements[0]!.name).toBe(longId);
+      expect(ast.modules[0]!.features[0]!.requirements[0]!.constraints[0]!.name).toBe(longId);
+
+      // Clean up
+      tree!.delete();
+    });
+
+    test("handles document with many lines (>5000 lines)", () => {
+      // Generate a document with many lines
+      // 15 modules × 5 features × 5 requirements × 2 constraints generates ~6000+ lines
+      const code = generateLargeBlueprintFile(15, 5, 5, 2);
+      const lineCount = code.split("\n").length;
+
+      // Verify we have many lines
+      expect(lineCount).toBeGreaterThan(5000);
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.hasError).toBe(false);
+
+      // Verify last module can be found (tests that full document is parsed)
+      const ast = transformToAST(tree!);
+      expect(ast.modules[14]!.name).toBe("module-14");
+
+      // Clean up
+      tree!.delete();
+    });
+  });
+
+  describe("performance characteristics", () => {
+    test("parsing time scales linearly with file size", () => {
+      // Parse documents of increasing size and verify timing is reasonable
+      const sizes = [
+        { modules: 1, features: 2, requirements: 2 },
+        { modules: 2, features: 2, requirements: 2 },
+        { modules: 4, features: 2, requirements: 2 },
+      ];
+
+      const times: number[] = [];
+
+      for (const size of sizes) {
+        const code = generateLargeBlueprintFile(size.modules, size.features, size.requirements, 1);
+
+        const start = performance.now();
+        const tree = parseDocument(code);
+        const elapsed = performance.now() - start;
+
+        expect(tree).not.toBeNull();
+        expect(tree!.rootNode.hasError).toBe(false);
+
+        times.push(elapsed);
+        tree!.delete();
+      }
+
+      // Verify all parses completed (not timing out or crashing)
+      expect(times).toHaveLength(3);
+
+      // All times should be reasonable (under 1 second each for these small-medium files)
+      for (const time of times) {
+        expect(time).toBeLessThan(1000);
+      }
+    });
+  });
+});

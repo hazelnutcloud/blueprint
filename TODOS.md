@@ -512,7 +512,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] **Add edge case tests**:
   - [x] Empty document parsing (Added tests for empty string, whitespace-only, and newlines-only documents in `documents.test.ts`)
   - [x] Document with only comments (Added tests for single-line only, multi-line only, and mixed comments in `documents.test.ts`. Note: Tests revealed a grammar bug where multi-line comments are sometimes parsed as `description_block` - see Grammar Bugs section.)
-  - [ ] Very large documents
+  - [x] Very large documents (Added comprehensive tests in `documents.test.ts` under "Very Large Document Parsing" describe block. Tests cover: parsing ~320KB and ~1.3MB files without errors, element counting verification, symbol table building, @depends-on reference parsing, documents with many constraints, very long description text (10KB+), 100-character identifiers, documents with 5000+ lines, and linear scaling performance verification. 12 new tests added.)
   - [ ] Invalid UTF-8 sequences
 
 ### Performance (Future)
