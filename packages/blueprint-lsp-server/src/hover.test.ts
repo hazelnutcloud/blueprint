@@ -375,6 +375,142 @@ describe("hover", () => {
         expect(content!.value).toContain("src/auth/login.ts");
         expect(content!.value).toContain("tests/auth/login.test.ts");
       });
+
+      test("shows hover for module-level requirement (no parent feature)", () => {
+        // Module-level requirements have a 2-part path: module.requirement
+        // instead of the usual 3-part path: module.feature.requirement
+        const source = `@module config
+  Configuration utilities.
+  
+  @requirement load-config
+    Load configuration from file.
+    
+    @constraint yaml-support
+      Must support YAML format.`;
+
+        const tickets: TicketFile = {
+          version: "1.0",
+          source: "config.bp",
+          tickets: [
+            {
+              id: "TKT-001",
+              ref: "config.load-config",
+              description: "Implement config loading",
+              status: "in-progress",
+              constraints_satisfied: [],
+            },
+          ],
+        };
+
+        const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+        // Hover over the requirement identifier "load-config"
+        const target = findHoverTarget(
+          tree!,
+          { line: 3, character: 16 },
+          context.symbolIndex,
+          context.fileUri
+        );
+        expect(target).not.toBeNull();
+        expect(target!.kind).toBe("requirement");
+        // Module-level requirements have 2-part path
+        expect(target!.path).toBe("config.load-config");
+
+        const content = buildHoverContent(target!, context);
+        expect(content).not.toBeNull();
+
+        // Should show the requirement header
+        expect(content!.value).toContain("@requirement load-config");
+
+        // Should show ticket information
+        expect(content!.value).toContain("TKT-001");
+        expect(content!.value).toContain("in progress");
+
+        // Should show constraint satisfaction
+        expect(content!.value).toContain("0/1 satisfied");
+        expect(content!.value).toContain("yaml-support");
+      });
+
+      test("shows hover for module-level requirement with complete status", () => {
+        const source = `@module utils
+  Utility functions.
+  
+  @requirement logger
+    Logging utility.
+    
+    @constraint structured-logs
+      Use structured logging.
+    
+    @constraint log-levels
+      Support debug, info, warn, error levels.`;
+
+        const tickets: TicketFile = {
+          version: "1.0",
+          source: "utils.bp",
+          tickets: [
+            {
+              id: "TKT-001",
+              ref: "utils.logger",
+              description: "Implement logger",
+              status: "complete",
+              constraints_satisfied: ["structured-logs", "log-levels"],
+              implementation: {
+                files: ["src/utils/logger.ts"],
+                tests: ["tests/utils/logger.test.ts"],
+              },
+            },
+          ],
+        };
+
+        const { tree, context } = createHoverContext(source, "file:///test.bp", tickets);
+
+        const target = findHoverTarget(
+          tree!,
+          { line: 3, character: 16 },
+          context.symbolIndex,
+          context.fileUri
+        );
+        expect(target).not.toBeNull();
+        expect(target!.path).toBe("utils.logger");
+
+        const content = buildHoverContent(target!, context);
+
+        // Should show complete status
+        expect(content!.value).toContain("complete");
+
+        // Should show all constraints satisfied
+        expect(content!.value).toContain("2/2 satisfied");
+        expect(content!.value).toContain("\u2713 structured-logs");
+        expect(content!.value).toContain("\u2713 log-levels");
+
+        // Should show implementation files
+        expect(content!.value).toContain("src/utils/logger.ts");
+        expect(content!.value).toContain("tests/utils/logger.test.ts");
+      });
+
+      test("shows no tickets message for module-level requirement without tickets", () => {
+        const source = `@module helpers
+  Helper functions.
+  
+  @requirement date-formatter
+    Format dates for display.`;
+
+        const { tree, context } = createHoverContext(source);
+
+        const target = findHoverTarget(
+          tree!,
+          { line: 3, character: 16 },
+          context.symbolIndex,
+          context.fileUri
+        );
+        expect(target).not.toBeNull();
+        expect(target!.path).toBe("helpers.date-formatter");
+
+        const content = buildHoverContent(target!, context);
+
+        expect(content!.value).toContain("@requirement date-formatter");
+        expect(content!.value).toContain("No tickets");
+      });
     });
 
     describe("feature hover", () => {
