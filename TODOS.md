@@ -322,30 +322,30 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 11.1 Extension Setup
 
-- [ ] Create VS Code extension package structure
-- [ ] Define `package.json` with extension manifest
-- [ ] Configure extension activation events (`.bp` files)
-- [ ] Set up language configuration for Blueprint
+- [x] Create VS Code extension package structure (Created `packages/blueprint-lsp-client/` with proper VS Code extension layout including `src/`, `syntaxes/`, and configuration files.)
+- [x] Define `package.json` with extension manifest (Configured with `engines.vscode`, `activationEvents`, `main` entry point, `contributes.languages`, `contributes.grammars`, `contributes.configuration` for `blueprint.ticketsPath` and `blueprint.trace.server` settings, and dependencies on `vscode-languageclient`.)
+- [x] Configure extension activation events (`.bp` files) (Set `activationEvents: ["onLanguage:blueprint"]` and registered `.bp` file extension with `blueprint` language ID.)
+- [x] Set up language configuration for Blueprint (Created `language-configuration.json` with comment toggling, bracket pairs, auto-closing, surrounding pairs, folding markers, word pattern, and indentation rules.)
 
 ### 11.2 Language Client
 
-- [ ] Initialize `LanguageClient` with server options
-- [ ] Configure server module path and debug options
-- [ ] Set document selector for `.bp` files
-- [ ] Handle client lifecycle (start, stop, restart)
+- [x] Initialize `LanguageClient` with server options (Created `src/extension.ts` with `LanguageClient` initialization using `TransportKind.ipc`.)
+- [x] Configure server module path and debug options (Configured server module path to `../blueprint-lsp-server/dist/index.cjs` with debug options for `--inspect=6009`.)
+- [x] Set document selector for `.bp` files (Set document selector to `{ scheme: "file", language: "blueprint" }`.)
+- [x] Handle client lifecycle (start, stop, restart) (Implemented `activate()` and `deactivate()` functions with proper client start/stop handling.)
 
 ### 11.3 Language Configuration
 
-- [ ] Define bracket pairs and auto-closing
-- [ ] Configure comment toggling (`//` and `/* */`)
-- [ ] Set up word pattern for identifiers
-- [ ] Configure indentation rules
+- [x] Define bracket pairs and auto-closing (Configured in `language-configuration.json` with `()`, `[]`, `{}` pairs and auto-closing for quotes and block comments.)
+- [x] Configure comment toggling (`//` and `/* */`) (Set `lineComment: "//"` and `blockComment: ["/*", "*/"]` in `language-configuration.json`.)
+- [x] Set up word pattern for identifiers (Set `wordPattern: "[a-zA-Z_][a-zA-Z0-9_-]*"` matching SPEC.md identifier rules.)
+- [x] Configure indentation rules (Set `increaseIndentPattern` and `decreaseIndentPattern` for Blueprint keywords.)
 
 ### 11.4 TextMate Grammar (Fallback)
 
-- [ ] Create `.tmLanguage.json` for basic syntax highlighting
-- [ ] Define scopes for keywords, identifiers, comments
-- [ ] Register grammar with VS Code
+- [x] Create `.tmLanguage.json` for basic syntax highlighting (Created `syntaxes/blueprint.tmLanguage.json` with TextMate grammar.)
+- [x] Define scopes for keywords, identifiers, comments (Defined scopes: `keyword.control.*` for hierarchy keywords, `keyword.other.*` for annotations, `entity.name.type.*` for identifiers, `comment.*` for comments, `string.*` for strings, and `markup.fenced_code.*` for code blocks.)
+- [x] Register grammar with VS Code (Registered in `package.json` contributes.grammars with `scopeName: "source.blueprint"`)
 
 ### 11.5 Extension Settings
 

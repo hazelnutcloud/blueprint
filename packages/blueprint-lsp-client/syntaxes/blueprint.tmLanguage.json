@@ -1,0 +1,126 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Blueprint",
+  "scopeName": "source.blueprint",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#keywords" },
+    { "include": "#strings" },
+    { "include": "#code-blocks" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.blueprint",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.blueprint",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.description.blueprint",
+          "match": "^\\s*(@description)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.description.blueprint" }
+          }
+        },
+        {
+          "match": "^\\s*(@module)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "keyword.control.module.blueprint" },
+            "2": { "name": "entity.name.type.module.blueprint" }
+          }
+        },
+        {
+          "match": "^\\s*(@feature)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "keyword.control.feature.blueprint" },
+            "2": { "name": "entity.name.type.feature.blueprint" }
+          }
+        },
+        {
+          "match": "^\\s*(@requirement)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "keyword.control.requirement.blueprint" },
+            "2": { "name": "entity.name.type.requirement.blueprint" }
+          }
+        },
+        {
+          "match": "^\\s*(@constraint)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "keyword.other.constraint.blueprint" },
+            "2": { "name": "entity.name.tag.constraint.blueprint" }
+          }
+        },
+        {
+          "match": "^\\s*(@depends-on)\\s+(.+)$",
+          "captures": {
+            "1": { "name": "keyword.other.depends-on.blueprint" },
+            "2": {
+              "patterns": [
+                {
+                  "match": "[a-zA-Z_][a-zA-Z0-9_-]*(\\.[a-zA-Z_][a-zA-Z0-9_-]*)*",
+                  "name": "entity.name.tag.reference.blueprint"
+                },
+                {
+                  "match": ",",
+                  "name": "punctuation.separator.comma.blueprint"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.blueprint",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.blueprint",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.blueprint",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.blueprint",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "code-blocks": {
+      "patterns": [
+        {
+          "name": "markup.fenced_code.block.blueprint",
+          "begin": "^\\s*(```)(\\w*)?\\s*$",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.markdown.blueprint" },
+            "2": { "name": "fenced_code.block.language.blueprint" }
+          },
+          "end": "^\\s*(```)\\s*$",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.markdown.blueprint" }
+          },
+          "contentName": "meta.embedded.block.blueprint"
+        }
+      ]
+    }
+  }
+}
