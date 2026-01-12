@@ -483,7 +483,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### Implementation Issues
 
-- [ ] **Potential memory leak with tree cleanup** - In `index.ts:425-430` (semantic tokens handler), when parsing a document that isn't in the document manager, the code creates a tree with `parseDocument()` and calls `tree.delete()` after building tokens. However, if `buildSemanticTokens()` throws an exception, the tree won't be deleted. Should wrap in try/finally.
+- [x] **Potential memory leak with tree cleanup** - In `index.ts:425-430` (semantic tokens handler), when parsing a document that isn't in the document manager, the code creates a tree with `parseDocument()` and calls `tree.delete()` after building tokens. However, if `buildSemanticTokens()` throws an exception, the tree won't be deleted. Should wrap in try/finally. (Fixed: Wrapped both `buildSemanticTokens()` and `buildDocumentSymbols()` calls in try/finally blocks to ensure `tree.delete()` is always called.)
 
 - [ ] **Inefficient re-computation of dependency graph and ticket map on each hover** - In `index.ts:448-464`, each hover request rebuilds the entire `RequirementTicketMap` and `DependencyGraph` from scratch. For large workspaces, this could cause noticeable latency. Consider caching these structures and invalidating on document/ticket changes.
 

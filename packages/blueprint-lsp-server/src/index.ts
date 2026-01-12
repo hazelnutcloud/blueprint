@@ -574,9 +574,12 @@ connection.languages.semanticTokens.on((params: SemanticTokensParams) => {
     if (!tree) {
       return { data: [] };
     }
-    const tokens = buildSemanticTokens(tree);
-    tree.delete();
-    return tokens;
+    // Use try/finally to ensure tree.delete() is called even if buildSemanticTokens throws
+    try {
+      return buildSemanticTokens(tree);
+    } finally {
+      tree.delete();
+    }
   }
 
   return buildSemanticTokens(state.tree);
@@ -815,9 +818,12 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) => {
     if (!tree) {
       return null;
     }
-    const symbols = buildDocumentSymbols(tree);
-    tree.delete();
-    return symbols;
+    // Use try/finally to ensure tree.delete() is called even if buildDocumentSymbols throws
+    try {
+      return buildDocumentSymbols(tree);
+    } finally {
+      tree.delete();
+    }
   }
 
   return buildDocumentSymbols(state.tree);
