@@ -87,6 +87,16 @@
           "type": "string",
           "default": "#868e96",
           "description": "Color for obsolete requirements (gray with strikethrough)"
+        },
+        "blueprint.gotoModifier": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "alt",
+            "ctrlCmd"
+          ],
+          "default": "alt",
+          "markdownDescription": "Modifier key for Ctrl/Cmd+Click to go to definition. When set to `alt`, use Alt+Click for go-to-definition (Ctrl/Cmd+Click adds cursors). When set to `ctrlCmd`, use Ctrl/Cmd+Click for go-to-definition (Alt+Click adds cursors). See [SPEC.md Section 5.9](https://github.com/blueprintlang/blueprint/blob/main/SPEC.md#59-configuration) and [VS Code multi-cursor documentation](https://code.visualstudio.com/docs/editor/codebasics#_multicursor-modifier)."
         }
       }
     },
@@ -141,7 +151,8 @@
     ],
     "configurationDefaults": {
       "[blueprint]": {
-        "editor.semanticHighlighting.enabled": true
+        "editor.semanticHighlighting.enabled": true,
+        "editor.multiCursorModifier": "ctrlCmd"
       },
       "editor.semanticTokenColorCustomizations": {
         "rules": {

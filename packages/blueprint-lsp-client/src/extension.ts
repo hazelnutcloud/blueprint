@@ -21,6 +21,54 @@ const DEFAULT_COLORS = {
 };
 
 /**
+ * Valid values for the gotoModifier setting per SPEC.md Section 5.9
+ * Maps to VS Code's editor.multiCursorModifier setting.
+ *
+ * - "alt": Use Alt+Click for go-to-definition (Ctrl/Cmd+Click adds cursors)
+ * - "ctrlCmd": Use Ctrl/Cmd+Click for go-to-definition (Alt+Click adds cursors)
+ *
+ * Note: VS Code's multiCursorModifier is the inverse - it specifies which key
+ * adds multiple cursors, and go-to-definition uses the other key.
+ */
+type GotoModifier = "alt" | "ctrlCmd";
+
+/**
+ * Updates the VS Code editor.multiCursorModifier setting for Blueprint files
+ * based on the blueprint.gotoModifier setting.
+ *
+ * The relationship is inverse:
+ * - If gotoModifier is "alt", multiCursorModifier should be "ctrlCmd"
+ *   (so Alt+Click does go-to-definition)
+ * - If gotoModifier is "ctrlCmd", multiCursorModifier should be "alt"
+ *   (so Ctrl/Cmd+Click does go-to-definition)
+ */
+function updateGotoModifier(): void {
+  const config = workspace.getConfiguration("blueprint");
+  const gotoModifier = config.get<GotoModifier>("gotoModifier") ?? "alt";
+
+  // Inverse mapping: gotoModifier specifies what triggers definition,
+  // multiCursorModifier specifies what triggers multi-cursor
+  const multiCursorModifier: "alt" | "ctrlCmd" = gotoModifier === "alt" ? "ctrlCmd" : "alt";
+
+  // Get the current language-specific settings for Blueprint
+  const editorConfig = workspace.getConfiguration("editor", {
+    languageId: "blueprint",
+  });
+
+  // Only update if the value differs from current setting
+  const currentValue = editorConfig.get<string>("multiCursorModifier");
+  if (currentValue !== multiCursorModifier) {
+    // Update the language-specific setting for Blueprint files
+    editorConfig.update(
+      "multiCursorModifier",
+      multiCursorModifier,
+      ConfigurationTarget.Global,
+      true // overrideInLanguage
+    );
+  }
+}
+
+/**
  * Updates the semantic token color customizations based on the user's
  * blueprint.highlighting.* settings. This allows users to customize
  * the colors used for requirement status highlighting.
@@ -123,14 +171,18 @@ export function activate(context: ExtensionContext): void {
   // Start the client. This will also launch the server.
   client.start();
 
-  // Apply initial highlighting color settings
+  // Apply initial settings
   updateSemanticTokenColors();
+  updateGotoModifier();
 
-  // Listen for configuration changes to update highlighting colors dynamically
+  // Listen for configuration changes to update settings dynamically
   context.subscriptions.push(
     workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("blueprint.highlighting")) {
         updateSemanticTokenColors();
+      }
+      if (e.affectsConfiguration("blueprint.gotoModifier")) {
+        updateGotoModifier();
       }
     })
   );
