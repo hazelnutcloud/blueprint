@@ -57,6 +57,112 @@
           ],
           "default": "off",
           "description": "Traces the communication between VS Code and the Blueprint language server"
+        },
+        "blueprint.highlighting.complete": {
+          "scope": "window",
+          "type": "string",
+          "default": "#2d5a27",
+          "description": "Color for completed requirements (green)"
+        },
+        "blueprint.highlighting.inProgress": {
+          "scope": "window",
+          "type": "string",
+          "default": "#8a6d3b",
+          "description": "Color for in-progress requirements (amber)"
+        },
+        "blueprint.highlighting.blocked": {
+          "scope": "window",
+          "type": "string",
+          "default": "#a94442",
+          "description": "Color for blocked requirements (red)"
+        },
+        "blueprint.highlighting.noTicket": {
+          "scope": "window",
+          "type": "string",
+          "default": "#6c757d",
+          "description": "Color for requirements without tickets (gray)"
+        },
+        "blueprint.highlighting.obsolete": {
+          "scope": "window",
+          "type": "string",
+          "default": "#868e96",
+          "description": "Color for obsolete requirements (gray with strikethrough)"
+        }
+      }
+    },
+    "semanticTokenModifiers": [
+      {
+        "id": "noTicket",
+        "description": "Requirement has no associated ticket"
+      },
+      {
+        "id": "blocked",
+        "description": "Requirement is blocked by incomplete dependencies"
+      },
+      {
+        "id": "inProgress",
+        "description": "Requirement is being actively worked on"
+      },
+      {
+        "id": "complete",
+        "description": "Requirement has been fully implemented"
+      },
+      {
+        "id": "obsolete",
+        "description": "Requirement has been removed or is no longer relevant"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "blueprint",
+        "scopes": {
+          "*.noTicket": [
+            "markup.faded",
+            "comment.block"
+          ],
+          "*.blocked": [
+            "invalid.illegal",
+            "markup.deleted"
+          ],
+          "*.inProgress": [
+            "markup.changed",
+            "entity.name.tag"
+          ],
+          "*.complete": [
+            "string",
+            "markup.inserted"
+          ],
+          "*.obsolete": [
+            "comment.line",
+            "markup.strikethrough"
+          ]
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[blueprint]": {
+        "editor.semanticHighlighting.enabled": true
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "*.noTicket:blueprint": {
+            "foreground": "#6c757d",
+            "fontStyle": "italic"
+          },
+          "*.blocked:blueprint": {
+            "foreground": "#a94442",
+            "fontStyle": "underline"
+          },
+          "*.inProgress:blueprint": {
+            "foreground": "#8a6d3b"
+          },
+          "*.complete:blueprint": {
+            "foreground": "#2d5a27"
+          },
+          "*.obsolete:blueprint": {
+            "foreground": "#868e96",
+            "fontStyle": "strikethrough"
+          }
         }
       }
     }
