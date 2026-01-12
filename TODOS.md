@@ -22,7 +22,7 @@ This document outlines the implementation plan for the Blueprint DSL Language Se
 - [x] Configure `package.json` with workspaces for monorepo management
 - [x] Set up TypeScript configuration (`tsconfig.json`) for each package
 - [x] Configure Bun as the package manager and test runner
-- [ ] Set up zshy bundler configuration for production builds
+- [x] Set up zshy bundler configuration for production builds (Configured `packages/blueprint-lsp-server/package.json` with zshy entrypoint map and bin field for CLI executable, added `build`, `build:dry-run`, and `clean` scripts. Updated `tsconfig.json` to support emit for zshy builds. Added shebang to `src/index.ts`. zshy auto-generates `main`, `module`, `types`, `exports`, `bin`, and `files` fields. Produces dual ESM/CJS output in `dist/` directory with `blueprint-lsp-server` CLI command.)
 - [x] Create `.gitignore` with appropriate exclusions
 
 ### 1.2 Development Environment

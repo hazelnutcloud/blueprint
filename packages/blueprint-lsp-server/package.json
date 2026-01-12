@@ -1,15 +1,27 @@
 {
   "name": "blueprint-lsp-server",
-  "module": "src/index.ts",
+  "version": "0.1.0",
+  "description": "Language Server Protocol implementation for Blueprint DSL",
   "type": "module",
   "private": true,
+  "zshy": {
+    "exports": {
+      ".": "./src/index.ts"
+    },
+    "bin": {
+      "blueprint-lsp-server": "./src/index.ts"
+    }
+  },
   "scripts": {
+    "build": "zshy",
+    "build:dry-run": "zshy --dry-run --verbose",
     "dev": "bun --watch src/index.ts",
     "dev:debug": "bun --watch --inspect=6009 src/index.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --noEmit",
-    "typecheck:watch": "tsc --noEmit --watch"
+    "typecheck:watch": "tsc --noEmit --watch",
+    "clean": "rm -rf dist"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -24,5 +36,21 @@
     "vscode-languageserver-textdocument": "^1.0.12",
     "vscode-uri": "^3.0.8",
     "web-tree-sitter": "^0.26.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.cts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "bin": {
+    "blueprint-lsp-server": "./dist/index.cjs"
   }
 }
