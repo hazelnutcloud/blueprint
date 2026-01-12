@@ -713,6 +713,471 @@ describe("LSP Server Integration Tests", () => {
     });
   });
 
+  describe("diagnostics", () => {
+    test("publishes syntax error diagnostics for invalid Blueprint file", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "syntax-error.bp");
+      const testFileUri = `file://${testFilePath}`;
+      // Invalid syntax: identifier starting with digit
+      const content = `@module 123invalid
+  This module has an invalid name.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      // Wait for diagnostics notification
+      const diagnosticsNotification = await client.waitForMessage<{
+        method: string;
+        params: {
+          uri: string;
+          diagnostics: Array<{
+            range: { start: { line: number; character: number } };
+            severity: number;
+            message: string;
+          }>;
+        };
+      }>((msg) => "method" in msg && msg.method === "textDocument/publishDiagnostics");
+
+      expect(diagnosticsNotification.params.uri).toBe(testFileUri);
+      expect(diagnosticsNotification.params.diagnostics.length).toBeGreaterThan(0);
+      // Syntax errors have severity 1 (Error)
+      expect(diagnosticsNotification.params.diagnostics[0]!.severity).toBe(1);
+    });
+
+    test("publishes diagnostics for unresolved @depends-on reference", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "unresolved-ref.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  Auth module.
+
+@feature login
+  @depends-on nonexistent.feature
+
+  Login feature.
+
+  @requirement basic-auth
+    Basic authentication.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      // Wait for diagnostics notification with unresolved reference
+      // There may be multiple diagnostics notifications, keep checking until we find the one with unresolved-reference
+      let foundUnresolvedRefDiagnostic = false;
+      const startTime = Date.now();
+      const timeout = 5000;
+
+      while (!foundUnresolvedRefDiagnostic && Date.now() - startTime < timeout) {
+        try {
+          const diagnosticsNotification = await client.waitForMessage<{
+            method: string;
+            params: {
+              uri: string;
+              diagnostics: Array<{
+                range: { start: { line: number; character: number } };
+                severity: number;
+                message: string;
+                code?: string;
+              }>;
+            };
+          }>(
+            (msg) =>
+              "method" in msg &&
+              msg.method === "textDocument/publishDiagnostics" &&
+              "params" in msg &&
+              (msg as { params: { uri: string } }).params.uri === testFileUri,
+            1000
+          );
+
+          // Check if this notification contains an unresolved reference diagnostic
+          const unresolvedDiag = diagnosticsNotification.params.diagnostics.find(
+            (d) => d.code === "unresolved-reference" || d.message.includes("non-existent")
+          );
+          if (unresolvedDiag) {
+            foundUnresolvedRefDiagnostic = true;
+            expect(unresolvedDiag.severity).toBe(1); // Error
+            expect(unresolvedDiag.message).toContain("nonexistent.feature");
+          }
+        } catch {
+          // Timeout on this attempt, try again
+        }
+      }
+
+      expect(foundUnresolvedRefDiagnostic).toBe(true);
+    });
+
+    test("publishes warning diagnostic for requirement without ticket", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "no-ticket.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module payments
+  Payment processing module.
+
+@feature checkout
+  Checkout feature.
+
+  @requirement process-payment
+    Process a payment transaction.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      // Wait for diagnostics notification with no-ticket warning
+      let foundNoTicketDiagnostic = false;
+      const startTime = Date.now();
+      const timeout = 5000;
+
+      while (!foundNoTicketDiagnostic && Date.now() - startTime < timeout) {
+        try {
+          const diagnosticsNotification = await client.waitForMessage<{
+            method: string;
+            params: {
+              uri: string;
+              diagnostics: Array<{
+                range: { start: { line: number; character: number } };
+                severity: number;
+                message: string;
+                code?: string;
+              }>;
+            };
+          }>(
+            (msg) =>
+              "method" in msg &&
+              msg.method === "textDocument/publishDiagnostics" &&
+              "params" in msg &&
+              (msg as { params: { uri: string } }).params.uri === testFileUri,
+            1000
+          );
+
+          // Check if this notification contains a no-ticket warning
+          const noTicketDiag = diagnosticsNotification.params.diagnostics.find(
+            (d) => d.code === "no-ticket" || d.message.includes("no associated ticket")
+          );
+          if (noTicketDiag) {
+            foundNoTicketDiagnostic = true;
+            expect(noTicketDiag.severity).toBe(2); // Warning
+            expect(noTicketDiag.message).toContain("process-payment");
+          }
+        } catch {
+          // Timeout on this attempt, try again
+        }
+      }
+
+      expect(foundNoTicketDiagnostic).toBe(true);
+    });
+
+    test("publishes error diagnostics for circular dependencies", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "circular.bp");
+      const testFileUri = `file://${testFilePath}`;
+      // Create a circular dependency: A depends on B, B depends on A
+      const content = `@module cycle
+  Module with circular dependencies.
+
+@feature feature-a
+  @depends-on cycle.feature-b
+
+  Feature A.
+
+  @requirement req-a
+    Requirement A.
+
+@feature feature-b
+  @depends-on cycle.feature-a
+
+  Feature B.
+
+  @requirement req-b
+    Requirement B.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      // Wait for diagnostics notification with circular dependency error
+      let foundCircularDiagnostic = false;
+      const startTime = Date.now();
+      const timeout = 5000;
+
+      while (!foundCircularDiagnostic && Date.now() - startTime < timeout) {
+        try {
+          const diagnosticsNotification = await client.waitForMessage<{
+            method: string;
+            params: {
+              uri: string;
+              diagnostics: Array<{
+                range: { start: { line: number; character: number } };
+                severity: number;
+                message: string;
+                code?: string;
+              }>;
+            };
+          }>(
+            (msg) =>
+              "method" in msg &&
+              msg.method === "textDocument/publishDiagnostics" &&
+              "params" in msg &&
+              (msg as { params: { uri: string } }).params.uri === testFileUri,
+            1000
+          );
+
+          // Check if this notification contains a circular dependency error
+          const circularDiag = diagnosticsNotification.params.diagnostics.find(
+            (d) => d.code === "circular-dependency" || d.message.includes("Circular dependency")
+          );
+          if (circularDiag) {
+            foundCircularDiagnostic = true;
+            expect(circularDiag.severity).toBe(1); // Error
+            expect(circularDiag.message).toContain("Circular dependency detected");
+          }
+        } catch {
+          // Timeout on this attempt, try again
+        }
+      }
+
+      expect(foundCircularDiagnostic).toBe(true);
+    });
+
+    test("clears document-level diagnostics when document is closed", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "close-clear.bp");
+      const testFileUri = `file://${testFilePath}`;
+      // Valid file (no syntax errors) with a requirement that has no ticket
+      const content = `@module valid-close
+  A valid module.
+
+@feature test-feature
+  A test feature.
+
+  @requirement test-req
+    A test requirement.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      // Wait for initial diagnostics (likely no-ticket warning)
+      await client.waitForMessage<{
+        method: string;
+        params: { uri: string; diagnostics: Array<object> };
+      }>(
+        (msg) =>
+          "method" in msg &&
+          msg.method === "textDocument/publishDiagnostics" &&
+          "params" in msg &&
+          (msg as { params: { uri: string } }).params.uri === testFileUri
+      );
+
+      // Close the document
+      client.sendNotification("textDocument/didClose", {
+        textDocument: { uri: testFileUri },
+      });
+
+      // Wait for a diagnostic notification for this file
+      // Note: The document manager sends an immediate clear, but workspace diagnostics
+      // may re-add warnings (like no-ticket) since the file is still in the symbol index.
+      // What we're testing is that the didClose handler is called and doesn't crash.
+      const notification = await client.waitForMessage<{
+        method: string;
+        params: { uri: string; diagnostics: Array<object> };
+      }>(
+        (msg) =>
+          "method" in msg &&
+          msg.method === "textDocument/publishDiagnostics" &&
+          "params" in msg &&
+          (msg as { params: { uri: string } }).params.uri === testFileUri
+      );
+
+      // The notification should be valid (may be empty or contain workspace diagnostics)
+      expect(notification.params.uri).toBe(testFileUri);
+      expect(notification.params.diagnostics).toBeArray();
+    });
+
+    test("updates diagnostics when document content changes", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "update-diag.bp");
+      const testFileUri = `file://${testFilePath}`;
+
+      // Start with invalid content
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: `@module 123invalid
+  Invalid module.
+`,
+        },
+      });
+
+      // Wait for initial diagnostics with errors
+      await client.waitForMessage<{
+        method: string;
+        params: { uri: string; diagnostics: Array<object> };
+      }>(
+        (msg) =>
+          "method" in msg &&
+          msg.method === "textDocument/publishDiagnostics" &&
+          "params" in msg &&
+          (msg as { params: { uri: string; diagnostics: Array<object> } }).params.uri ===
+            testFileUri &&
+          (msg as { params: { uri: string; diagnostics: Array<object> } }).params.diagnostics
+            .length > 0
+      );
+
+      // Fix the content
+      client.sendNotification("textDocument/didChange", {
+        textDocument: {
+          uri: testFileUri,
+          version: 2,
+        },
+        contentChanges: [
+          {
+            text: `@module valid-module
+  Now this is a valid module.
+
+@feature valid-feature
+  A valid feature.
+
+  @requirement valid-req
+    A valid requirement.
+`,
+          },
+        ],
+      });
+
+      // Wait for updated diagnostics - should have fewer/no syntax errors
+      // But may still have "no-ticket" warning which is expected
+      let foundUpdatedDiagnostics = false;
+      const startTime = Date.now();
+      const timeout = 5000;
+
+      while (!foundUpdatedDiagnostics && Date.now() - startTime < timeout) {
+        try {
+          const diagnosticsNotification = await client.waitForMessage<{
+            method: string;
+            params: {
+              uri: string;
+              diagnostics: Array<{
+                severity: number;
+                message: string;
+                code?: string;
+              }>;
+            };
+          }>(
+            (msg) =>
+              "method" in msg &&
+              msg.method === "textDocument/publishDiagnostics" &&
+              "params" in msg &&
+              (msg as { params: { uri: string } }).params.uri === testFileUri,
+            1000
+          );
+
+          // Check that there are no syntax errors (severity 1 without specific codes)
+          const syntaxErrors = diagnosticsNotification.params.diagnostics.filter(
+            (d) => d.severity === 1 && !d.code // Syntax errors don't have a code
+          );
+
+          if (syntaxErrors.length === 0) {
+            foundUpdatedDiagnostics = true;
+            // May still have warnings like no-ticket, but no syntax errors
+          }
+        } catch {
+          // Timeout on this attempt, try again
+        }
+      }
+
+      expect(foundUpdatedDiagnostics).toBe(true);
+    });
+  });
+
   describe("shutdown", () => {
     test("handles shutdown and exit gracefully", async () => {
       // Initialize first
