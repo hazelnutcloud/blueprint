@@ -1,0 +1,75 @@
+{
+  // Editor settings aligned with .prettierrc
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // File settings
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  // TypeScript settings
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.preferences.importModuleSpecifier": "relative",
+
+  // ESLint settings
+  "eslint.enable": true,
+  "eslint.useFlatConfig": true,
+  "eslint.workingDirectories": [{ "mode": "auto" }],
+
+  // File associations
+  "files.associations": {
+    "*.bp": "blueprint"
+  },
+
+  // Search exclusions
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/out": true,
+    "**/.blueprint": true,
+    "**/coverage": true,
+    "packages/tree-sitter-blueprint/src/parser.c": true,
+    "packages/tree-sitter-blueprint/src/tree_sitter/**": true
+  },
+
+  // Files to hide in explorer (generated/build artifacts)
+  "files.exclude": {
+    "**/.git": true,
+    "**/node_modules": false,
+    "**/.DS_Store": true
+  },
+
+  // Bun as default for npm scripts
+  "npm.packageManager": "bun",
+
+  // Test explorer settings
+  "testing.automaticallyOpenPeekView": "never",
+
+  // Language-specific settings
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.wordWrap": "on"
+  },
+
+  // Recommended extensions notification
+  "extensions.ignoreRecommendations": false
+}

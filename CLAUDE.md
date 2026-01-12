@@ -155,3 +155,7 @@ Run corpus tests:
 ```sh
 cd packages/tree-sitter-blueprint && bunx tree-sitter test
 ```
+
+## Linting and Formatting
+
+Always run `bun run lint` and `bun run format` before committing changes to ensure code quality and consistency.
