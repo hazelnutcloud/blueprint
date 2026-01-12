@@ -11,6 +11,16 @@ import type { DependencyGraph, CircularDependency } from "./dependency-graph";
 import { join, isAbsolute } from "node:path";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * Maximum number of transitive blockers to display in hover before truncating.
+ * When there are more blockers than this limit, we show "... and N more".
+ */
+const MAX_TRANSITIVE_BLOCKERS_DISPLAYED = 3;
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -608,11 +618,16 @@ function buildRequirementHover(target: HoverTarget, context: HoverContext): Mark
     }
     if (blockingInfo.transitiveBlockers.length > 0) {
       lines.push("*Transitive blockers:*");
-      for (const blocker of blockingInfo.transitiveBlockers.slice(0, 3)) {
+      for (const blocker of blockingInfo.transitiveBlockers.slice(
+        0,
+        MAX_TRANSITIVE_BLOCKERS_DISPLAYED
+      )) {
         lines.push(`- \u25CB ${blocker.path} (${formatStatus(blocker.status)})`);
       }
-      if (blockingInfo.transitiveBlockers.length > 3) {
-        lines.push(`- ... and ${blockingInfo.transitiveBlockers.length - 3} more`);
+      if (blockingInfo.transitiveBlockers.length > MAX_TRANSITIVE_BLOCKERS_DISPLAYED) {
+        const remaining =
+          blockingInfo.transitiveBlockers.length - MAX_TRANSITIVE_BLOCKERS_DISPLAYED;
+        lines.push(`- ... and ${remaining} more`);
       }
     }
     lines.push("");

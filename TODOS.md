@@ -567,7 +567,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [x] **TypeScript compilation errors in code-actions.ts and tickets.ts** - `code-actions.ts` had variable name mismatches where `symbolIndex` and `fileUri` were used instead of the underscore-prefixed `_symbolIndex` and `_fileUri` parameters in `findSymbolAtPosition` function calls to `buildSymbolPath`. `tickets.ts` was missing the `stat` import from `node:fs/promises` used in `ticketFileExists`. (Fixed: Updated `code-actions.ts` lines 907, 910, 913 to use underscore-prefixed parameter names. Added `stat` to the import statement in `tickets.ts`.)
 
-- [ ] **Magic number for transitive blocker limit** - `hover.ts:499` uses `3` as the limit for showing transitive blockers before truncating. This should be a named constant for clarity.
+- [x] **Magic number for transitive blocker limit** - `hover.ts:499` uses `3` as the limit for showing transitive blockers before truncating. This should be a named constant for clarity. (Fixed: Extracted to `MAX_TRANSITIVE_BLOCKERS_DISPLAYED` constant in `hover.ts` with JSDoc documentation explaining its purpose.)
 
 - [ ] **Inconsistent ticket file creation for hover context** - In `index.ts:456-459`, a mock ticket file is created with `{ version: "1.0", source: "", tickets: allTickets }`. The empty `source` string is technically invalid per SPEC.md Section 4.5 which requires `source` to be "Path to the source `.bp` file". While this is internal, it could cause issues if validation is added later.
 
