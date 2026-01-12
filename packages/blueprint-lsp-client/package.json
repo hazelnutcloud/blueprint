@@ -104,6 +104,12 @@
           "default": true,
           "description": "Show progress icons in the editor gutter for requirements. Icons indicate completion status: checkmark for complete, spinner for in-progress, blocked icon for blocked requirements, etc."
         },
+        "blueprint.showProgressHighlighting": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Highlight requirement lines with background colors based on their status. Per [SPEC.md Section 5.4](https://github.com/blueprintlang/blueprint/blob/main/SPEC.md#54-progress-highlighting): green for complete, amber for in-progress, red for blocked, gray for no-ticket, and strikethrough for obsolete."
+        },
         "blueprint.hoverDelay": {
           "scope": "language-overridable",
           "type": "number",

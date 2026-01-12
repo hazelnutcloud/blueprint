@@ -25,6 +25,13 @@ let client: LanguageClient | undefined;
 let gutterDecorationTypes: Map<string, TextEditorDecorationType> | undefined;
 
 /**
+ * Background decoration types for each requirement status.
+ * Created lazily when the feature is enabled.
+ * Per SPEC.md Section 5.4, requirements are highlighted with backgrounds based on status.
+ */
+let backgroundDecorationTypes: Map<string, TextEditorDecorationType> | undefined;
+
+/**
  * Debounce timer for updating gutter decorations.
  */
 let gutterUpdateTimer: ReturnType<typeof setTimeout> | undefined;
@@ -43,6 +50,19 @@ const DEFAULT_COLORS = {
   blocked: "#a94442",
   noTicket: "#6c757d",
   obsolete: "#868e96",
+};
+
+/**
+ * Default background colors per SPEC.md Section 5.4
+ * These have low opacity for subtle highlighting effect.
+ */
+const DEFAULT_BACKGROUND_COLORS = {
+  complete: "rgba(45, 90, 39, 0.15)", // Green background
+  inProgress: "rgba(138, 109, 59, 0.15)", // Amber background
+  blocked: "rgba(169, 68, 66, 0.15)", // Red background
+  noTicket: "rgba(108, 117, 125, 0.10)", // Dim/gray background
+  obsolete: "rgba(134, 142, 150, 0.08)", // Very dim gray
+  pending: undefined, // No highlight per SPEC
 };
 
 /**
@@ -160,11 +180,91 @@ function disposeGutterDecorationTypes(): void {
 }
 
 /**
- * Updates gutter decorations for a text editor.
+ * Creates background decoration types for each requirement status.
+ * Per SPEC.md Section 5.4, requirements are highlighted with backgrounds:
+ * - No ticket: Dim/gray background
+ * - pending: No highlight (default)
+ * - blocked: Red underline or background
+ * - in-progress: Yellow/amber background
+ * - complete: Green background
+ * - obsolete: Strikethrough (handled via font style, dim background for visual consistency)
+ */
+function createBackgroundDecorationTypes(): Map<string, TextEditorDecorationType> {
+  const types = new Map<string, TextEditorDecorationType>();
+
+  // Read user's color settings (fall back to defaults)
+  const config = workspace.getConfiguration("blueprint.highlighting");
+
+  // Helper to convert a hex color to rgba with low opacity
+  function toBackgroundColor(
+    hexColor: string | undefined,
+    defaultRgba: string | undefined
+  ): string | undefined {
+    if (!defaultRgba) return undefined;
+    if (!hexColor) return defaultRgba;
+
+    // Convert hex to rgba with 0.15 opacity
+    const hex = hexColor.replace("#", "");
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, 0.15)`;
+  }
+
+  const statuses: {
+    status: RequirementStatus;
+    configKey: keyof typeof DEFAULT_COLORS | null;
+    fontStyle?: string;
+  }[] = [
+    { status: "complete", configKey: "complete" },
+    { status: "in-progress", configKey: "inProgress" },
+    { status: "blocked", configKey: "blocked", fontStyle: "underline" }, // SPEC says "Red underline or background"
+    { status: "no-ticket", configKey: "noTicket", fontStyle: "italic" },
+    { status: "obsolete", configKey: "obsolete", fontStyle: "line-through" }, // SPEC says "Strikethrough"
+    { status: "pending", configKey: null }, // No highlight
+  ];
+
+  for (const { status, configKey, fontStyle } of statuses) {
+    const userColor = configKey ? config.get<string>(configKey) : undefined;
+    const defaultBgColor =
+      DEFAULT_BACKGROUND_COLORS[status as keyof typeof DEFAULT_BACKGROUND_COLORS];
+    const backgroundColor = toBackgroundColor(userColor, defaultBgColor);
+
+    // Create decoration even if no background color (for pending)
+    const decorationType = window.createTextEditorDecorationType({
+      backgroundColor,
+      isWholeLine: true,
+      overviewRulerColor: backgroundColor,
+      overviewRulerLane: 2, // OverviewRulerLane.Center
+      textDecoration: fontStyle ? `none; text-decoration: ${fontStyle}` : undefined,
+    });
+    types.set(status, decorationType);
+  }
+
+  return types;
+}
+
+/**
+ * Disposes all background decoration types.
+ */
+function disposeBackgroundDecorationTypes(): void {
+  if (backgroundDecorationTypes) {
+    for (const decorationType of backgroundDecorationTypes.values()) {
+      decorationType.dispose();
+    }
+    backgroundDecorationTypes = undefined;
+  }
+}
+
+/**
+ * Updates decorations (gutter and/or background) for a text editor.
  * Requests requirement statuses from the server and applies decorations.
  */
-async function updateGutterDecorations(editor: TextEditor): Promise<void> {
-  if (!client || !gutterDecorationTypes) {
+async function updateDecorations(editor: TextEditor): Promise<void> {
+  const hasGutterDecorations = !!gutterDecorationTypes;
+  const hasBackgroundDecorations = !!backgroundDecorationTypes;
+
+  if (!client || (!hasGutterDecorations && !hasBackgroundDecorations)) {
     return;
   }
 
@@ -189,28 +289,38 @@ async function updateGutterDecorations(editor: TextEditor): Promise<void> {
       decorationsByStatus.set(status, ranges);
     }
 
-    // Apply decorations for each status
-    for (const [status, decorationType] of gutterDecorationTypes) {
-      const ranges = decorationsByStatus.get(status as RequirementStatus) ?? [];
-      editor.setDecorations(decorationType, ranges);
+    // Apply gutter decorations for each status
+    if (gutterDecorationTypes) {
+      for (const [status, decorationType] of gutterDecorationTypes) {
+        const ranges = decorationsByStatus.get(status as RequirementStatus) ?? [];
+        editor.setDecorations(decorationType, ranges);
+      }
+    }
+
+    // Apply background decorations for each status
+    if (backgroundDecorationTypes) {
+      for (const [status, decorationType] of backgroundDecorationTypes) {
+        const ranges = decorationsByStatus.get(status as RequirementStatus) ?? [];
+        editor.setDecorations(decorationType, ranges);
+      }
     }
   } catch (error) {
     // Silently ignore errors (e.g., server not ready)
-    console.error("Failed to update gutter decorations:", error);
+    console.error("Failed to update decorations:", error);
   }
 }
 
 /**
- * Schedules a debounced update of gutter decorations for all visible editors.
+ * Schedules a debounced update of decorations (gutter and background) for all visible editors.
  */
-function scheduleGutterUpdate(): void {
+function scheduleDecorationUpdate(): void {
   if (gutterUpdateTimer) {
     clearTimeout(gutterUpdateTimer);
   }
   gutterUpdateTimer = setTimeout(() => {
     gutterUpdateTimer = undefined;
     for (const editor of window.visibleTextEditors) {
-      updateGutterDecorations(editor);
+      updateDecorations(editor);
     }
   }, GUTTER_UPDATE_DEBOUNCE_MS);
 }
@@ -224,6 +334,20 @@ function clearAllGutterDecorations(): void {
   }
   for (const editor of window.visibleTextEditors) {
     for (const decorationType of gutterDecorationTypes.values()) {
+      editor.setDecorations(decorationType, []);
+    }
+  }
+}
+
+/**
+ * Clears background decorations from all visible editors.
+ */
+function clearAllBackgroundDecorations(): void {
+  if (!backgroundDecorationTypes) {
+    return;
+  }
+  for (const editor of window.visibleTextEditors) {
+    for (const decorationType of backgroundDecorationTypes.values()) {
       editor.setDecorations(decorationType, []);
     }
   }
@@ -325,11 +449,33 @@ function updateGutterIconsEnabled(context: ExtensionContext): void {
       gutterDecorationTypes = createGutterDecorationTypes(context);
     }
     // Update decorations for all visible editors
-    scheduleGutterUpdate();
+    scheduleDecorationUpdate();
   } else {
     // Clear and dispose decoration types
     clearAllGutterDecorations();
     disposeGutterDecorationTypes();
+  }
+}
+
+/**
+ * Initializes or disposes background decorations based on the showProgressHighlighting setting.
+ * Per SPEC.md Section 5.4, requirements are highlighted with backgrounds based on status.
+ */
+function updateProgressHighlightingEnabled(): void {
+  const config = workspace.getConfiguration("blueprint");
+  const enabled = config.get<boolean>("showProgressHighlighting") ?? true;
+
+  if (enabled) {
+    // Create decoration types if not already created
+    if (!backgroundDecorationTypes) {
+      backgroundDecorationTypes = createBackgroundDecorationTypes();
+    }
+    // Update decorations for all visible editors
+    scheduleDecorationUpdate();
+  } else {
+    // Clear and dispose decoration types
+    clearAllBackgroundDecorations();
+    disposeBackgroundDecorationTypes();
   }
 }
 
@@ -380,10 +526,11 @@ export function activate(context: ExtensionContext): void {
   );
 
   // Start the client. This will also launch the server.
-  // Wait for the client to be ready before enabling gutter decorations
+  // Wait for the client to be ready before enabling decorations
   client.start().then(() => {
-    // Initialize gutter decorations after server is ready
+    // Initialize gutter and background decorations after server is ready
     updateGutterIconsEnabled(context);
+    updateProgressHighlightingEnabled();
   });
 
   // Apply initial settings
@@ -403,37 +550,43 @@ export function activate(context: ExtensionContext): void {
       if (e.affectsConfiguration("blueprint.showProgressInGutter")) {
         updateGutterIconsEnabled(context);
       }
+      if (e.affectsConfiguration("blueprint.showProgressHighlighting")) {
+        updateProgressHighlightingEnabled();
+      }
       if (e.affectsConfiguration("blueprint.hoverDelay")) {
         updateHoverDelay();
       }
     })
   );
 
-  // Update gutter decorations when visible editors change
+  // Update decorations when visible editors change
   context.subscriptions.push(
     window.onDidChangeVisibleTextEditors(() => {
-      if (gutterDecorationTypes) {
-        scheduleGutterUpdate();
+      if (gutterDecorationTypes || backgroundDecorationTypes) {
+        scheduleDecorationUpdate();
       }
     })
   );
 
-  // Update gutter decorations when document content changes
+  // Update decorations when document content changes
   context.subscriptions.push(
     workspace.onDidChangeTextDocument((e) => {
-      if (gutterDecorationTypes && e.document.languageId === "blueprint") {
-        scheduleGutterUpdate();
+      if (
+        (gutterDecorationTypes || backgroundDecorationTypes) &&
+        e.document.languageId === "blueprint"
+      ) {
+        scheduleDecorationUpdate();
       }
     })
   );
 
-  // Update gutter decorations when a document is saved (ticket files may change)
+  // Update decorations when a document is saved (ticket files may change)
   context.subscriptions.push(
     workspace.onDidSaveTextDocument((doc) => {
-      if (gutterDecorationTypes) {
+      if (gutterDecorationTypes || backgroundDecorationTypes) {
         // Trigger update for .bp files or when ticket files are saved
         if (doc.languageId === "blueprint" || doc.fileName.endsWith(".tickets.json")) {
-          scheduleGutterUpdate();
+          scheduleDecorationUpdate();
         }
       }
     })
@@ -441,12 +594,13 @@ export function activate(context: ExtensionContext): void {
 }
 
 export function deactivate(): Thenable<void> | undefined {
-  // Clean up gutter decorations
+  // Clean up decorations
   if (gutterUpdateTimer) {
     clearTimeout(gutterUpdateTimer);
     gutterUpdateTimer = undefined;
   }
   disposeGutterDecorationTypes();
+  disposeBackgroundDecorationTypes();
 
   if (!client) {
     return undefined;

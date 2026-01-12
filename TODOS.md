@@ -357,9 +357,9 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 11.6 Progress Decorations
 
-- [ ] Create decoration types for each status
-- [ ] Apply decorations based on semantic tokens
-- [ ] Update decorations on document/ticket changes
+- [x] Create decoration types for each status (Completed: Added `createBackgroundDecorationTypes()` function that creates `TextEditorDecorationType` with background colors for each requirement status per SPEC.md Section 5.4. Default colors use low opacity (0.15) for subtle highlighting. Added `disposeBackgroundDecorationTypes()` and `clearAllBackgroundDecorations()` for cleanup.)
+- [x] Apply decorations based on semantic tokens (Completed: Refactored `updateGutterDecorations()` to `updateDecorations()` which now applies both gutter icons and background decorations. Background decorations use `isWholeLine: true` to highlight the entire requirement line.)
+- [x] Update decorations on document/ticket changes (Completed: Updated event handlers for `onDidChangeVisibleTextEditors`, `onDidChangeTextDocument`, and `onDidSaveTextDocument` to trigger decoration updates when either gutter or background decorations are enabled. Added `blueprint.showProgressHighlighting` configuration setting to enable/disable the feature.)
 
 ### 11.7 Gutter Icons
 
