@@ -543,7 +543,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 - [x] **No null check for ticketMap.get() result in reference hover** - (False positive: The `buildReferenceHover` function at line 824 has an early guard `if (!target.path) return null;` that ensures `target.path` is defined before it's used with `ticketMap.get()`. The optional `path` field is properly narrowed by TypeScript after this check.)
 
-- [ ] **Inconsistent status formatting** - The `formatStatus` function (`hover.ts:705-718`) handles "in-progress" → "in progress" but the `getStatusIcon` function uses the raw status values. When displaying "Status: in progress", the icon and text are consistent, but in other places raw status values may appear.
+- [x] **Inconsistent status formatting** - (Fixed: Refactored `getStatusIcon` and `formatStatus` in `hover.ts` to use a centralized `STATUS_DISPLAY` constant map that pairs icons and formatted text together. Added `StatusDisplayInfo` interface and `getStatusDisplay()` function that returns both icon and text, ensuring they always stay in sync. Both `getStatusIcon()` and `formatStatus()` now delegate to this single source of truth.)
 
 ### Test Coverage Gaps
 

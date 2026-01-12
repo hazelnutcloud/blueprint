@@ -935,43 +935,54 @@ function buildDescriptionHover(target: HoverTarget, context: HoverContext): Mark
 // ============================================================================
 
 /**
+ * Display information for a status value.
+ * Centralizes icon and formatted text to ensure they stay in sync.
+ */
+interface StatusDisplayInfo {
+  /** Icon character for the status */
+  icon: string;
+  /** Human-readable formatted text */
+  text: string;
+}
+
+/**
+ * Map of status values to their display information.
+ * Using a const object ensures icon and text are always paired correctly.
+ */
+const STATUS_DISPLAY: Record<string, StatusDisplayInfo> = {
+  complete: { icon: "\u2713", text: "complete" }, // checkmark
+  "in-progress": { icon: "\u25D0", text: "in progress" }, // half circle
+  pending: { icon: "\u25CB", text: "pending" }, // empty circle
+  obsolete: { icon: "\u2717", text: "obsolete" }, // X
+  "no-ticket": { icon: "\u2014", text: "no ticket" }, // em dash
+};
+
+/** Default display info for unknown statuses */
+const DEFAULT_STATUS_DISPLAY: StatusDisplayInfo = {
+  icon: "\u25CB", // empty circle
+  text: "unknown",
+};
+
+/**
+ * Get display information for a status.
+ * Returns both icon and formatted text to ensure consistency.
+ */
+function getStatusDisplay(status: string): StatusDisplayInfo {
+  return STATUS_DISPLAY[status] ?? { ...DEFAULT_STATUS_DISPLAY, text: status };
+}
+
+/**
  * Get an icon for a ticket/requirement status.
  */
 function getStatusIcon(status: string): string {
-  switch (status) {
-    case "complete":
-      return "\u2713"; // checkmark
-    case "in-progress":
-      return "\u25D0"; // half circle
-    case "pending":
-      return "\u25CB"; // empty circle
-    case "obsolete":
-      return "\u2717"; // X
-    case "no-ticket":
-      return "\u2014"; // em dash
-    default:
-      return "\u25CB";
-  }
+  return getStatusDisplay(status).icon;
 }
 
 /**
  * Format a status for display.
  */
 function formatStatus(status: string): string {
-  switch (status) {
-    case "complete":
-      return "complete";
-    case "in-progress":
-      return "in progress";
-    case "pending":
-      return "pending";
-    case "obsolete":
-      return "obsolete";
-    case "no-ticket":
-      return "no ticket";
-    default:
-      return status;
-  }
+  return getStatusDisplay(status).text;
 }
 
 /**
