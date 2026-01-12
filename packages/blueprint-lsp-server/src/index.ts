@@ -39,7 +39,7 @@ import { TicketDocumentManager } from "./ticket-documents";
 import { WorkspaceManager } from "./workspace";
 import { CrossFileSymbolIndex } from "./symbol-index";
 import { transformToAST } from "./ast";
-import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
+import { isTicketFilePath, isBlueprintFilePath, DEFAULT_TICKETS_PATH } from "./tickets";
 import {
   computeWorkspaceDiagnostics,
   computeOrphanedTicketDiagnostics,
@@ -92,6 +92,59 @@ let workspaceDiagnosticsDebounceTimer: ReturnType<typeof setTimeout> | null = nu
 // Debounce delay in milliseconds for workspace diagnostics
 // This allows batching rapid changes together for better performance
 const WORKSPACE_DIAGNOSTICS_DEBOUNCE_MS = 150;
+
+// Current configuration settings
+// These are updated when the client sends configuration changes
+let configuredTicketsPath: string = DEFAULT_TICKETS_PATH;
+
+/**
+ * Blueprint LSP configuration settings.
+ * Matches the configuration schema defined in the VS Code extension's package.json.
+ */
+interface BlueprintConfiguration {
+  ticketsPath?: string;
+}
+
+/**
+ * Fetches the Blueprint configuration from the client.
+ * Returns the current settings or defaults if not available.
+ */
+async function fetchConfiguration(): Promise<BlueprintConfiguration> {
+  if (!hasConfigurationCapability) {
+    return {};
+  }
+
+  try {
+    const config = await connection.workspace.getConfiguration("blueprint");
+    return {
+      ticketsPath: config?.ticketsPath,
+    };
+  } catch (error) {
+    connection.console.error(`Failed to fetch configuration: ${error}`);
+    return {};
+  }
+}
+
+/**
+ * Updates the cached configuration values from the client.
+ */
+async function updateConfiguration(): Promise<void> {
+  const config = await fetchConfiguration();
+
+  // Update tickets path (use default if not configured)
+  const newTicketsPath = config.ticketsPath || DEFAULT_TICKETS_PATH;
+  if (newTicketsPath !== configuredTicketsPath) {
+    connection.console.log(`Tickets path changed: ${configuredTicketsPath} -> ${newTicketsPath}`);
+    configuredTicketsPath = newTicketsPath;
+
+    // Note: File watcher glob patterns are registered once at initialization.
+    // If the ticketsPath changes, new ticket files in the new location will be
+    // discovered via explicit file operations, but file system watching may
+    // not pick up changes in the new directory. This is a known limitation.
+    // A full solution would require re-registering file watchers, which is
+    // complex and may not be supported by all clients.
+  }
+}
 
 /**
  * Schedule workspace diagnostics to be published after a debounce delay.
@@ -268,6 +321,9 @@ connection.onInitialized(async () => {
   if (hasConfigurationCapability) {
     // Register for configuration changes
     connection.client.register(DidChangeConfigurationNotification.type, undefined);
+
+    // Fetch initial configuration
+    await updateConfiguration();
   }
   if (hasWorkspaceFolderCapability) {
     connection.workspace.onDidChangeWorkspaceFolders(async (event) => {
@@ -335,6 +391,14 @@ connection.onInitialized(async () => {
   }
 
   connection.console.log("Blueprint LSP server ready");
+});
+
+// Handle configuration changes from the client
+connection.onDidChangeConfiguration(async (_change) => {
+  // Re-fetch configuration when it changes
+  // The _change parameter contains the changed settings, but we re-fetch
+  // the full configuration to ensure we have the latest values
+  await updateConfiguration();
 });
 
 /**
@@ -861,6 +925,7 @@ connection.onCodeAction((params: CodeActionParams) => {
     workspaceFolderUris: workspaceManager.getWorkspaceFolderUris(),
     dependencyGraph,
     tree: state?.tree ?? undefined,
+    ticketsPath: configuredTicketsPath,
   };
 
   return buildCodeActions(params, codeActionsContext);

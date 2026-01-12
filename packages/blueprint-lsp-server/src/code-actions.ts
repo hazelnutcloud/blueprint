@@ -10,7 +10,7 @@ import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 import type { TicketDocumentManager } from "./ticket-documents";
 import type { RequirementNode, SourceLocation } from "./ast";
 import type { Ticket, TicketFile } from "./tickets";
-import { resolveTicketFileUri, DEFAULT_TICKETS_PATH, TICKET_SCHEMA_VERSION } from "./tickets";
+import { resolveTicketFileUri, TICKET_SCHEMA_VERSION } from "./tickets";
 import { URI } from "vscode-uri";
 import type { DependencyGraph } from "./dependency-graph";
 import type { Tree } from "./parser";
@@ -29,6 +29,8 @@ export interface CodeActionsContext {
   dependencyGraph?: DependencyGraph;
   /** The parse tree for the current document */
   tree?: Tree;
+  /** Path to tickets directory relative to workspace root */
+  ticketsPath?: string;
 }
 
 // ============================================================================
@@ -735,7 +737,7 @@ export function buildCodeActions(
       const ticketFileUri = resolveTicketFileUri(
         params.textDocument.uri,
         workspaceFolder,
-        DEFAULT_TICKETS_PATH
+        context.ticketsPath
       );
 
       // Check if the ticket file already exists

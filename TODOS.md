@@ -349,7 +349,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ### 11.5 Extension Settings
 
-- [ ] Implement `blueprint.ticketsPath` setting
+- [x] Implement `blueprint.ticketsPath` setting (Added configuration retrieval in LSP server via `connection.workspace.getConfiguration("blueprint")`. Stores `ticketsPath` in module-level `configuredTicketsPath` variable with default from `DEFAULT_TICKETS_PATH`. Added `onDidChangeConfiguration` handler to update setting dynamically. Pass `ticketsPath` through `CodeActionsContext` to `resolveTicketFileUri()` for ticket file creation. Configuration is fetched on `onInitialized` and whenever settings change. Note: File watcher glob patterns are registered once at initialization, so changing `ticketsPath` at runtime requires extension reload for full file watching support.)
 - [ ] Implement highlighting color customization settings
 - [ ] Implement `blueprint.gotoModifier` setting
 - [ ] Implement `blueprint.showProgressInGutter` setting
