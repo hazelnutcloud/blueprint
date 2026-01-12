@@ -27,8 +27,6 @@ import { findDefinitionTarget, buildDefinition, type DefinitionContext } from ".
 import { findReferencesTarget, buildReferences, type ReferencesContext, type TicketFileInfo } from "./references";
 import { buildDocumentSymbols } from "./document-symbol";
 import { buildWorkspaceSymbols } from "./workspace-symbol";
-import { buildRequirementTicketMapFromSymbols } from "./requirement-ticket-map";
-import { DependencyGraph } from "./dependency-graph";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initializeParser, cleanupParser, parseDocument } from "./parser";
 import { DocumentManager } from "./documents";
@@ -39,6 +37,7 @@ import { transformToAST } from "./ast";
 import { isTicketFilePath, isBlueprintFilePath } from "./tickets";
 import { computeWorkspaceDiagnostics, computeOrphanedTicketDiagnostics, computeConstraintMismatchDiagnostics, mergeDiagnosticResults } from "./workspace-diagnostics";
 import { buildCodeActions, type CodeActionsContext } from "./code-actions";
+import { ComputedDataCache } from "./computed-data-cache";
 import { readFile } from "node:fs/promises";
 import { URI } from "vscode-uri";
 
@@ -60,6 +59,10 @@ const workspaceManager = new WorkspaceManager(connection);
 
 // Create the cross-file symbol index for workspace-wide symbol resolution
 const symbolIndex = new CrossFileSymbolIndex();
+
+// Create the computed data cache for dependency graph and ticket map
+// This avoids recomputing expensive data structures on each hover/definition/references request
+const computedDataCache = new ComputedDataCache(symbolIndex, ticketDocumentManager);
 
 // Track whether the client supports dynamic registration for configuration changes
 let hasConfigurationCapability = false;
@@ -341,6 +344,8 @@ async function indexFile(fileUri: string, filePath: string): Promise<void> {
     if (tree) {
       const ast = transformToAST(tree);
       symbolIndex.addFile(fileUri, ast);
+      // Invalidate dependency graph cache since symbol index changed
+      computedDataCache.invalidateDependencyGraph();
       tree.delete(); // Clean up the tree after indexing
     }
   } catch (error) {
@@ -390,6 +395,8 @@ connection.onDidChangeWatchedFiles(async (params) => {
           // Remove from workspace manager and symbol index
           workspaceManager.removeFile(change.uri);
           symbolIndex.removeFile(change.uri);
+          // Invalidate dependency graph cache since symbol index changed
+          computedDataCache.invalidateDependencyGraph();
           // Also clean up document manager state if it exists
           documentManager.onDocumentClose(change.uri);
           // Re-publish workspace diagnostics after file removal
@@ -413,6 +420,8 @@ connection.onDidChangeWatchedFiles(async (params) => {
             // Use onDocumentChange to validate and update state
             // We use version 0 for external file changes since we don't have a real version
             ticketDocumentManager.onDocumentChange(change.uri, 0, content);
+            // Invalidate ticket map cache since tickets changed
+            computedDataCache.invalidateTicketMap();
             // Re-publish workspace diagnostics since ticket status affects
             // no-ticket warnings and blocked requirement info
             scheduleWorkspaceDiagnostics();
@@ -426,6 +435,8 @@ connection.onDidChangeWatchedFiles(async (params) => {
         case FileChangeType.Deleted: {
           // Clean up the ticket document state
           ticketDocumentManager.onDocumentClose(change.uri);
+          // Invalidate ticket map cache since tickets changed
+          computedDataCache.invalidateTicketMap();
           // Re-publish workspace diagnostics after ticket file removal
           scheduleWorkspaceDiagnostics();
           break;
@@ -446,6 +457,8 @@ documents.onDidOpen((event) => {
       event.document.version,
       event.document.getText()
     );
+    // Invalidate ticket map cache since tickets changed
+    computedDataCache.invalidateTicketMap();
     // Re-publish workspace diagnostics since ticket status affects
     // no-ticket warnings and blocked requirement info
     scheduleWorkspaceDiagnostics();
@@ -463,6 +476,8 @@ documents.onDidOpen((event) => {
     if (state.tree) {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
+      // Invalidate dependency graph cache since symbol index changed
+      computedDataCache.invalidateDependencyGraph();
       // Publish workspace diagnostics after indexing
       scheduleWorkspaceDiagnostics();
     }
@@ -479,6 +494,8 @@ documents.onDidChangeContent((event) => {
       event.document.version,
       event.document.getText()
     );
+    // Invalidate ticket map cache since tickets changed
+    computedDataCache.invalidateTicketMap();
     // Re-publish workspace diagnostics since ticket status affects
     // no-ticket warnings and blocked requirement info
     scheduleWorkspaceDiagnostics();
@@ -495,6 +512,8 @@ documents.onDidChangeContent((event) => {
     if (state.tree) {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
+      // Invalidate dependency graph cache since symbol index changed
+      computedDataCache.invalidateDependencyGraph();
       // Publish workspace diagnostics after indexing
       scheduleWorkspaceDiagnostics();
     }
@@ -528,6 +547,8 @@ documents.onDidSave((event) => {
       event.document.version,
       event.document.getText()
     );
+    // Invalidate ticket map cache since tickets changed
+    computedDataCache.invalidateTicketMap();
     // Re-publish workspace diagnostics since ticket status affects
     // no-ticket warnings and blocked requirement info
     scheduleWorkspaceDiagnostics();
@@ -544,6 +565,8 @@ documents.onDidSave((event) => {
     if (state.tree) {
       const ast = transformToAST(state.tree);
       symbolIndex.addFile(event.document.uri, ast);
+      // Invalidate dependency graph cache since symbol index changed
+      computedDataCache.invalidateDependencyGraph();
       // Publish workspace diagnostics after indexing
       scheduleWorkspaceDiagnostics();
     }
@@ -621,21 +644,9 @@ connection.onHover((params: HoverParams) => {
   }
 
   // Build the hover context with ticket and dependency information
-  const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
-  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
-  
-  // Create a mock ticket file for the map builder
-  const ticketFile = allTickets.length > 0 
-    ? { version: "1.0", source: "", tickets: allTickets }
-    : null;
-  
-  const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
-    requirementSymbols,
-    ticketFile
-  );
-
-  // Build the dependency graph
-  const { graph: dependencyGraph, cycles } = DependencyGraph.build(symbolIndex);
+  // Use cached data to avoid expensive recomputation on each hover
+  const { map: ticketMap } = computedDataCache.getTicketMap();
+  const { graph: dependencyGraph, cycles } = computedDataCache.getDependencyGraph();
 
   // Get workspace folder URIs for resolving relative file paths
   const workspaceFolderUris = workspaceManager.getWorkspaceFolderUris();
@@ -687,18 +698,8 @@ connection.onDefinition((params: DefinitionParams) => {
   }
 
   // Build the definition context with ticket information
-  const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
-  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
-  
-  // Create a mock ticket file for the map builder
-  const ticketFile = allTickets.length > 0 
-    ? { version: "1.0", source: "", tickets: allTickets }
-    : null;
-  
-  const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
-    requirementSymbols,
-    ticketFile
-  );
+  // Use cached ticket map to avoid expensive recomputation
+  const { map: ticketMap } = computedDataCache.getTicketMap();
 
   // Build the ticket files map for position lookup
   const ticketFilesMap = new Map<string, { uri: string; content: string; tickets: import("./tickets").Ticket[] }>();
@@ -754,22 +755,10 @@ connection.onReferences((params: ReferenceParams) => {
     return null;
   }
 
-  // Build the dependency graph for reference lookup
-  const { graph: dependencyGraph, edges } = DependencyGraph.build(symbolIndex);
-
-  // Build the requirement-ticket map for finding ticket references
-  const requirementSymbols = symbolIndex.getSymbolsByKind("requirement");
-  const allTickets = ticketDocumentManager.getAllTickets().map(t => t.ticket);
-  
-  // Create a mock ticket file for the map builder
-  const ticketFile = allTickets.length > 0 
-    ? { version: "1.0", source: "", tickets: allTickets }
-    : null;
-  
-  const { map: ticketMap } = buildRequirementTicketMapFromSymbols(
-    requirementSymbols,
-    ticketFile
-  );
+  // Build the dependency graph and ticket map for reference lookup
+  // Use cached data to avoid expensive recomputation on each request
+  const { graph: dependencyGraph, edges } = computedDataCache.getDependencyGraph();
+  const { map: ticketMap } = computedDataCache.getTicketMap();
 
   // Build the ticket files map for position lookup
   const ticketFilesMap = new Map<string, TicketFileInfo>();
@@ -860,8 +849,8 @@ connection.onCodeAction((params: CodeActionParams) => {
   // Get the parse tree for dependency code actions
   const state = documentManager.getState(params.textDocument.uri);
   
-  // Build the dependency graph for dependency-related actions
-  const { graph: dependencyGraph } = DependencyGraph.build(symbolIndex);
+  // Use cached dependency graph for dependency-related actions
+  const { graph: dependencyGraph } = computedDataCache.getDependencyGraph();
 
   // Build the code actions context
   const codeActionsContext: CodeActionsContext = {
@@ -895,6 +884,9 @@ connection.onShutdown(() => {
   
   // Clean up symbol index
   symbolIndex.clear();
+  
+  // Clean up computed data cache
+  computedDataCache.cleanup();
   
   // Clean up parser resources
   cleanupParser();
