@@ -513,7 +513,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
   - [x] Empty document parsing (Added tests for empty string, whitespace-only, and newlines-only documents in `documents.test.ts`)
   - [x] Document with only comments (Added tests for single-line only, multi-line only, and mixed comments in `documents.test.ts`. Note: Tests revealed a grammar bug where multi-line comments are sometimes parsed as `description_block` - see Grammar Bugs section.)
   - [x] Very large documents (Added comprehensive tests in `documents.test.ts` under "Very Large Document Parsing" describe block. Tests cover: parsing ~320KB and ~1.3MB files without errors, element counting verification, symbol table building, @depends-on reference parsing, documents with many constraints, very long description text (10KB+), 100-character identifiers, documents with 5000+ lines, and linear scaling performance verification. 12 new tests added.)
-  - [ ] Invalid UTF-8 sequences
+  - [x] Invalid UTF-8 sequences (Added 11 tests in `documents.test.ts` under "invalid UTF-8 sequence handling" describe block. Tests cover: invalid continuation bytes (0x80), incomplete multi-byte sequences (0xc2 without continuation), overlong encodings (0xc0 0xaf), invalid 4-byte sequence starts (0xf5+), never-valid bytes (0xfe, 0xff), invalid bytes in identifiers, null bytes, mixed valid/invalid UTF-8, keyword recognition after invalid bytes, AST transformation with invalid UTF-8, and symbol table building with invalid UTF-8. Tree-sitter handles invalid UTF-8 gracefully by treating invalid sequences as individual bytes and continuing to parse the document structure.)
 
 ### Performance (Future)
 

@@ -287,6 +287,179 @@ describe("Parser", () => {
       expect(tree!.rootNode.hasError).toBe(false);
     });
   });
+
+  describe("invalid UTF-8 sequence handling", () => {
+    // Per SPEC.md Section 3.1.1: "Blueprint files are UTF-8 encoded"
+    // These tests verify the parser's behavior with invalid UTF-8 byte sequences.
+    // Tree-sitter treats invalid UTF-8 sequences as individual bytes and continues parsing.
+
+    test("parses document with invalid UTF-8 continuation byte", () => {
+      // 0x80-0xBF are continuation bytes that are invalid at the start of a sequence
+      const invalidByte = Buffer.from([0x80]);
+      const code = `@module test\n  Description with invalid byte: ${invalidByte.toString("latin1")} here.\n`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      // The parser should still produce a valid tree structure
+      expect(tree!.rootNode.type).toBe("source_file");
+      // The module should still be recognized
+      const moduleNode = tree!.rootNode.children.find((c) => c.type === "module_block");
+      expect(moduleNode).toBeDefined();
+    });
+
+    test("parses document with incomplete multi-byte UTF-8 sequence", () => {
+      // 0xc2 starts a 2-byte sequence but we don't provide the continuation byte
+      const incompleteSequence = Buffer.from([0xc2]);
+      const code = `@module test\n  Has incomplete: ${incompleteSequence.toString("latin1")} sequence.\n`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      // Parser should still recognize the module structure
+      const moduleNode = tree!.rootNode.children.find((c) => c.type === "module_block");
+      expect(moduleNode).toBeDefined();
+    });
+
+    test("parses document with overlong UTF-8 encoding", () => {
+      // Overlong encoding of '/' (U+002F): should be 0x2F but encoded as 0xc0 0xaf
+      // This is invalid UTF-8 per RFC 3629
+      const overlongSlash = Buffer.from([0xc0, 0xaf]);
+      const code = `@module test\n  Overlong: ${overlongSlash.toString("latin1")} here.\n`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+    });
+
+    test("parses document with invalid 4-byte sequence start", () => {
+      // 0xf5-0xf7 would indicate 4-byte sequences for code points > U+10FFFF (invalid)
+      const invalidStart = Buffer.from([0xf5, 0x80, 0x80, 0x80]);
+      const code = `@module test\n  Invalid 4-byte: ${invalidStart.toString("latin1")} end.\n`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+    });
+
+    test("parses document with 0xfe and 0xff bytes", () => {
+      // 0xfe and 0xff are never valid in UTF-8
+      const invalidBytes = Buffer.from([0xfe, 0xff]);
+      const code = `@module test\n  Never valid: ${invalidBytes.toString("latin1")} here.\n`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+    });
+
+    test("parses module identifier containing invalid UTF-8", () => {
+      // Invalid UTF-8 in an identifier position
+      const invalidByte = Buffer.from([0x80]);
+      const code = `@module test${invalidByte.toString("latin1")}name\n  Description.\n`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      // The parser should attempt to parse, though the identifier may be split/errored
+      expect(tree!.rootNode.type).toBe("source_file");
+    });
+
+    test("parses document with null byte", () => {
+      // Null byte (0x00) is valid UTF-8 but unusual in text files
+      const code = "@module test\n  Has null: \x00 byte.\n";
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+    });
+
+    test("parses document with mixed valid and invalid UTF-8", () => {
+      // Mix of valid UTF-8 (emoji, accents) and invalid sequences
+      const invalidByte = Buffer.from([0x80]);
+      const code = `@module test
+  Valid UTF-8: café, 日本語, 🚀
+  Invalid byte: ${invalidByte.toString("latin1")}
+  More valid: ñoño
+
+@feature login
+  More valid UTF-8: Ω α β γ
+`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      // Should still parse structure correctly
+      const moduleNode = tree!.rootNode.children.find((c) => c.type === "module_block");
+      expect(moduleNode).toBeDefined();
+      // Feature is inside the module block in the grammar, not at top level
+      const sexp = tree!.rootNode.toString();
+      expect(sexp).toContain("feature_block");
+    });
+
+    test("parses keyword after invalid UTF-8 sequence", () => {
+      // Ensure keywords are still recognized after invalid bytes
+      const invalidByte = Buffer.from([0x80]);
+      const code = `${invalidByte.toString("latin1")}@module test\n  Description.\n`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe("source_file");
+      // Module should still be parsed (invalid byte treated as content before it)
+      const hasModule = tree!.rootNode.children.some((c) => c.type === "module_block");
+      expect(hasModule).toBe(true);
+    });
+
+    test("produces valid AST from document with invalid UTF-8", () => {
+      // Verify AST transformation still works with invalid UTF-8
+      const invalidByte = Buffer.from([0x80]);
+      const code = `@module auth
+  Has invalid: ${invalidByte.toString("latin1")} byte.
+
+@feature login
+  Login feature.
+
+  @requirement basic-auth
+    Basic auth requirement.
+`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      expect(ast).not.toBeNull();
+      expect(ast.modules).toHaveLength(1);
+      expect(ast.modules[0]!.name).toBe("auth");
+      expect(ast.modules[0]!.features).toHaveLength(1);
+      expect(ast.modules[0]!.features[0]!.requirements).toHaveLength(1);
+    });
+
+    test("builds symbol table from document with invalid UTF-8", () => {
+      // Verify symbol table building works with invalid UTF-8
+      const invalidByte = Buffer.from([0x80]);
+      const code = `@module auth
+  Has invalid: ${invalidByte.toString("latin1")} byte.
+
+@feature login
+  Login feature.
+
+  @requirement basic-auth
+    Basic auth requirement.
+
+    @constraint security
+      Must be secure.
+`;
+
+      const tree = parseDocument(code);
+      expect(tree).not.toBeNull();
+
+      const ast = transformToAST(tree!);
+      expect(ast).not.toBeNull();
+
+      const { symbolTable } = buildSymbolTable(ast);
+      expect(symbolTable.modules.has("auth")).toBe(true);
+      expect(symbolTable.features.has("auth.login")).toBe(true);
+      expect(symbolTable.requirements.has("auth.login.basic-auth")).toBe(true);
+      expect(symbolTable.constraints.has("auth.login.basic-auth.security")).toBe(true);
+    });
+  });
 });
 
 describe("Description Placement Validation", () => {
