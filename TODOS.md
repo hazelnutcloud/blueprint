@@ -392,7 +392,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [x] Test document synchronization (Covered in `tests/integration/lsp-server.test.ts` - tests didOpen, didChange, didClose notifications and verifies server correctly processes document updates via documentSymbol requests)
 - [x] Test diagnostic publishing (6 tests in `tests/integration/lsp-server.test.ts` covering syntax error diagnostics, unresolved reference diagnostics, no-ticket warnings, circular dependency errors, diagnostics clearing on document close, and diagnostics updating on content changes. Tests verify correct severity levels, diagnostic codes, and message content.)
 - [x] Test hover information content (Covered in `tests/integration/lsp-server.test.ts` - tests hover for @module keyword and requirement identifiers, verifies hover contains expected content)
-- [ ] Test go-to-definition navigation
+- [x] Test go-to-definition navigation (8 tests in `tests/integration/lsp-server.test.ts` covering: @depends-on reference navigation within same file, requirement identifier definition without ticket, constraint identifier definition, keyword returns null, unresolved reference returns null, cross-file reference navigation between storage.bp and auth.bp, feature identifier definition, and module identifier definition. Tests verify correct URI and range.start.line for all navigation targets.)
 - [ ] Test find-references results
 - [ ] Test cross-file reference resolution
 

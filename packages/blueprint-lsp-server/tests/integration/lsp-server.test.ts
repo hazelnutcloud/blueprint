@@ -1178,6 +1178,442 @@ describe("LSP Server Integration Tests", () => {
     });
   });
 
+  describe("go-to-definition", () => {
+    test("provides definition for @depends-on reference to another symbol", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            definition: {
+              dynamicRegistration: false,
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "definition-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  Authentication module.
+
+  @feature login
+    User login functionality.
+
+    @requirement basic-auth
+      Email/password authentication.
+
+  @feature session
+    @depends-on auth.login.basic-auth
+
+    Session management.
+
+    @requirement create-token
+      Create session tokens.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition at the @depends-on reference (line 10, on "auth.login.basic-auth")
+      // Line 10: "    @depends-on auth.login.basic-auth"
+      // Character position around 20 should be on the reference
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: testFileUri },
+        position: { line: 10, character: 20 },
+      });
+
+      expect(definition).not.toBeNull();
+      if (definition) {
+        // Should navigate to the basic-auth requirement definition
+        expect(definition.uri).toBe(testFileUri);
+        // The requirement is on line 6
+        expect(definition.range.start.line).toBe(6);
+      }
+    });
+
+    test("provides definition for requirement identifier (navigates to symbol when no ticket)", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "def-req-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module payments
+  Payment processing.
+
+  @feature checkout
+    Checkout feature.
+
+    @requirement process-payment
+      Process a payment transaction.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition on the requirement identifier "process-payment" (line 6)
+      // Line 6: "    @requirement process-payment"
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: testFileUri },
+        position: { line: 6, character: 20 },
+      });
+
+      expect(definition).not.toBeNull();
+      if (definition) {
+        // Should stay in the same file, at the requirement definition line
+        expect(definition.uri).toBe(testFileUri);
+        expect(definition.range.start.line).toBe(6);
+      }
+    });
+
+    test("provides definition for constraint identifier", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "def-constraint-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module security
+  Security module.
+
+  @feature encryption
+    Encryption feature.
+
+    @requirement encrypt-data
+      Encrypt sensitive data.
+
+      @constraint aes-256
+        Use AES-256 encryption.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition on the constraint identifier "aes-256" (line 9)
+      // Line 9: "      @constraint aes-256"
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: testFileUri },
+        position: { line: 9, character: 20 },
+      });
+
+      expect(definition).not.toBeNull();
+      if (definition) {
+        expect(definition.uri).toBe(testFileUri);
+        expect(definition.range.start.line).toBe(9);
+      }
+    });
+
+    test("returns null for keyword (no definition for keywords)", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "def-keyword-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module test
+  A test module.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition on the @module keyword (line 0, character 1-5)
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: testFileUri },
+        position: { line: 0, character: 3 },
+      });
+
+      // Keywords don't have definitions
+      expect(definition).toBeNull();
+    });
+
+    test("returns null for unresolved reference", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "def-unresolved-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  @depends-on nonexistent.feature
+
+  Authentication module.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition on the unresolved reference (line 1)
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: testFileUri },
+        position: { line: 1, character: 20 },
+      });
+
+      // Unresolved references don't have definitions
+      expect(definition).toBeNull();
+    });
+
+    test("provides cross-file definition for reference to symbol in another file", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Create two files: storage.bp and auth.bp
+      const storageFilePath = join(workspaceDir, "storage.bp");
+      const storageFileUri = `file://${storageFilePath}`;
+      const storageContent = `@module storage
+  Storage module.
+
+  @feature user-accounts
+    User account management.
+
+    @requirement user-table
+      User table schema.
+`;
+
+      const authFilePath = join(workspaceDir, "auth.bp");
+      const authFileUri = `file://${authFilePath}`;
+      const authContent = `@module auth
+  @depends-on storage.user-accounts
+
+  Authentication module.
+
+  @feature login
+    Login functionality.
+`;
+
+      // Open storage.bp first (so the symbol is indexed)
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: storageFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: storageContent,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Open auth.bp
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: authFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: authContent,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition at the @depends-on reference in auth.bp (line 1)
+      // Line 1: "  @depends-on storage.user-accounts"
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: authFileUri },
+        position: { line: 1, character: 20 },
+      });
+
+      expect(definition).not.toBeNull();
+      if (definition) {
+        // Should navigate to storage.bp
+        expect(definition.uri).toBe(storageFileUri);
+        // The user-accounts feature is on line 3
+        expect(definition.range.start.line).toBe(3);
+      }
+    });
+
+    test("provides definition for feature identifier", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "def-feature-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module inventory
+  Inventory module.
+
+  @feature stock-management
+    Stock management feature.
+
+    @requirement track-inventory
+      Track inventory levels.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition on the feature identifier "stock-management" (line 3)
+      // Line 3: "  @feature stock-management"
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: testFileUri },
+        position: { line: 3, character: 15 },
+      });
+
+      expect(definition).not.toBeNull();
+      if (definition) {
+        expect(definition.uri).toBe(testFileUri);
+        expect(definition.range.start.line).toBe(3);
+      }
+    });
+
+    test("provides definition for module identifier", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {},
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "def-module-test.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module notifications
+  Notification handling module.
+
+  @feature email
+    Email notifications.
+`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request definition on the module identifier "notifications" (line 0)
+      // Line 0: "@module notifications"
+      const definition = await client.sendRequest<{
+        uri: string;
+        range: { start: { line: number; character: number } };
+      } | null>("textDocument/definition", {
+        textDocument: { uri: testFileUri },
+        position: { line: 0, character: 10 },
+      });
+
+      expect(definition).not.toBeNull();
+      if (definition) {
+        expect(definition.uri).toBe(testFileUri);
+        expect(definition.range.start.line).toBe(0);
+      }
+    });
+  });
+
   describe("shutdown", () => {
     test("handles shutdown and exit gracefully", async () => {
       // Initialize first
