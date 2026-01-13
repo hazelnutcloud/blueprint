@@ -194,11 +194,11 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 7.2 Rich Documentation Content
 
-- [ ] Include symbol description text
-- [ ] Show dependency count and list
-- [ ] Show constraint count and list
-- [ ] Include file location with clickable link
-- [ ] Format as Markdown for proper rendering
+- [x] Include symbol description text
+- [x] Show dependency count and list
+- [x] Show constraint count and list
+- [x] Include file location with clickable link
+- [x] Format as Markdown for proper rendering
 
 ---
 
@@ -231,9 +231,9 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 8.5 Integration Tests
 
-- [ ] Test full completion flow with mock LSP connection
-- [ ] Test with multi-file workspace
-- [ ] Test with large symbol index
+- [x] Test full completion flow with mock LSP connection
+- [x] Test with multi-file workspace
+- [x] Test with large symbol index
 
 ---
 

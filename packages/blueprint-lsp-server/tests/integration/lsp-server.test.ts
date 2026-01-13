@@ -2093,6 +2093,662 @@ describe("LSP Server Integration Tests", () => {
     });
   });
 
+  describe("completion", () => {
+    test("provides keyword completions at top-level", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              dynamicRegistration: false,
+              completionItem: {
+                snippetSupport: true,
+              },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-keyword.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion at the @ position
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+          insertText?: string;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 0, character: 1 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // At top-level, should have @module and @description
+        expect(labels).toContain("@module");
+        expect(labels).toContain("@description");
+        // Should NOT have @feature at top-level
+        expect(labels).not.toContain("@feature");
+      }
+    });
+
+    test("provides keyword completions inside module scope", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-module-scope.bp");
+      const testFileUri = `file://${testFilePath}`;
+      // Document with @ trigger on its own line inside module, after description text
+      // Line 2 has "  @" which triggers keyword completion in module scope
+      const content = `@module auth
+  Authentication module description.
+  @
+  @feature login
+    Login functionality.`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion at line 2, character 3 (at the @ trigger)
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 2, character: 3 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // Inside module with @ trigger, should have module-level keywords
+        expect(labels).toContain("@feature");
+        expect(labels).toContain("@requirement");
+        expect(labels).toContain("@constraint");
+        expect(labels).toContain("@depends-on");
+        // Should NOT have @module inside a module
+        expect(labels).not.toContain("@module");
+      }
+    });
+
+    test("provides reference completions in @depends-on context", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-depends-on.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  @feature login
+    Login functionality.
+
+    @requirement basic-auth
+      Basic authentication.
+
+@module storage
+  @depends-on `;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion after @depends-on
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 8, character: 14 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // Should suggest the auth module and its children
+        expect(labels).toContain("auth");
+        expect(labels).toContain("auth.login");
+        expect(labels).toContain("auth.login.basic-auth");
+      }
+    });
+
+    test("provides path completions after dot", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-path.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic auth.
+    @requirement oauth
+      OAuth.
+  @feature session
+    @requirement token
+      Token management.
+
+@module storage
+  @depends-on auth.`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion after "auth."
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 11, character: 19 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // Should suggest direct children of auth (login, session)
+        expect(labels).toContain("login");
+        expect(labels).toContain("session");
+        // Should NOT suggest nested children directly
+        expect(labels).not.toContain("basic-auth");
+        expect(labels).not.toContain("oauth");
+      }
+    });
+
+    test("provides cross-file reference completions", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Create two files
+      const file1Path = join(workspaceDir, "completion-cross-1.bp");
+      const file1Uri = `file://${file1Path}`;
+      const file1Content = `@module storage
+  @feature database
+    @requirement connection-pool
+      Database connection pooling.`;
+
+      const file2Path = join(workspaceDir, "completion-cross-2.bp");
+      const file2Uri = `file://${file2Path}`;
+      const file2Content = `@module api
+  @depends-on stor`;
+
+      // Open file1 first
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: file1Uri,
+          languageId: "blueprint",
+          version: 1,
+          text: file1Content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Open file2
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: file2Uri,
+          languageId: "blueprint",
+          version: 1,
+          text: file2Content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion with prefix "stor"
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: file2Uri },
+        position: { line: 1, character: 18 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // Should suggest storage module from the other file
+        expect(labels).toContain("storage");
+        expect(labels).toContain("storage.database");
+        expect(labels).toContain("storage.database.connection-pool");
+      }
+    });
+
+    test("provides code block language completions after triple backticks", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-codeblock.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module api
+  @feature endpoints
+    Example code:
+    \`\`\``;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion after triple backticks
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 3, character: 7 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // Should suggest language identifiers
+        expect(labels).toContain("typescript");
+        expect(labels).toContain("javascript");
+        expect(labels).toContain("json");
+        expect(labels).toContain("sql");
+      }
+    });
+
+    test("resolves completion item with rich documentation", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: {
+                snippetSupport: true,
+                resolveSupport: {
+                  properties: ["documentation"],
+                },
+              },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-resolve.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  Authentication module handling user login and session management.
+  @feature login
+    User login functionality.
+    @requirement basic-auth
+      Basic email/password authentication.
+      @constraint bcrypt
+        Passwords must use bcrypt hashing.
+
+@module api
+  @depends-on `;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion
+      const completionResult = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+          data?: object;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 10, character: 14 },
+      });
+
+      expect(completionResult).not.toBeNull();
+      expect(completionResult!.items.length).toBeGreaterThan(0);
+
+      // Find the auth module completion item
+      const authItem = completionResult!.items.find((item) => item.label === "auth");
+      expect(authItem).toBeDefined();
+
+      // Resolve the completion item to get documentation
+      const resolvedItem = await client.sendRequest<{
+        label: string;
+        documentation?: { kind: string; value: string };
+      }>("completionItem/resolve", authItem);
+
+      expect(resolvedItem).toBeDefined();
+      expect(resolvedItem.documentation).toBeDefined();
+      expect(resolvedItem.documentation!.kind).toBe("markdown");
+      // Documentation should include the module's description
+      expect(resolvedItem.documentation!.value).toContain("auth");
+      expect(resolvedItem.documentation!.value).toContain("Authentication module");
+    });
+
+    test("returns null for completion inside code block content", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-codeblock-skip.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module api
+  @feature endpoints
+    Example code:
+    \`\`\`typescript
+    const x = @
+    \`\`\``;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion inside code block
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 4, character: 15 },
+      });
+
+      // Should return null because we're inside a code block (skip zone)
+      expect(result).toBeNull();
+    });
+
+    test("provides constraint name completions", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-constraint.bp");
+      const testFileUri = `file://${testFilePath}`;
+      const content = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+        Validate all inputs.
+      @constraint rate-limiting
+        Limit login attempts.
+    @requirement oauth
+      @constraint input-validation
+        OAuth input validation.
+
+@module storage
+  @feature database
+    @requirement connect
+      @constraint `;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion after @constraint
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+          kind: number;
+          detail?: string;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 14, character: 18 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // Should suggest existing constraint names from the workspace
+        expect(labels).toContain("input-validation");
+        expect(labels).toContain("rate-limiting");
+
+        // Should show usage count in detail
+        const inputValidation = result.items.find((item) => item.label === "input-validation");
+        expect(inputValidation).toBeDefined();
+        expect(inputValidation!.detail).toContain("2"); // Used 2 times
+      }
+    });
+
+    test("filters out self-references in completion", async () => {
+      // Initialize first
+      await client.sendRequest("initialize", {
+        processId: process.pid,
+        rootUri: `file://${workspaceDir}`,
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: { snippetSupport: true },
+            },
+          },
+        },
+      });
+      client.sendNotification("initialized", {});
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const testFilePath = join(workspaceDir, "completion-self-ref.bp");
+      const testFileUri = `file://${testFilePath}`;
+      // Create a document with multiple symbols - use a valid depends-on with partial text
+      // to ensure proper parsing. Position cursor at end of partial reference.
+      const content = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic authentication implementation.
+      @depends-on auth.session.tok
+  @feature session
+    @requirement tokens
+      Token management.`;
+
+      // Open the document
+      client.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: testFileUri,
+          languageId: "blueprint",
+          version: 1,
+          text: content,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Request completion at end of partial reference "auth.session.tok"
+      // Line 4: "      @depends-on auth.session.tok"
+      // Position at end is character 34
+      const result = await client.sendRequest<{
+        isIncomplete: boolean;
+        items: Array<{
+          label: string;
+        }>;
+      } | null>("textDocument/completion", {
+        textDocument: { uri: testFileUri },
+        position: { line: 4, character: 34 },
+      });
+
+      expect(result).not.toBeNull();
+      if (result) {
+        const labels = result.items.map((item) => item.label);
+        // Should NOT suggest auth.login.basic-auth (self) or paths starting with it
+        expect(labels).not.toContain("auth.login.basic-auth");
+        // Should suggest matching paths like auth.session.tokens
+        expect(labels).toContain("auth.session.tokens");
+      }
+    });
+  });
+
   describe("shutdown", () => {
     test("handles shutdown and exit gracefully", async () => {
       // Initialize first
