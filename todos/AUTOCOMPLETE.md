@@ -243,7 +243,7 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 - [x] Add JSDoc comments to all public functions
 - [x] Document the completion provider architecture
-- [ ] Add inline comments for complex logic
+- [x] Add inline comments for complex logic
 
 ### 9.2 Update Package Documentation
 
