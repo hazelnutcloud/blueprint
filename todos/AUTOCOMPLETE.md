@@ -101,8 +101,8 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 ### 4.1 Reference Context Detection
 
 - [x] Detect cursor is after `@depends-on` keyword
-- [ ] Parse existing references in the same `@depends-on` clause
-- [ ] Determine if adding first reference or comma-separated addition
+- [x] Parse existing references in the same `@depends-on` clause
+- [x] Determine if adding first reference or comma-separated addition
 - [x] Extract partial reference text for filtering
 
 ### 4.2 Symbol Gathering

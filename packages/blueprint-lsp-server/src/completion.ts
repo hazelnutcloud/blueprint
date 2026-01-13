@@ -147,6 +147,10 @@ export interface CompletionContext {
   currentFeature: string | null;
   /** Current requirement name, if inside a requirement */
   currentRequirement: string | null;
+  /** References already present in the current @depends-on clause */
+  existingReferences: string[];
+  /** Whether cursor is after a comma (adding additional reference) */
+  isAfterComma: boolean;
 }
 
 /**
@@ -247,6 +251,47 @@ export function getCurrentScope(tree: Tree, position: Position): CompletionScope
 }
 
 /**
+ * Find the containing @depends-on node at a given position.
+ * Walks up the tree to find if cursor is inside a depends_on node.
+ */
+export function findContainingDependsOn(tree: Tree, position: Position): Node | null {
+  const root = tree.rootNode;
+  const deepestNode = findNodeAtPosition(root, position.line, position.character);
+
+  if (!deepestNode) {
+    return null;
+  }
+
+  // Walk up to find a depends_on node
+  let current: Node | null = deepestNode;
+  while (current) {
+    if (current.type === "depends_on") {
+      return current;
+    }
+    current = current.parent;
+  }
+
+  return null;
+}
+
+/**
+ * Extract existing references from a @depends-on clause.
+ * Returns an array of reference paths (e.g., ["auth.login", "storage"]).
+ */
+export function extractExistingReferences(dependsOnNode: Node): string[] {
+  const references: string[] = [];
+
+  for (const child of dependsOnNode.children) {
+    if (child.type === "reference") {
+      // Reference text is the full dot-notation path
+      references.push(child.text);
+    }
+  }
+
+  return references;
+}
+
+/**
  * Get the full context for completion at a given position.
  */
 export function getCursorContext(
@@ -276,6 +321,41 @@ export function getCursorContext(
   // Check if we're in a comment or code block
   const node = findNodeAtPosition(tree.rootNode, position.line, position.character);
   const isInSkipZone = node?.type === "comment" || node?.type === "code_block";
+
+  // Parse existing references in the @depends-on clause
+  let existingReferences: string[] = [];
+  let isAfterComma = false;
+
+  if (isInDependsOn) {
+    // Try to find the depends_on node from the tree
+    const dependsOnNode = findContainingDependsOn(tree, position);
+    if (dependsOnNode) {
+      existingReferences = extractExistingReferences(dependsOnNode);
+    }
+
+    // Also parse from the text for incomplete references (tree may not have them yet)
+    // Extract references from text: "@depends-on ref1, ref2, " -> ["ref1", "ref2"]
+    const dependsOnMatch = textBeforeCursor.match(/@depends-on\s+(.*)$/);
+    if (dependsOnMatch && dependsOnMatch[1]) {
+      const refsText = dependsOnMatch[1];
+      // Split by comma and extract complete references
+      const textRefs = refsText
+        .split(",")
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0 && !r.endsWith(".")); // Filter out incomplete refs
+
+      // Merge with tree-based refs (tree has complete refs, text may have partial)
+      for (const ref of textRefs) {
+        if (!existingReferences.includes(ref) && ref !== prefix) {
+          existingReferences.push(ref);
+        }
+      }
+    }
+
+    // Detect if we're after a comma (adding additional reference)
+    // Check if there's a comma followed by optional whitespace before the prefix
+    isAfterComma = /,\s*[\w.-]*$/.test(textBeforeCursor);
+  }
 
   // Extract scope path information
   let currentModule: string | null = null;
@@ -327,6 +407,8 @@ export function getCursorContext(
     currentModule,
     currentFeature,
     currentRequirement,
+    existingReferences,
+    isAfterComma,
   };
 }
 
@@ -385,7 +467,7 @@ export function getReferenceCompletions(
   handlerContext: CompletionHandlerContext
 ): CompletionItem[] {
   const { symbolIndex, fileUri } = handlerContext;
-  const { prefix, scopePath } = context;
+  const { prefix, scopePath, existingReferences } = context;
   const completions: CompletionItem[] = [];
 
   // Collect all referenceable symbols (modules, features, requirements)
@@ -398,11 +480,19 @@ export function getReferenceCompletions(
   // Track paths we've already added to avoid duplicates
   const addedPaths = new Set<string>();
 
+  // Create set of existing references for fast lookup
+  const existingRefSet = new Set(existingReferences);
+
   for (const symbol of allSymbols) {
     const path = symbol.path;
 
     // Skip if already added (can happen with multi-file duplicates)
     if (addedPaths.has(path)) {
+      continue;
+    }
+
+    // Skip references already in the @depends-on clause
+    if (existingRefSet.has(path)) {
       continue;
     }
 

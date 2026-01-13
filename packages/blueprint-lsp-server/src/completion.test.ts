@@ -6,6 +6,8 @@ import {
   getCursorContext,
   getCurrentScope,
   findContainingBlock,
+  findContainingDependsOn,
+  extractExistingReferences,
   getKeywordCompletions,
   isKeywordValidInScope,
   getReferenceCompletions,
@@ -330,6 +332,117 @@ describe("completion", () => {
   });
 
   // ============================================================================
+  // Phase 4.1: Existing References Parsing
+  // ============================================================================
+
+  describe("existing references parsing", () => {
+    test("extracts existing references from @depends-on clause", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on storage.users, cache.sessions`;
+      const { tree } = createTestContext(source);
+
+      // Cursor at end of line, after the second reference
+      const context = getCursorContext(tree!, { line: 2, character: 43 }, source);
+      expect(context.isInDependsOn).toBe(true);
+      expect(context.existingReferences).toContain("storage.users");
+      expect(context.existingReferences).toContain("cache.sessions");
+    });
+
+    test("extracts single reference from @depends-on clause", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on storage.users`;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 2, character: 27 }, source);
+      expect(context.existingReferences).toContain("storage.users");
+    });
+
+    test("returns empty array when cursor is right after @depends-on", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on `;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 2, character: 16 }, source);
+      expect(context.existingReferences).toEqual([]);
+    });
+
+    test("detects isAfterComma when adding additional reference", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on storage.users, `;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 2, character: 31 }, source);
+      expect(context.isAfterComma).toBe(true);
+    });
+
+    test("detects isAfterComma is false for first reference", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on `;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 2, character: 16 }, source);
+      expect(context.isAfterComma).toBe(false);
+    });
+
+    test("detects isAfterComma with partial reference", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on storage.users, ca`;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 2, character: 33 }, source);
+      expect(context.isAfterComma).toBe(true);
+      expect(context.prefix).toBe("ca");
+    });
+  });
+
+  describe("findContainingDependsOn", () => {
+    test("finds depends_on node when cursor is inside", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on storage.users`;
+      const { tree } = createTestContext(source);
+
+      const dependsOnNode = findContainingDependsOn(tree!, { line: 2, character: 20 });
+      expect(dependsOnNode).not.toBeNull();
+      expect(dependsOnNode!.type).toBe("depends_on");
+    });
+
+    test("returns null when cursor is not in depends_on", () => {
+      const source = `@module auth
+  @feature login
+    Description text.`;
+      const { tree } = createTestContext(source);
+
+      const dependsOnNode = findContainingDependsOn(tree!, { line: 2, character: 10 });
+      expect(dependsOnNode).toBeNull();
+    });
+  });
+
+  describe("extractExistingReferences", () => {
+    test("extracts all references from depends_on node", () => {
+      const source = `@module auth
+  @feature login
+    @depends-on storage.users, cache.sessions, logging.audit`;
+      const { tree } = createTestContext(source);
+
+      const dependsOnNode = findContainingDependsOn(tree!, { line: 2, character: 20 });
+      expect(dependsOnNode).not.toBeNull();
+
+      const refs = extractExistingReferences(dependsOnNode!);
+      expect(refs).toContain("storage.users");
+      expect(refs).toContain("cache.sessions");
+      expect(refs).toContain("logging.audit");
+      expect(refs).toHaveLength(3);
+    });
+  });
+
+  // ============================================================================
   // Phase 3: Keyword Completion
   // ============================================================================
 
@@ -493,6 +606,8 @@ describe("completion", () => {
         currentModule: "storage",
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -532,6 +647,8 @@ describe("completion", () => {
         currentModule: "auth",
         currentFeature: "login",
         currentRequirement: "basic-auth",
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -573,6 +690,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -585,6 +704,53 @@ describe("completion", () => {
       expect(labels).toContain("storage");
       expect(labels).toContain("storage.connect");
       expect(labels).not.toContain("auth");
+    });
+
+    test("filters out existing references in @depends-on clause", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Basic auth.
+
+@module storage
+  @feature database
+    @requirement connect
+      Connect to database.
+
+@module cache
+  @feature redis
+    Redis caching.`;
+
+      const { symbolIndex } = createTestContext(source);
+      // Simulate context where "auth" and "storage" are already referenced
+      const context: CompletionContext = {
+        scope: "feature",
+        scopePath: "cache.redis",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "cache",
+        currentFeature: "redis",
+        currentRequirement: null,
+        existingReferences: ["auth", "storage"],
+        isAfterComma: true,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // "auth" and "storage" should be filtered out (already referenced)
+      expect(labels).not.toContain("auth");
+      expect(labels).not.toContain("storage");
+      // But their children should still be available
+      expect(labels).toContain("auth.login");
+      expect(labels).toContain("storage.database");
     });
 
     test("limits results to 50", () => {
@@ -606,6 +772,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -645,6 +813,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -682,6 +852,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -733,6 +905,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -782,6 +956,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -820,6 +996,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -854,6 +1032,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -882,6 +1062,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
@@ -914,6 +1096,8 @@ describe("completion", () => {
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
       };
       const handlerContext: CompletionHandlerContext = {
         symbolIndex,
