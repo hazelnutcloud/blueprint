@@ -19,7 +19,7 @@ import {
 } from "vscode-languageserver/node";
 import type { Position, CompletionParams } from "vscode-languageserver/node";
 import type { Tree, Node } from "./parser";
-import type { CrossFileSymbolIndex } from "./symbol-index";
+import type { CrossFileSymbolIndex, IndexedSymbol } from "./symbol-index";
 
 // ============================================================================
 // Constants
@@ -455,12 +455,117 @@ export function getKeywordCompletions(scope: CompletionScope, prefix: string): C
 }
 
 // ============================================================================
+// Reference Matching and Scoring
+// ============================================================================
+
+/**
+ * Check if a symbol matches a query string for reference completion.
+ * Matching is case-insensitive and supports:
+ * - Prefix matching (query matches start of name or path)
+ * - Substring matching (query is contained in name or path)
+ * - Fuzzy matching (query characters appear in order in name)
+ */
+export function matchesReferenceQuery(symbol: IndexedSymbol, query: string): boolean {
+  if (!query) {
+    return true; // Empty query matches everything
+  }
+
+  const lowerQuery = query.toLowerCase();
+  const name = symbol.node.name?.toLowerCase() ?? "";
+  const path = symbol.path.toLowerCase();
+
+  // Exact prefix match on name
+  if (name.startsWith(lowerQuery)) {
+    return true;
+  }
+
+  // Substring match on name
+  if (name.includes(lowerQuery)) {
+    return true;
+  }
+
+  // Substring match on full path
+  if (path.includes(lowerQuery)) {
+    return true;
+  }
+
+  // Fuzzy match: query characters appear in order in name
+  let queryIdx = 0;
+  for (let i = 0; i < name.length && queryIdx < lowerQuery.length; i++) {
+    if (name[i] === lowerQuery[queryIdx]) {
+      queryIdx++;
+    }
+  }
+  if (queryIdx === lowerQuery.length) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Calculate a relevance score for sorting reference completion results.
+ * Higher scores are better matches.
+ *
+ * Scoring tiers:
+ * - 100: Exact match on name
+ * - 80-90: Prefix match on name
+ * - 70: Exact match on path segment
+ * - 50-60: Substring match on name (earlier position is better)
+ * - 40: Substring match on path
+ * - 20: Fuzzy match (fallback)
+ */
+export function calculateReferenceScore(symbol: IndexedSymbol, query: string): number {
+  if (!query) {
+    return 0;
+  }
+
+  const lowerQuery = query.toLowerCase();
+  const name = symbol.node.name?.toLowerCase() ?? "";
+  const path = symbol.path.toLowerCase();
+
+  // Exact match on name
+  if (name === lowerQuery) {
+    return 100;
+  }
+
+  // Prefix match on name
+  if (name.startsWith(lowerQuery)) {
+    return 80 + (lowerQuery.length / name.length) * 10;
+  }
+
+  // Exact match on path segment
+  const pathParts = path.split(".");
+  if (pathParts.includes(lowerQuery)) {
+    return 70;
+  }
+
+  // Substring match on name (earlier position is better)
+  const nameIdx = name.indexOf(lowerQuery);
+  if (nameIdx !== -1) {
+    return 60 - Math.min(nameIdx, 10);
+  }
+
+  // Substring match on path
+  if (path.includes(lowerQuery)) {
+    return 40;
+  }
+
+  // Fuzzy match (fallback)
+  return 20;
+}
+
+// ============================================================================
 // Reference Completion (for @depends-on)
 // ============================================================================
 
 /**
  * Get reference completions for @depends-on context.
  * Returns symbols from the symbol index that can be referenced.
+ *
+ * Uses fuzzy matching and scoring to rank results:
+ * - exact match > prefix match > substring match > fuzzy match
+ * - Local symbols (same file) are boosted in ranking
  */
 export function getReferenceCompletions(
   context: CompletionContext,
@@ -468,7 +573,6 @@ export function getReferenceCompletions(
 ): CompletionItem[] {
   const { symbolIndex, fileUri } = handlerContext;
   const { prefix, scopePath, existingReferences } = context;
-  const completions: CompletionItem[] = [];
 
   // Collect all referenceable symbols (modules, features, requirements)
   const allSymbols = [
@@ -482,6 +586,9 @@ export function getReferenceCompletions(
 
   // Create set of existing references for fast lookup
   const existingRefSet = new Set(existingReferences);
+
+  // Collect matching symbols with their scores
+  const scoredSymbols: Array<{ symbol: IndexedSymbol; score: number; isLocal: boolean }> = [];
 
   for (const symbol of allSymbols) {
     const path = symbol.path;
@@ -506,10 +613,41 @@ export function getReferenceCompletions(
       continue;
     }
 
-    // Filter by prefix if provided
-    if (prefix && !path.toLowerCase().includes(prefix.toLowerCase())) {
+    // Use fuzzy matching to filter symbols
+    if (!matchesReferenceQuery(symbol, prefix)) {
       continue;
     }
+
+    // Calculate relevance score
+    const score = calculateReferenceScore(symbol, prefix);
+    const isLocal = symbol.fileUri === fileUri;
+
+    scoredSymbols.push({ symbol, score, isLocal });
+    addedPaths.add(path);
+  }
+
+  // Sort by: local boost first, then by score (descending), then by name (ascending)
+  scoredSymbols.sort((a, b) => {
+    // Local symbols come first
+    if (a.isLocal !== b.isLocal) {
+      return a.isLocal ? -1 : 1;
+    }
+
+    // Higher score is better
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+
+    // Alphabetical by path as tiebreaker
+    return a.symbol.path.localeCompare(b.symbol.path);
+  });
+
+  // Convert to CompletionItems with sortText based on sorted order
+  const completions: CompletionItem[] = [];
+
+  for (let i = 0; i < scoredSymbols.length && i < 50; i++) {
+    const { symbol, isLocal } = scoredSymbols[i];
+    const path = symbol.path;
 
     // Map symbol kind to CompletionItemKind
     let kind: CompletionItemKind;
@@ -527,14 +665,15 @@ export function getReferenceCompletions(
         kind = CompletionItemKind.Reference;
     }
 
-    // Boost local symbols (same file) by adding them with higher sort priority
-    const isLocal = symbol.fileUri === fileUri;
-    const sortText = isLocal ? `0${path}` : `1${path}`;
     const fileName = symbol.fileUri.split("/").pop() ?? symbol.fileUri;
 
     // Extract description from the symbol's AST node if available
     const description =
       "description" in symbol.node && symbol.node.description ? symbol.node.description : undefined;
+
+    // Use sortText to preserve the sorted order (0-padded index)
+    // Local symbols get "0" prefix, remote get "1" prefix
+    const sortText = `${isLocal ? "0" : "1"}${String(i).padStart(4, "0")}`;
 
     const item: CompletionItem = {
       label: path,
@@ -553,12 +692,9 @@ export function getReferenceCompletions(
     }
 
     completions.push(item);
-
-    addedPaths.add(path);
   }
 
-  // Limit results to prevent overwhelming the UI
-  return completions.slice(0, 50);
+  return completions;
 }
 
 // ============================================================================

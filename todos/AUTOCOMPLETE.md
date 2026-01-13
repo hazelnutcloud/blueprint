@@ -115,8 +115,8 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 ### 4.3 Reference Filtering and Sorting
 
 - [x] Apply prefix matching from partial reference text
-- [ ] Score results using existing `matchesQuery` logic from `workspace-symbol.ts`
-- [ ] Sort by: exact match > prefix match > substring match > fuzzy match
+- [x] Score results using existing `matchesQuery` logic from `workspace-symbol.ts`
+- [x] Sort by: exact match > prefix match > substring match > fuzzy match
 - [x] Boost local symbols (same file) in ranking
 - [x] Limit results to reasonable count (e.g., 50)
 

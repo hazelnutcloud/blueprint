@@ -13,6 +13,8 @@ import {
   getReferenceCompletions,
   getPathCompletions,
   buildCompletions,
+  matchesReferenceQuery,
+  calculateReferenceScore,
   type CompletionContext,
   type CompletionHandlerContext,
 } from "./completion";
@@ -1071,6 +1073,237 @@ describe("completion", () => {
       // moduleB doesn't depend on moduleA, so it's safe
       expect(labels).toContain("moduleB");
       expect(labels).toContain("moduleB.featureB");
+    });
+
+    test("sorts results by score - exact match first", () => {
+      const source = `@module auth
+  @feature auth-feature
+    Auth feature.
+  @feature login
+    Login feature.
+  @feature authentication
+    Authentication feature.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "auth",
+        isInSkipZone: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // "auth" should be first (exact match)
+      expect(labels[0]).toBe("auth");
+      // "auth-feature" should come before "authentication" (prefix on name vs substring)
+      const authFeatureIdx = labels.indexOf("auth.auth-feature");
+      const authenticationIdx = labels.indexOf("auth.authentication");
+      expect(authFeatureIdx).toBeLessThan(authenticationIdx);
+    });
+
+    test("sorts results by score - prefix match before substring match", () => {
+      const source = `@module storage
+  @feature database
+    Database feature.
+
+@module authorization
+  @feature oauth
+    OAuth feature.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "auth",
+        isInSkipZone: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // "authorization" (prefix match) should come before anything else
+      expect(labels[0]).toBe("authorization");
+    });
+
+    test("fuzzy matching finds symbols with characters in order", () => {
+      const source = `@module auth
+  @feature basic-authentication
+    Basic auth feature.
+  @feature login
+    Login feature.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      // Search for "bauth" - should fuzzy match "basic-authentication"
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "bauth",
+        isInSkipZone: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // "basic-authentication" should be found via fuzzy match
+      expect(labels).toContain("auth.basic-authentication");
+      // "login" should NOT match "bauth"
+      expect(labels).not.toContain("auth.login");
+    });
+  });
+
+  // ============================================================================
+  // Phase 4.3: Reference Matching and Scoring Unit Tests
+  // ============================================================================
+
+  describe("matchesReferenceQuery", () => {
+    function createMockSymbol(name: string, path: string) {
+      return {
+        kind: "module" as const,
+        path,
+        fileUri: "file:///test.bp",
+        node: { name, location: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 } },
+      };
+    }
+
+    test("empty query matches everything", () => {
+      const symbol = createMockSymbol("auth", "auth");
+      expect(matchesReferenceQuery(symbol, "")).toBe(true);
+    });
+
+    test("matches exact prefix on name", () => {
+      const symbol = createMockSymbol("authentication", "auth.authentication");
+      expect(matchesReferenceQuery(symbol, "auth")).toBe(true);
+    });
+
+    test("matches substring in name", () => {
+      const symbol = createMockSymbol("basic-authentication", "auth.basic-authentication");
+      expect(matchesReferenceQuery(symbol, "auth")).toBe(true);
+    });
+
+    test("matches substring in path", () => {
+      const symbol = createMockSymbol("login", "auth.login");
+      expect(matchesReferenceQuery(symbol, "auth")).toBe(true);
+    });
+
+    test("matches fuzzy pattern in name", () => {
+      const symbol = createMockSymbol("basic-authentication", "auth.basic-authentication");
+      // "bauth" - b...auth should fuzzy match
+      expect(matchesReferenceQuery(symbol, "bauth")).toBe(true);
+    });
+
+    test("does not match unrelated query", () => {
+      const symbol = createMockSymbol("storage", "storage");
+      expect(matchesReferenceQuery(symbol, "auth")).toBe(false);
+    });
+
+    test("matching is case-insensitive", () => {
+      const symbol = createMockSymbol("Authentication", "auth.Authentication");
+      expect(matchesReferenceQuery(symbol, "AUTH")).toBe(true);
+      expect(matchesReferenceQuery(symbol, "authentication")).toBe(true);
+    });
+  });
+
+  describe("calculateReferenceScore", () => {
+    function createMockSymbol(name: string, path: string) {
+      return {
+        kind: "module" as const,
+        path,
+        fileUri: "file:///test.bp",
+        node: { name, location: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 } },
+      };
+    }
+
+    test("returns 0 for empty query", () => {
+      const symbol = createMockSymbol("auth", "auth");
+      expect(calculateReferenceScore(symbol, "")).toBe(0);
+    });
+
+    test("returns 100 for exact match on name", () => {
+      const symbol = createMockSymbol("auth", "module.auth");
+      expect(calculateReferenceScore(symbol, "auth")).toBe(100);
+    });
+
+    test("returns high score (80-90) for prefix match on name", () => {
+      const symbol = createMockSymbol("authentication", "auth.authentication");
+      const score = calculateReferenceScore(symbol, "auth");
+      expect(score).toBeGreaterThanOrEqual(80);
+      expect(score).toBeLessThanOrEqual(90);
+    });
+
+    test("returns 70 for exact match on path segment", () => {
+      const symbol = createMockSymbol("login", "auth.login");
+      expect(calculateReferenceScore(symbol, "auth")).toBe(70);
+    });
+
+    test("returns 50-60 for substring match on name", () => {
+      // Use a path without "tion" as a segment so it doesn't match path segment
+      const symbol = createMockSymbol("basic-authentication", "module.basic-authentication");
+      const score = calculateReferenceScore(symbol, "tion");
+      expect(score).toBeGreaterThanOrEqual(50);
+      expect(score).toBeLessThanOrEqual(60);
+    });
+
+    test("returns 40 for substring match on path", () => {
+      const symbol = createMockSymbol("login", "authentication.login");
+      const score = calculateReferenceScore(symbol, "auth");
+      expect(score).toBe(40);
+    });
+
+    test("returns 20 for fuzzy match only", () => {
+      // "bauth" fuzzy matches "basic-authentication" but not as prefix/substring
+      const symbol = createMockSymbol("basic-authentication", "basic.basic-authentication");
+      const score = calculateReferenceScore(symbol, "bauth");
+      expect(score).toBe(20);
+    });
+
+    test("higher prefix match ratio gives higher score", () => {
+      const shortSymbol = createMockSymbol("auth", "auth");
+      const longSymbol = createMockSymbol("authentication", "authentication");
+      // Both are prefix matches, but "auth" is exact, "authentication" is partial
+      const shortScore = calculateReferenceScore(shortSymbol, "auth");
+      const longScore = calculateReferenceScore(longSymbol, "auth");
+      expect(shortScore).toBeGreaterThan(longScore);
     });
   });
 
