@@ -95,14 +95,72 @@ Configure the colors used for requirement status highlighting. Colors should be 
 
 ## Keyboard Shortcuts
 
-| Action            | Default Shortcut     | Description                                    |
-| ----------------- | -------------------- | ---------------------------------------------- |
-| Go to Definition  | `Alt+Click` or `F12` | Navigate to ticket or referenced requirement   |
-| Find References   | `Shift+F12`          | Find all dependencies on a requirement         |
-| Hover             | Mouse hover          | Show ticket status and constraint satisfaction |
-| Quick Fix         | `Ctrl+.` / `Cmd+.`   | Show code actions (create ticket, fix typo)    |
-| Document Symbols  | `Ctrl+Shift+O`       | Browse modules, features, requirements         |
-| Workspace Symbols | `Ctrl+T`             | Search across all `.bp` files                  |
+The Blueprint extension uses standard VS Code keybindings for LSP features. All shortcuts work in `.bp` files.
+
+### Navigation
+
+| Action           | Windows/Linux        | macOS                | Description                                  |
+| ---------------- | -------------------- | -------------------- | -------------------------------------------- |
+| Go to Definition | `Alt+Click` or `F12` | `Alt+Click` or `F12` | Navigate to ticket or referenced requirement |
+| Peek Definition  | `Alt+F12`            | `Option+F12`         | Peek definition in inline editor             |
+| Find References  | `Shift+F12`          | `Shift+F12`          | Find all `@depends-on` references            |
+| Go Back          | `Alt+Left`           | `Ctrl+-`             | Navigate back after go-to-definition         |
+| Go Forward       | `Alt+Right`          | `Ctrl+Shift+-`       | Navigate forward in navigation history       |
+
+> **Note**: The go-to-definition modifier key is configurable via `blueprint.gotoModifier`. When set to `alt` (default), use Alt+Click. When set to `ctrlCmd`, use Ctrl+Click (Windows/Linux) or Cmd+Click (macOS).
+
+### Symbols & Search
+
+| Action                 | Windows/Linux       | macOS              | Description                            |
+| ---------------------- | ------------------- | ------------------ | -------------------------------------- |
+| Document Symbols       | `Ctrl+Shift+O`      | `Cmd+Shift+O`      | Browse modules, features, requirements |
+| Workspace Symbols      | `Ctrl+T`            | `Cmd+T`            | Search across all `.bp` files          |
+| Go to Symbol in Editor | `Ctrl+Shift+O`, `@` | `Cmd+Shift+O`, `@` | Filter symbols by type with `@:`       |
+
+### Hover & Information
+
+| Action        | Trigger                         | Description                                                    |
+| ------------- | ------------------------------- | -------------------------------------------------------------- |
+| Hover Info    | Mouse hover                     | Show ticket status, constraint satisfaction, and blocking info |
+| Trigger Hover | `Ctrl+K Ctrl+I` / `Cmd+K Cmd+I` | Show hover at cursor position                                  |
+
+> **Tip**: Configure hover delay with `blueprint.hoverDelay` (default: 300ms).
+
+### Code Actions & Quick Fixes
+
+| Action                | Windows/Linux  | macOS         | Description                          |
+| --------------------- | -------------- | ------------- | ------------------------------------ |
+| Quick Fix             | `Ctrl+.`       | `Cmd+.`       | Create ticket, fix typo in reference |
+| Show All Code Actions | `Ctrl+Shift+.` | `Cmd+Shift+.` | Show all available code actions      |
+
+### Comments
+
+| Action               | Windows/Linux | macOS            | Description                 |
+| -------------------- | ------------- | ---------------- | --------------------------- |
+| Toggle Line Comment  | `Ctrl+/`      | `Cmd+/`          | Toggle `//` comment on line |
+| Toggle Block Comment | `Shift+Alt+A` | `Shift+Option+A` | Toggle `/* */` comment      |
+
+### Folding
+
+| Action       | Windows/Linux   | macOS          | Description           |
+| ------------ | --------------- | -------------- | --------------------- |
+| Fold         | `Ctrl+Shift+[`  | `Cmd+Option+[` | Fold current region   |
+| Unfold       | `Ctrl+Shift+]`  | `Cmd+Option+]` | Unfold current region |
+| Fold All     | `Ctrl+K Ctrl+0` | `Cmd+K Cmd+0`  | Fold all regions      |
+| Unfold All   | `Ctrl+K Ctrl+J` | `Cmd+K Cmd+J`  | Unfold all regions    |
+| Fold Level N | `Ctrl+K Ctrl+N` | `Cmd+K Cmd+N`  | Fold to level N (1-7) |
+
+### Editor Keybindings by Platform
+
+Per [SPEC.md Section 8.4](https://github.com/blueprintlang/blueprint/blob/main/SPEC.md#84-editor-keybinding-defaults), these are the go-to-definition shortcuts across editors:
+
+| Editor         | Go-to-Definition |
+| -------------- | ---------------- |
+| VS Code        | Alt+Click        |
+| JetBrains IDEs | Alt+Click        |
+| Neovim         | `gd`             |
+| Emacs          | `M-.`            |
+| Sublime Text   | Alt+Click        |
 
 ## Development
 
