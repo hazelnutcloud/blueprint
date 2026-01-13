@@ -440,13 +440,6 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 
 ## Phase 14: Packaging & Distribution
 
-### 14.1 Build Pipeline
-
-- [ ] Configure zshy bundler for server
-- [ ] Configure zshy bundler for client extension
-- [ ] Set up tree-sitter WASM compilation for browser compatibility
-- [ ] Create production build scripts
-
 ### 14.2 VS Code Extension Packaging
 
 - [x] Create `.vscodeignore` for extension (Created comprehensive `.vscodeignore` that excludes source files, tests, source maps, type declarations, and development artifacts. Added `package` and `package:ls` scripts to `package.json` using `--no-dependencies` flag to properly handle monorepo workspace. The extension package includes only: `package.json`, `README.md`, `language-configuration.json`, `syntaxes/blueprint.tmLanguage.json`, `out/extension.js`, `out/index.js`, and `icons/*.svg`.)
