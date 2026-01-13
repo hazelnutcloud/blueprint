@@ -124,7 +124,7 @@
           "type": "number",
           "default": 300,
           "minimum": 0,
-          "maximum": 1e4,
+          "maximum": 10000,
           "description": "Delay in milliseconds after which the hover is shown for Blueprint files"
         }
       }
