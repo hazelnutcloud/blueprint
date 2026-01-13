@@ -453,7 +453,9 @@ describe("tickets", () => {
 
       // Valid because version warning is non-critical
       expect(result.valid).toBe(true);
-      expect(result.errors.some((e) => e.message.includes("unknown schema version"))).toBe(true);
+      expect(result.errors.some((e) => e.message.includes("Unsupported schema version"))).toBe(
+        true
+      );
     });
 
     test("rejects missing source", () => {
@@ -498,7 +500,7 @@ describe("tickets", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.message.includes("duplicate ticket id"))).toBe(true);
+      expect(result.errors.some((e) => e.message.includes("Duplicate ticket ID"))).toBe(true);
     });
 
     test("rejects non-object ticket", () => {
@@ -509,7 +511,7 @@ describe("tickets", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.message === "ticket must be an object")).toBe(true);
+      expect(result.errors.some((e) => e.message.includes("Ticket must be an object"))).toBe(true);
     });
 
     test("rejects missing ticket.id", () => {
@@ -799,14 +801,14 @@ describe("tickets", () => {
       const result = parseTicketFileContent("{ not valid json }");
 
       expect(result.valid).toBe(false);
-      expect(result.errors[0]?.message).toContain("invalid JSON");
+      expect(result.errors[0]?.message).toContain("Invalid JSON syntax");
     });
 
     test("returns error for empty string", () => {
       const result = parseTicketFileContent("");
 
       expect(result.valid).toBe(false);
-      expect(result.errors[0]?.message).toContain("invalid JSON");
+      expect(result.errors[0]?.message).toContain("Invalid JSON syntax");
     });
 
     test("validates parsed content", () => {
@@ -866,7 +868,7 @@ describe("tickets", () => {
       const result = await parseTicketFile(join(testDir, "nonexistent.tickets.json"));
 
       expect(result.valid).toBe(false);
-      expect(result.errors[0]?.message).toContain("failed to read file");
+      expect(result.errors[0]?.message).toContain("Failed to read ticket file");
     });
 
     test("returns error for invalid JSON in file", async () => {
@@ -876,7 +878,7 @@ describe("tickets", () => {
       const result = await parseTicketFile(ticketPath);
 
       expect(result.valid).toBe(false);
-      expect(result.errors[0]?.message).toContain("invalid JSON");
+      expect(result.errors[0]?.message).toContain("Invalid JSON syntax");
     });
 
     test("returns validation errors for invalid schema", async () => {

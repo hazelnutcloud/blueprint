@@ -80,7 +80,7 @@ function addCycleDiagnostics(cycle: CircularDependency, byFile: Map<string, Diag
           character: edge.reference.location.endColumn,
         },
       },
-      message: `Circular dependency detected: ${cyclePath}`,
+      message: `Circular dependency detected: ${cyclePath}. Remove one of the @depends-on declarations to break the cycle.`,
       source: "blueprint",
       code: "circular-dependency",
     };
@@ -133,7 +133,7 @@ export function computeUnresolvedReferenceDiagnostics(
           character: unresolvedRef.reference.location.endColumn,
         },
       },
-      message: `Reference to non-existent element: '${unresolvedRef.reference.path}'`,
+      message: `Reference to non-existent element: '${unresolvedRef.reference.path}'. Check for typos or ensure the target is defined.`,
       source: "blueprint",
       code: "unresolved-reference",
     };
@@ -226,7 +226,7 @@ export function computeNoTicketDiagnostics(
               (node as { name: string }).name.length,
           },
         },
-        message: `Requirement '${req.path}' has no associated ticket`,
+        message: `Requirement '${req.path}' has no associated ticket. Create a ticket in the .tickets.json file to track implementation.`,
         source: "blueprint",
         code: "no-ticket",
       };
@@ -300,7 +300,7 @@ export function computeOrphanedTicketDiagnostics(
             start: { line: 0, character: 0 },
             end: { line: 0, character: 0 },
           },
-          message: `Ticket '${ticket.id}' references removed requirement '${ticket.ref}'`,
+          message: `Ticket '${ticket.id}' references removed requirement '${ticket.ref}'. Update the ticket ref or mark it as obsolete.`,
           source: "blueprint",
           code: "orphaned-ticket",
         };
@@ -379,7 +379,7 @@ export function computeConstraintMismatchDiagnostics(
               start: { line: 0, character: 0 },
               end: { line: 0, character: 0 },
             },
-            message: `Ticket '${ticket.id}' claims to satisfy undefined constraint '${constraintName}' for requirement '${ticket.ref}'`,
+            message: `Ticket '${ticket.id}' references undefined constraint '${constraintName}' for requirement '${ticket.ref}'. Remove it from constraints_satisfied or add the constraint to the requirement.`,
             source: "blueprint",
             code: "constraint-mismatch",
           };

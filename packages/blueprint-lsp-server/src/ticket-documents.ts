@@ -188,7 +188,7 @@ export class TicketDocumentManager {
 
       // Determine severity based on error type
       // Version mismatch is a warning, everything else is an error
-      const severity = error.message.includes("unknown schema version")
+      const severity = error.message.includes("Unsupported schema version")
         ? DiagnosticSeverity.Warning
         : DiagnosticSeverity.Error;
 

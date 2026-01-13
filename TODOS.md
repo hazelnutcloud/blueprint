@@ -434,7 +434,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 - [ ] Add extension icon and branding
 - [ ] Write extension marketplace description
 - [ ] Create demo GIF/video
-- [ ] Review and improve error messages
+- [x] Review and improve error messages (Improved 40+ error messages across documents.ts, workspace-diagnostics.ts, tickets.ts, and ticket-documents.ts: added consistent capitalization and punctuation, added actionable hints and examples to missing identifier errors, improved orphaned element messages with guidance on proper structure, enhanced reference errors with dot notation examples, made ticket validation errors more descriptive with required field hints, changed "unknown schema version" to more accurate "Unsupported schema version" wording, and added suggestions for resolving each type of error.)
 
 ---
 

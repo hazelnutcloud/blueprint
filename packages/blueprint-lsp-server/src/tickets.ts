@@ -151,23 +151,24 @@ function issueToError(issue: v.BaseIssue<unknown>): TicketValidationError {
   if (issue.type === "object" && issue.expected === "Object") {
     // Check if this is a ticket in the array (path like "tickets[0]")
     if (/^tickets\[\d+\]$/.test(path)) {
-      message = "ticket must be an object";
+      message =
+        "Ticket must be an object with id, ref, description, status, and constraints_satisfied fields.";
     } else if (path) {
-      message = `${path} must be an object`;
+      message = `${path} must be an object.`;
     } else {
-      message = "ticket file must be a JSON object";
+      message = "Ticket file must be a JSON object with version, source, and tickets fields.";
     }
   } else if (issue.type === "array" && issue.expected === "Array") {
-    message = `${path} must be an array`;
+    message = `${path} must be an array.`;
   } else if (issue.type === "string" && issue.expected === "string") {
     if (path.includes(".")) {
       const field = path.split(".").pop();
-      message = `${path.replace(/\.[^.]+$/, "")}.${field} is required and must be a string`;
+      message = `${path.replace(/\.[^.]+$/, "")}.${field} is required and must be a string.`;
     } else {
-      message = `${path} is required and must be a string`;
+      message = `${path} is required and must be a string.`;
     }
   } else if (issue.type === "picklist") {
-    message = `ticket.status must be one of: ${VALID_TICKET_STATUSES.join(", ")}`;
+    message = `Invalid ticket status. Must be one of: ${VALID_TICKET_STATUSES.join(", ")}.`;
   } else {
     message = issue.message;
   }
@@ -194,7 +195,12 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
     return {
       valid: false,
       data: null,
-      errors: [{ message: "ticket file must be a JSON object", path: "" }],
+      errors: [
+        {
+          message: "Ticket file must be a JSON object with version, source, and tickets fields.",
+          path: "",
+        },
+      ],
     };
   }
 
@@ -219,7 +225,7 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
   // Check for version mismatch (warning, not error)
   if (ticketFile.version !== TICKET_SCHEMA_VERSION) {
     errors.push({
-      message: `unknown schema version "${ticketFile.version}", expected "${TICKET_SCHEMA_VERSION}"`,
+      message: `Unsupported schema version "${ticketFile.version}". Expected "${TICKET_SCHEMA_VERSION}". Some features may not work correctly.`,
       path: "version",
       value: ticketFile.version,
     });
@@ -231,7 +237,7 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
     const ticket = ticketFile.tickets[i]!;
     if (ticketIds.has(ticket.id)) {
       errors.push({
-        message: `duplicate ticket id "${ticket.id}"`,
+        message: `Duplicate ticket ID "${ticket.id}". Each ticket must have a unique ID.`,
         path: `tickets[${i}].id`,
         value: ticket.id,
       });
@@ -240,7 +246,7 @@ export function validateTicketFile(data: unknown): TicketValidationResult {
   }
 
   // If we have duplicate IDs, that's a critical error
-  const hasDuplicates = errors.some((e) => e.message.includes("duplicate ticket id"));
+  const hasDuplicates = errors.some((e) => e.message.includes("Duplicate ticket ID"));
   if (hasDuplicates) {
     return {
       valid: false,
@@ -272,7 +278,7 @@ export function parseTicketFileContent(jsonString: string): TicketValidationResu
       data: null,
       errors: [
         {
-          message: `invalid JSON: ${e instanceof Error ? e.message : String(e)}`,
+          message: `Invalid JSON syntax: ${e instanceof Error ? e.message : String(e)}`,
           path: "",
         },
       ],
@@ -298,7 +304,7 @@ export async function parseTicketFile(ticketFilePath: string): Promise<TicketVal
       data: null,
       errors: [
         {
-          message: `failed to read file: ${e instanceof Error ? e.message : String(e)}`,
+          message: `Failed to read ticket file: ${e instanceof Error ? e.message : String(e)}`,
           path: "",
         },
       ],

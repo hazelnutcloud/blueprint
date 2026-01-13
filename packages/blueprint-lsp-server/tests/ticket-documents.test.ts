@@ -105,7 +105,7 @@ describe("TicketDocumentManager", () => {
       expect(state.hasErrors).toBe(true);
       expect(state.data).toBeNull();
       expect(state.diagnostics).toHaveLength(1);
-      expect(state.diagnostics[0]?.message).toContain("invalid JSON");
+      expect(state.diagnostics[0]?.message).toContain("Invalid JSON syntax");
       expect(state.diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
     });
 
@@ -231,7 +231,7 @@ describe("TicketDocumentManager", () => {
       const state = manager.onDocumentOpen("file:///test.tickets.json", 1, content);
 
       expect(state.hasErrors).toBe(true);
-      expect(state.diagnostics.some((d) => d.message.includes("duplicate ticket id"))).toBe(true);
+      expect(state.diagnostics.some((d) => d.message.includes("Duplicate ticket ID"))).toBe(true);
     });
   });
 
@@ -249,7 +249,7 @@ describe("TicketDocumentManager", () => {
       expect(state.hasErrors).toBe(false); // Version mismatch doesn't fail validation
       expect(state.diagnostics).toHaveLength(1);
       expect(state.diagnostics[0]?.severity).toBe(DiagnosticSeverity.Warning);
-      expect(state.diagnostics[0]?.message).toContain("unknown schema version");
+      expect(state.diagnostics[0]?.message).toContain("Unsupported schema version");
     });
   });
 
