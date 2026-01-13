@@ -253,8 +253,8 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 9.3 Performance Optimization
 
-- [ ] Profile completion performance with large workspaces
-- [ ] Add caching for frequently accessed data
+- [x] Profile completion performance with large workspaces
+- [x] Add caching for frequently accessed data
 - [ ] Implement debouncing if needed
 - [ ] Consider incremental updates to symbol index
 

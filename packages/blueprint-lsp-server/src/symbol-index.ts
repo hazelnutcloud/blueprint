@@ -86,6 +86,13 @@ export class CrossFileSymbolIndex {
     new Map();
 
   /**
+   * Cache for getSymbolsByKind() results.
+   * This cache is invalidated when files are added or removed.
+   * Key: symbol kind, Value: cached array of symbols of that kind
+   */
+  private symbolsByKindCache: Map<SymbolKind, IndexedSymbol[]> = new Map();
+
+  /**
    * Add or update symbols from a parsed document.
    *
    * @param fileUri The URI of the file being indexed
@@ -94,6 +101,9 @@ export class CrossFileSymbolIndex {
   addFile(fileUri: string, document: DocumentNode): void {
     // Remove existing symbols for this file first
     this.removeFile(fileUri);
+
+    // Invalidate the symbols-by-kind cache since we're adding new symbols
+    this.symbolsByKindCache.clear();
 
     const { symbolTable } = buildSymbolTable(document);
     this.fileSymbols.set(fileUri, symbolTable);
@@ -157,6 +167,9 @@ export class CrossFileSymbolIndex {
     if (!paths) {
       return;
     }
+
+    // Invalidate the symbols-by-kind cache since we're removing symbols
+    this.symbolsByKindCache.clear();
 
     for (const path of paths) {
       const symbols = this.globalSymbols.get(path);
@@ -328,10 +341,20 @@ export class CrossFileSymbolIndex {
   /**
    * Get all symbols of a specific kind.
    *
+   * Results are cached for performance - the cache is invalidated when
+   * files are added or removed from the index.
+   *
    * @param kind The kind of symbols to retrieve
    * @returns Array of symbols of that kind
    */
   getSymbolsByKind(kind: SymbolKind): IndexedSymbol[] {
+    // Check cache first
+    const cached = this.symbolsByKindCache.get(kind);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    // Build the result
     const result: IndexedSymbol[] = [];
     for (const symbols of this.globalSymbols.values()) {
       for (const symbol of symbols) {
@@ -340,6 +363,9 @@ export class CrossFileSymbolIndex {
         }
       }
     }
+
+    // Cache the result
+    this.symbolsByKindCache.set(kind, result);
     return result;
   }
 
@@ -440,6 +466,7 @@ export class CrossFileSymbolIndex {
     this.fileSymbols.clear();
     this.symbolsByFile.clear();
     this.fileReferences.clear();
+    this.symbolsByKindCache.clear();
   }
 
   /**
