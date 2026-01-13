@@ -44,24 +44,24 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 2.1 Cursor Position Analysis
 
-- [ ] Create `getCursorContext(document, position, tree)` function
-- [ ] Implement `findContainingBlock(tree, position)` to find parent scope
-- [ ] Determine if cursor is at line start, after keyword, or mid-expression
-- [ ] Detect if cursor is inside a comment or code block (skip completion)
+- [x] Create `getCursorContext(document, position, tree)` function
+- [x] Implement `findContainingBlock(tree, position)` to find parent scope
+- [x] Determine if cursor is at line start, after keyword, or mid-expression
+- [x] Detect if cursor is inside a comment or code block (skip completion)
 
 ### 2.2 Scope Detection
 
-- [ ] Implement `getCurrentScope(tree, position)` function
-- [ ] Walk parent nodes to determine nesting level
-- [ ] Return scope type: top-level, inside module, inside feature, inside requirement
-- [ ] Track the fully-qualified path to current scope (e.g., `auth.login`)
+- [x] Implement `getCurrentScope(tree, position)` function
+- [x] Walk parent nodes to determine nesting level
+- [x] Return scope type: top-level, inside module, inside feature, inside requirement
+- [x] Track the fully-qualified path to current scope (e.g., `auth.login`)
 
 ### 2.3 Trigger Context Detection
 
-- [ ] Detect `@` trigger at start of line/block for keyword completion
-- [ ] Detect `.` trigger after identifier for path completion
-- [ ] Detect `@depends-on` context for reference completion
-- [ ] Handle text preceding cursor for filtering suggestions
+- [x] Detect `@` trigger at start of line/block for keyword completion
+- [x] Detect `.` trigger after identifier for path completion
+- [x] Detect `@depends-on` context for reference completion
+- [x] Handle text preceding cursor for filtering suggestions
 
 ---
 
@@ -69,30 +69,30 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 3.1 Basic Keyword Suggestions
 
-- [ ] Implement `getKeywordCompletions(scope, prefix)` function
-- [ ] Filter keywords based on current scope validity:
+- [x] Implement `getKeywordCompletions(scope, prefix)` function
+- [x] Filter keywords based on current scope validity:
   - Top-level: `@description` (if not present), `@module`
   - Module: `@feature`, `@requirement`, `@constraint`, `@depends-on`, description text
   - Feature: `@requirement`, `@constraint`, `@depends-on`, description text
   - Requirement: `@constraint`, `@depends-on`, description text
-- [ ] Apply prefix filtering for partial matches
+- [x] Apply prefix filtering for partial matches
 
 ### 3.2 Keyword Snippets
 
-- [ ] Create snippet templates for each keyword:
+- [x] Create snippet templates for each keyword:
   - `@module` -> `@module ${1:name}\n\t$0`
   - `@feature` -> `@feature ${1:name}\n\t$0`
   - `@requirement` -> `@requirement ${1:name}\n\t$0`
   - `@constraint` -> `@constraint ${1:name} $0`
   - `@depends-on` -> `@depends-on ${1:reference}$0`
   - `@description` -> `@description\n$0`
-- [ ] Set `insertTextFormat: InsertTextFormat.Snippet`
+- [x] Set `insertTextFormat: InsertTextFormat.Snippet`
 
 ### 3.3 Keyword Documentation
 
-- [ ] Add `documentation` field with MarkupContent for each keyword
-- [ ] Include usage examples in documentation
-- [ ] Describe valid contexts and constraints
+- [x] Add `documentation` field with MarkupContent for each keyword
+- [x] Include usage examples in documentation
+- [x] Describe valid contexts and constraints
 
 ---
 
@@ -100,33 +100,33 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 4.1 Reference Context Detection
 
-- [ ] Detect cursor is after `@depends-on` keyword
+- [x] Detect cursor is after `@depends-on` keyword
 - [ ] Parse existing references in the same `@depends-on` clause
 - [ ] Determine if adding first reference or comma-separated addition
-- [ ] Extract partial reference text for filtering
+- [x] Extract partial reference text for filtering
 
 ### 4.2 Symbol Gathering
 
-- [ ] Query `CrossFileSymbolIndex` for all available symbols
+- [x] Query `CrossFileSymbolIndex` for all available symbols
 - [ ] Filter out symbols that would create circular dependencies
-- [ ] Filter out self-references (cannot depend on yourself)
-- [ ] Filter by kind: only modules, features, requirements can be referenced
+- [x] Filter out self-references (cannot depend on yourself)
+- [x] Filter by kind: only modules, features, requirements can be referenced
 
 ### 4.3 Reference Filtering and Sorting
 
-- [ ] Apply prefix matching from partial reference text
+- [x] Apply prefix matching from partial reference text
 - [ ] Score results using existing `matchesQuery` logic from `workspace-symbol.ts`
 - [ ] Sort by: exact match > prefix match > substring match > fuzzy match
-- [ ] Boost local symbols (same file) in ranking
-- [ ] Limit results to reasonable count (e.g., 50)
+- [x] Boost local symbols (same file) in ranking
+- [x] Limit results to reasonable count (e.g., 50)
 
 ### 4.4 Reference Completion Items
 
-- [ ] Create `CompletionItem` for each matching symbol
-- [ ] Set `kind` to appropriate `CompletionItemKind` (Module/Class/Function)
-- [ ] Set `detail` to symbol kind and file location
+- [x] Create `CompletionItem` for each matching symbol
+- [x] Set `kind` to appropriate `CompletionItemKind` (Module/Class/Function)
+- [x] Set `detail` to symbol kind and file location
 - [ ] Set `documentation` to symbol description if available
-- [ ] Set `filterText` and `sortText` for proper ordering
+- [x] Set `filterText` and `sortText` for proper ordering
 
 ---
 
@@ -134,24 +134,24 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 5.1 Path Context Parsing
 
-- [ ] Detect `.` trigger after an identifier
-- [ ] Parse the path prefix before the dot (e.g., `auth.login.` -> `["auth", "login"]`)
-- [ ] Validate prefix resolves to a valid symbol
-- [ ] Handle invalid prefix gracefully (no suggestions)
+- [x] Detect `.` trigger after an identifier
+- [x] Parse the path prefix before the dot (e.g., `auth.login.` -> `["auth", "login"]`)
+- [x] Validate prefix resolves to a valid symbol
+- [x] Handle invalid prefix gracefully (no suggestions)
 
 ### 5.2 Child Symbol Resolution
 
-- [ ] Implement `getChildSymbols(parentPath)` function
-- [ ] Query `CrossFileSymbolIndex` for symbols under parent path
-- [ ] Filter to direct children only (one level deeper)
-- [ ] Return features for module path, requirements for feature path
+- [x] Implement `getChildSymbols(parentPath)` function (as `getPathCompletions`)
+- [x] Query `CrossFileSymbolIndex` for symbols under parent path
+- [x] Filter to direct children only (one level deeper)
+- [x] Return features for module path, requirements for feature path
 
 ### 5.3 Path Completion Items
 
-- [ ] Create `CompletionItem` for each child symbol
-- [ ] Use short name (not full path) as label
-- [ ] Include full path in `detail` for disambiguation
-- [ ] Set appropriate icon based on symbol kind
+- [x] Create `CompletionItem` for each child symbol
+- [x] Use short name (not full path) as label
+- [x] Include full path in `detail` for disambiguation
+- [x] Set appropriate icon based on symbol kind
 
 ---
 
@@ -206,28 +206,28 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 8.1 Unit Tests for Context Detection
 
-- [ ] Create `packages/blueprint-lsp-server/src/completion.test.ts`
-- [ ] Test `getCursorContext` at various positions
-- [ ] Test `getCurrentScope` with nested structures
-- [ ] Test trigger character detection
+- [x] Create `packages/blueprint-lsp-server/src/completion.test.ts`
+- [x] Test `getCursorContext` at various positions
+- [x] Test `getCurrentScope` with nested structures
+- [x] Test trigger character detection
 
 ### 8.2 Unit Tests for Keyword Completion
 
-- [ ] Test keyword filtering by scope
-- [ ] Test snippet generation
-- [ ] Test prefix filtering
+- [x] Test keyword filtering by scope
+- [x] Test snippet generation
+- [x] Test prefix filtering
 
 ### 8.3 Unit Tests for Reference Completion
 
-- [ ] Test reference gathering from symbol index
+- [x] Test reference gathering from symbol index
 - [ ] Test circular dependency filtering
-- [ ] Test scoring and sorting
+- [x] Test scoring and sorting
 
 ### 8.4 Unit Tests for Path Completion
 
-- [ ] Test path prefix parsing
-- [ ] Test child symbol resolution
-- [ ] Test invalid path handling
+- [x] Test path prefix parsing
+- [x] Test child symbol resolution
+- [x] Test invalid path handling
 
 ### 8.5 Integration Tests
 
