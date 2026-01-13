@@ -188,9 +188,9 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 7.1 Lazy Documentation Loading
 
-- [ ] Implement `onCompletionResolve` handler
-- [ ] Load full documentation only when item is focused
-- [ ] Fetch symbol details from AST for rich documentation
+- [x] Implement `onCompletionResolve` handler
+- [x] Load full documentation only when item is focused
+- [x] Fetch symbol details from AST for rich documentation
 
 ### 7.2 Rich Documentation Content
 

@@ -18,10 +18,12 @@ import {
   collectConstraintNames,
   getConstraintNameCompletions,
   getCodeBlockLanguageCompletions,
+  resolveCompletionItem,
   CODE_BLOCK_LANGUAGES,
   type CompletionContext,
   type CompletionHandlerContext,
 } from "./completion";
+import { CompletionItemKind } from "vscode-languageserver/node";
 
 describe("completion", () => {
   beforeAll(async () => {
@@ -2015,6 +2017,251 @@ describe("completion", () => {
       expect(languageIds).toContain("sql");
       expect(languageIds).toContain("graphql");
       expect(languageIds).toContain("http");
+    });
+  });
+
+  // ============================================================================
+  // Phase 7: Completion Resolve (Lazy Documentation Loading)
+  // ============================================================================
+
+  describe("resolveCompletionItem", () => {
+    test("loads rich documentation for module completion item", () => {
+      const source = `@module auth
+  This is the authentication module.
+  @depends-on storage
+  @constraint security-compliance
+  @feature login
+    Login feature.
+  @feature logout
+    Logout feature.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      // Create a completion item as it would come from getReferenceCompletions
+      const item = {
+        label: "auth",
+        kind: CompletionItemKind.Module,
+        detail: "module in test.bp",
+      };
+
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const resolved = resolveCompletionItem(item, handlerContext);
+
+      // Should have rich markdown documentation
+      expect(resolved.documentation).toBeDefined();
+      expect((resolved.documentation as any).kind).toBe("markdown");
+
+      const docValue = (resolved.documentation as any).value;
+
+      // Should include header with kind and path
+      expect(docValue).toContain("**Module**");
+      expect(docValue).toContain("`auth`");
+
+      // Should include description
+      expect(docValue).toContain("This is the authentication module.");
+
+      // Should include dependency count
+      expect(docValue).toContain("**Dependencies:** 1");
+      expect(docValue).toContain("`storage`");
+
+      // Should include constraint count
+      expect(docValue).toContain("**Constraints:** 1");
+      expect(docValue).toContain("`security-compliance`");
+
+      // Should include child counts for module
+      expect(docValue).toContain("**Contains:**");
+      expect(docValue).toContain("2 features");
+
+      // Should include file location
+      expect(docValue).toContain("*Defined in");
+      expect(docValue).toContain("test.bp");
+    });
+
+    test("loads rich documentation for feature completion item", () => {
+      const source = `@module auth
+  @feature login
+    Handles user login functionality.
+    @depends-on storage.database
+    @constraint rate-limiting
+    @requirement basic-auth
+      Basic authentication.
+    @requirement oauth
+      OAuth support.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const item = {
+        label: "auth.login",
+        kind: CompletionItemKind.Class, // Features use Class kind
+        detail: "feature in test.bp",
+      };
+
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const resolved = resolveCompletionItem(item, handlerContext);
+
+      expect(resolved.documentation).toBeDefined();
+      const docValue = (resolved.documentation as any).value;
+
+      // Should include feature-specific info
+      expect(docValue).toContain("**Feature**");
+      expect(docValue).toContain("`auth.login`");
+      expect(docValue).toContain("Handles user login functionality.");
+      expect(docValue).toContain("**Dependencies:** 1");
+      expect(docValue).toContain("`storage.database`");
+      expect(docValue).toContain("**Constraints:** 1");
+      expect(docValue).toContain("`rate-limiting`");
+
+      // Should include requirement count
+      expect(docValue).toContain("**Contains:** 2 requirements");
+    });
+
+    test("loads rich documentation for requirement completion item", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      Validates credentials using username and password.
+      @depends-on storage.users
+      @constraint input-validation
+        Must validate all inputs.
+      @constraint bcrypt-hashing
+        Passwords must use bcrypt.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const item = {
+        label: "auth.login.basic-auth",
+        kind: CompletionItemKind.Function, // Requirements use Function kind
+        detail: "requirement in test.bp",
+      };
+
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const resolved = resolveCompletionItem(item, handlerContext);
+
+      expect(resolved.documentation).toBeDefined();
+      const docValue = (resolved.documentation as any).value;
+
+      // Should include requirement-specific info
+      expect(docValue).toContain("**Requirement**");
+      expect(docValue).toContain("`auth.login.basic-auth`");
+      expect(docValue).toContain("Validates credentials using username and password.");
+      expect(docValue).toContain("**Dependencies:** 1");
+      expect(docValue).toContain("`storage.users`");
+      expect(docValue).toContain("**Constraints:** 2");
+      expect(docValue).toContain("`input-validation`");
+      expect(docValue).toContain("`bcrypt-hashing`");
+    });
+
+    test("handles symbol without description", () => {
+      const source = `@module auth
+  @feature login`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const item = {
+        label: "auth.login",
+        kind: CompletionItemKind.Class,
+        detail: "feature in test.bp",
+      };
+
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const resolved = resolveCompletionItem(item, handlerContext);
+
+      expect(resolved.documentation).toBeDefined();
+      const docValue = (resolved.documentation as any).value;
+
+      // Should still have header
+      expect(docValue).toContain("**Feature**");
+      expect(docValue).toContain("`auth.login`");
+      // Should still have file location
+      expect(docValue).toContain("*Defined in");
+    });
+
+    test("handles symbol without dependencies or constraints", () => {
+      const source = `@module auth
+  Simple auth module.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const item = {
+        label: "auth",
+        kind: CompletionItemKind.Module,
+        detail: "module in test.bp",
+      };
+
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const resolved = resolveCompletionItem(item, handlerContext);
+
+      expect(resolved.documentation).toBeDefined();
+      const docValue = (resolved.documentation as any).value;
+
+      // Should NOT include dependency section since there are none
+      expect(docValue).not.toContain("**Dependencies:**");
+      // Should NOT include constraint section since there are none
+      expect(docValue).not.toContain("**Constraints:**");
+    });
+
+    test("does not resolve non-reference completion items", () => {
+      const source = `@module auth`;
+      const { symbolIndex } = createTestContext(source);
+
+      // Keyword completion item (not a reference)
+      const item = {
+        label: "@feature",
+        kind: CompletionItemKind.Keyword,
+        detail: "Define a feature",
+      };
+
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const resolved = resolveCompletionItem(item, handlerContext);
+
+      // Should not add documentation for keywords
+      expect(resolved.documentation).toBeUndefined();
+    });
+
+    test("handles unknown symbol gracefully", () => {
+      const source = `@module auth`;
+      const { symbolIndex } = createTestContext(source);
+
+      // Completion item for a symbol that doesn't exist
+      const item = {
+        label: "nonexistent.module",
+        kind: CompletionItemKind.Module,
+        detail: "module",
+      };
+
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const resolved = resolveCompletionItem(item, handlerContext);
+
+      // Should not crash, just leave documentation undefined
+      expect(resolved.documentation).toBeUndefined();
     });
   });
 });

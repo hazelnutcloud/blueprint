@@ -1079,8 +1079,84 @@ export function buildCompletions(
 }
 
 /**
+ * Build rich documentation content for a symbol.
+ * This includes description, dependencies, constraints, and file location.
+ *
+ * @param symbol The indexed symbol to document
+ * @returns Markdown formatted documentation string
+ */
+function buildSymbolDocumentation(symbol: IndexedSymbol): string {
+  const lines: string[] = [];
+  const node = symbol.node;
+
+  // Header with symbol kind and name
+  const kindLabel = symbol.kind.charAt(0).toUpperCase() + symbol.kind.slice(1);
+  lines.push(`**${kindLabel}** \`${symbol.path}\``);
+  lines.push("");
+
+  // Description
+  if ("description" in node && node.description) {
+    lines.push(node.description);
+    lines.push("");
+  }
+
+  // Dependencies (for modules, features, requirements)
+  if ("dependencies" in node && node.dependencies.length > 0) {
+    const depCount = node.dependencies.reduce((sum, dep) => sum + dep.references.length, 0);
+    lines.push(`**Dependencies:** ${depCount}`);
+    for (const dep of node.dependencies) {
+      for (const ref of dep.references) {
+        lines.push(`- \`${ref.path}\``);
+      }
+    }
+    lines.push("");
+  }
+
+  // Constraints (for modules, features, requirements)
+  if ("constraints" in node && node.constraints.length > 0) {
+    lines.push(`**Constraints:** ${node.constraints.length}`);
+    for (const constraint of node.constraints) {
+      if (constraint.description) {
+        lines.push(`- \`${constraint.name}\`: ${constraint.description}`);
+      } else {
+        lines.push(`- \`${constraint.name}\``);
+      }
+    }
+    lines.push("");
+  }
+
+  // Child counts for containers
+  if (symbol.kind === "module" && "features" in node) {
+    const featureCount = node.features.length;
+    const reqCount =
+      node.requirements.length + node.features.reduce((sum, f) => sum + f.requirements.length, 0);
+    if (featureCount > 0 || reqCount > 0) {
+      lines.push(`**Contains:** ${featureCount} features, ${reqCount} requirements`);
+      lines.push("");
+    }
+  } else if (symbol.kind === "feature" && "requirements" in node) {
+    const reqCount = node.requirements.length;
+    if (reqCount > 0) {
+      lines.push(`**Contains:** ${reqCount} requirements`);
+      lines.push("");
+    }
+  }
+
+  // File location
+  const fileName = symbol.fileUri.split("/").pop() ?? symbol.fileUri;
+  const startLine = node.location.startLine + 1; // Convert to 1-based
+  lines.push(`*Defined in [${fileName}](${symbol.fileUri}#L${startLine})*`);
+
+  return lines.join("\n");
+}
+
+/**
  * Resolve additional details for a completion item.
  * This is called when a completion item is focused in the UI.
+ *
+ * Implements lazy documentation loading - full documentation including
+ * description, dependencies, constraints, and file location is only
+ * fetched when the item is selected, reducing initial completion latency.
  *
  * @param item The completion item to resolve
  * @param handlerContext Context with symbol index
@@ -1090,7 +1166,7 @@ export function resolveCompletionItem(
   item: CompletionItem,
   handlerContext: CompletionHandlerContext
 ): CompletionItem {
-  // If this is a reference completion, load full documentation
+  // Only resolve reference completions (Module, Class/Feature, Function/Requirement)
   if (
     item.kind === CompletionItemKind.Module ||
     item.kind === CompletionItemKind.Class ||
@@ -1100,15 +1176,20 @@ export function resolveCompletionItem(
     const symbols = symbolIndex.getSymbol(item.label);
     const symbol = symbols?.[0];
 
-    if (symbol && "description" in symbol.node) {
-      const description = symbol.node.description;
-      if (description) {
-        item.documentation = {
-          kind: MarkupKind.Markdown,
-          value: description,
-        };
-      }
+    if (symbol) {
+      // Build rich documentation with all symbol details
+      const documentation = buildSymbolDocumentation(symbol);
+      item.documentation = {
+        kind: MarkupKind.Markdown,
+        value: documentation,
+      };
     }
+  }
+
+  // Resolve constraint name completions (Property kind)
+  if (item.kind === CompletionItemKind.Property && !item.documentation) {
+    // Constraint names don't need additional resolution - they already have usage count
+    // But we could enhance this later with examples of where the constraint is used
   }
 
   return item;
