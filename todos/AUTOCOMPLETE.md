@@ -306,11 +306,11 @@ Recommended order of implementation:
 
 ## Success Criteria
 
-- [ ] Typing `@` at valid positions shows keyword completions
-- [ ] Keywords are filtered by current scope (no invalid suggestions)
-- [ ] Typing `@depends-on ` shows available references
-- [ ] Typing `module.` shows features within that module
-- [ ] Completions include documentation and snippets
-- [ ] Performance is acceptable (<100ms response time)
-- [ ] All tests pass
-- [ ] No regressions in existing LSP features
+- [x] Typing `@` at valid positions shows keyword completions
+- [x] Keywords are filtered by current scope (no invalid suggestions)
+- [x] Typing `@depends-on ` shows available references
+- [x] Typing `module.` shows features within that module
+- [x] Completions include documentation and snippets
+- [x] Performance is acceptable (<100ms response time)
+- [x] All tests pass
+- [x] No regressions in existing LSP features
