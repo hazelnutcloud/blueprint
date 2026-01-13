@@ -32,11 +32,11 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 1.3 Define Completion Types and Constants
 
-- [ ] Create `BLOCK_KEYWORDS` constant with all Blueprint keywords:
+- [x] Create `BLOCK_KEYWORDS` constant with all Blueprint keywords:
   - `@module`, `@feature`, `@requirement`, `@constraint`, `@depends-on`, `@description`
-- [ ] Define keyword metadata (valid contexts, snippets, descriptions)
-- [ ] Create `CompletionContext` type to track cursor context
-- [ ] Define `CompletionScope` enum: `TopLevel`, `Module`, `Feature`, `Requirement`
+- [x] Define keyword metadata (valid contexts, snippets, descriptions)
+- [x] Create `CompletionContext` type to track cursor context
+- [x] Define `CompletionScope` type: `top-level`, `module`, `feature`, `requirement` (union type, TypeScript best practice over enum)
 
 ---
 
