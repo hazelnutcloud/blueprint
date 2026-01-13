@@ -437,13 +437,27 @@ export function getReferenceCompletions(
     const sortText = isLocal ? `0${path}` : `1${path}`;
     const fileName = symbol.fileUri.split("/").pop() ?? symbol.fileUri;
 
-    completions.push({
+    // Extract description from the symbol's AST node if available
+    const description =
+      "description" in symbol.node && symbol.node.description ? symbol.node.description : undefined;
+
+    const item: CompletionItem = {
       label: path,
       kind,
       detail: `${symbol.kind} in ${fileName}`,
       sortText,
       filterText: path,
-    });
+    };
+
+    // Add documentation if description is available
+    if (description) {
+      item.documentation = {
+        kind: MarkupKind.Markdown,
+        value: description,
+      };
+    }
+
+    completions.push(item);
 
     addedPaths.add(path);
   }
@@ -526,12 +540,26 @@ export function getPathCompletions(
         kind = CompletionItemKind.Reference;
     }
 
-    completions.push({
+    // Extract description from the symbol's AST node if available
+    const description =
+      "description" in symbol.node && symbol.node.description ? symbol.node.description : undefined;
+
+    const item: CompletionItem = {
       label: remainingPath,
       kind,
       detail: `${symbol.kind}`,
       insertText: remainingPath,
-    });
+    };
+
+    // Add documentation if description is available
+    if (description) {
+      item.documentation = {
+        kind: MarkupKind.Markdown,
+        value: description,
+      };
+    }
+
+    completions.push(item);
 
     addedPaths.add(remainingPath);
   }

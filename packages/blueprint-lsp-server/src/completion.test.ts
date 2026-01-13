@@ -660,6 +660,96 @@ describe("completion", () => {
       expect(localCompletion!.sortText!.startsWith("0")).toBe(true);
       expect(remoteCompletion!.sortText!.startsWith("1")).toBe(true);
     });
+
+    test("includes documentation from symbol description", () => {
+      const source = `@module auth
+  This is the authentication module.
+  @feature login
+    Handles user login functionality.
+    @requirement basic-auth
+      Validates credentials using username and password.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+
+      // Check that auth module has documentation
+      const authCompletion = completions.find((c) => c.label === "auth");
+      expect(authCompletion).toBeDefined();
+      expect(authCompletion!.documentation).toBeDefined();
+      expect(authCompletion!.documentation).toMatchObject({
+        kind: "markdown",
+        value: "This is the authentication module.",
+      });
+
+      // Check that feature has documentation
+      const loginCompletion = completions.find((c) => c.label === "auth.login");
+      expect(loginCompletion).toBeDefined();
+      expect(loginCompletion!.documentation).toMatchObject({
+        kind: "markdown",
+        value: "Handles user login functionality.",
+      });
+
+      // Check that requirement has documentation
+      const reqCompletion = completions.find((c) => c.label === "auth.login.basic-auth");
+      expect(reqCompletion).toBeDefined();
+      expect(reqCompletion!.documentation).toMatchObject({
+        kind: "markdown",
+        value: "Validates credentials using username and password.",
+      });
+    });
+
+    test("omits documentation when symbol has no description", () => {
+      const source = `@module auth
+  @feature login`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+
+      // Symbols without descriptions should not have documentation
+      const authCompletion = completions.find((c) => c.label === "auth");
+      expect(authCompletion).toBeDefined();
+      expect(authCompletion!.documentation).toBeUndefined();
+
+      const loginCompletion = completions.find((c) => c.label === "auth.login");
+      expect(loginCompletion).toBeDefined();
+      expect(loginCompletion!.documentation).toBeUndefined();
+    });
   });
 
   // ============================================================================
@@ -800,6 +890,52 @@ describe("completion", () => {
 
       const completions = getPathCompletions(context, handlerContext);
       expect(completions).toHaveLength(0);
+    });
+
+    test("includes documentation from symbol description in path completions", () => {
+      const source = `@module auth
+  This is the authentication module.
+  @feature login
+    Handles user login functionality.
+  @feature session
+    Manages user sessions.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      // Context with prefix "auth." to get children of auth
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: true,
+        isInDependsOn: true,
+        prefix: "auth.",
+        isInSkipZone: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getPathCompletions(context, handlerContext);
+
+      // Check that features have documentation
+      const loginCompletion = completions.find((c) => c.label === "login");
+      expect(loginCompletion).toBeDefined();
+      expect(loginCompletion!.documentation).toMatchObject({
+        kind: "markdown",
+        value: "Handles user login functionality.",
+      });
+
+      const sessionCompletion = completions.find((c) => c.label === "session");
+      expect(sessionCompletion).toBeDefined();
+      expect(sessionCompletion!.documentation).toMatchObject({
+        kind: "markdown",
+        value: "Manages user sessions.",
+      });
     });
   });
 

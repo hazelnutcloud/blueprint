@@ -125,7 +125,7 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 - [x] Create `CompletionItem` for each matching symbol
 - [x] Set `kind` to appropriate `CompletionItemKind` (Module/Class/Function)
 - [x] Set `detail` to symbol kind and file location
-- [ ] Set `documentation` to symbol description if available
+- [x] Set `documentation` to symbol description if available
 - [x] Set `filterText` and `sortText` for proper ordering
 
 ---
