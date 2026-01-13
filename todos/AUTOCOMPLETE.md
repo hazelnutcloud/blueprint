@@ -247,9 +247,9 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 9.2 Update Package Documentation
 
-- [ ] Update README with completion feature description
-- [ ] Document trigger characters and behavior
-- [ ] Add examples of completion scenarios
+- [x] Update README with completion feature description
+- [x] Document trigger characters and behavior
+- [x] Add examples of completion scenarios
 
 ### 9.3 Performance Optimization
 
