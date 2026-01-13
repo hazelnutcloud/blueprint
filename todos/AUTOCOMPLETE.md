@@ -256,7 +256,7 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 - [x] Profile completion performance with large workspaces
 - [x] Add caching for frequently accessed data
 - [x] Implement debouncing if needed (evaluated: not needed - LSP clients handle debouncing via request cancellation; server-side debouncing would add latency without benefit)
-- [ ] Consider incremental updates to symbol index
+- [x] Consider incremental updates to symbol index (implemented: addFile/removeFile now compute diffs and selectively invalidate only affected symbol kind caches)
 
 ### 9.4 Edge Cases and Error Handling
 

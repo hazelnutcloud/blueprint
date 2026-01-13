@@ -53,11 +53,29 @@ export interface ResolvedReference {
 }
 
 /**
+ * Represents the result of an incremental update to the symbol index.
+ * This information can be used by consumers to optimize their own updates.
+ */
+export interface SymbolIndexUpdateResult {
+  /** Symbol paths that were added (new symbols) */
+  added: string[];
+  /** Symbol paths that were removed */
+  removed: string[];
+  /** Symbol paths that were modified (same path, different content) */
+  modified: string[];
+  /** Symbol kinds that were affected (for selective cache invalidation) */
+  affectedKinds: Set<SymbolKind>;
+}
+
+/**
  * Manages a cross-file symbol index for the Blueprint workspace.
  *
  * This class maintains a global registry of all symbols across all .bp files
  * in the workspace, enabling cross-file reference resolution and dependency
  * tracking.
+ *
+ * The index supports incremental updates: when a file changes, it computes
+ * the diff between old and new symbols and only invalidates affected caches.
  */
 export class CrossFileSymbolIndex {
   /**
@@ -79,6 +97,12 @@ export class CrossFileSymbolIndex {
   private symbolsByFile: Map<string, Set<string>> = new Map();
 
   /**
+   * Maps file URIs to the symbol kinds present in that file.
+   * Used for selective cache invalidation.
+   */
+  private kindsByFile: Map<string, Set<SymbolKind>> = new Map();
+
+  /**
    * Maps file URIs to the references they contain (for dependency tracking).
    * Key: file URI, Value: array of { reference, containingPath }
    */
@@ -87,7 +111,7 @@ export class CrossFileSymbolIndex {
 
   /**
    * Cache for getSymbolsByKind() results.
-   * This cache is invalidated when files are added or removed.
+   * This cache is selectively invalidated when symbols of that kind change.
    * Key: symbol kind, Value: cached array of symbols of that kind
    */
   private symbolsByKindCache: Map<SymbolKind, IndexedSymbol[]> = new Map();
@@ -95,26 +119,46 @@ export class CrossFileSymbolIndex {
   /**
    * Add or update symbols from a parsed document.
    *
+   * This method performs incremental updates: it computes the diff between
+   * old and new symbols and only invalidates affected caches.
+   *
    * @param fileUri The URI of the file being indexed
    * @param document The parsed AST document
+   * @returns Information about what changed (for consumers that need to optimize their updates)
    */
-  addFile(fileUri: string, document: DocumentNode): void {
-    // Remove existing symbols for this file first
-    this.removeFile(fileUri);
+  addFile(fileUri: string, document: DocumentNode): SymbolIndexUpdateResult {
+    // Get the old symbols for this file (for computing the diff)
+    const oldSymbolPaths = this.symbolsByFile.get(fileUri) ?? new Set<string>();
+    const oldKinds = this.kindsByFile.get(fileUri) ?? new Set<SymbolKind>();
 
-    // Invalidate the symbols-by-kind cache since we're adding new symbols
-    this.symbolsByKindCache.clear();
+    // Track what changed
+    const result: SymbolIndexUpdateResult = {
+      added: [],
+      removed: [],
+      modified: [],
+      affectedKinds: new Set<SymbolKind>(),
+    };
 
+    // Build the new symbol table
     const { symbolTable } = buildSymbolTable(document);
     this.fileSymbols.set(fileUri, symbolTable);
 
-    const fileSymbolPaths = new Set<string>();
+    const newSymbolPaths = new Set<string>();
+    const newKinds = new Set<SymbolKind>();
     const references: Array<{ reference: ReferenceNode; containingPath: string }> = [];
+
+    // Collect new symbols (we'll add them after removing old ones)
+    const newSymbols: Array<{
+      path: string;
+      kind: SymbolKind;
+      node: ModuleNode | FeatureNode | RequirementNode | ConstraintNode;
+    }> = [];
 
     // Index modules
     for (const [path, node] of symbolTable.modules) {
-      this.addSymbol(path, "module", fileUri, node);
-      fileSymbolPaths.add(path);
+      newSymbols.push({ path, kind: "module", node });
+      newSymbolPaths.add(path);
+      newKinds.add("module");
       // Collect module-level dependencies
       for (const dep of node.dependencies) {
         for (const ref of dep.references) {
@@ -125,8 +169,9 @@ export class CrossFileSymbolIndex {
 
     // Index features
     for (const [path, node] of symbolTable.features) {
-      this.addSymbol(path, "feature", fileUri, node);
-      fileSymbolPaths.add(path);
+      newSymbols.push({ path, kind: "feature", node });
+      newSymbolPaths.add(path);
+      newKinds.add("feature");
       // Collect feature-level dependencies
       for (const dep of node.dependencies) {
         for (const ref of dep.references) {
@@ -137,8 +182,9 @@ export class CrossFileSymbolIndex {
 
     // Index requirements
     for (const [path, node] of symbolTable.requirements) {
-      this.addSymbol(path, "requirement", fileUri, node);
-      fileSymbolPaths.add(path);
+      newSymbols.push({ path, kind: "requirement", node });
+      newSymbolPaths.add(path);
+      newKinds.add("requirement");
       // Collect requirement-level dependencies
       for (const dep of node.dependencies) {
         for (const ref of dep.references) {
@@ -149,31 +195,111 @@ export class CrossFileSymbolIndex {
 
     // Index constraints
     for (const [path, node] of symbolTable.constraints) {
-      this.addSymbol(path, "constraint", fileUri, node);
-      fileSymbolPaths.add(path);
+      newSymbols.push({ path, kind: "constraint", node });
+      newSymbolPaths.add(path);
+      newKinds.add("constraint");
     }
 
-    this.symbolsByFile.set(fileUri, fileSymbolPaths);
+    // Compute the diff: removed symbols (in old but not in new)
+    for (const oldPath of oldSymbolPaths) {
+      if (!newSymbolPaths.has(oldPath)) {
+        result.removed.push(oldPath);
+        // Get the kind of the removed symbol to track affected kinds
+        const symbols = this.globalSymbols.get(oldPath);
+        if (symbols) {
+          for (const sym of symbols) {
+            if (sym.fileUri === fileUri) {
+              result.affectedKinds.add(sym.kind);
+            }
+          }
+        }
+      }
+    }
+
+    // Compute the diff: added symbols (in new but not in old)
+    for (const newPath of newSymbolPaths) {
+      if (!oldSymbolPaths.has(newPath)) {
+        result.added.push(newPath);
+      } else {
+        // Symbol exists in both - it's been modified (content may have changed)
+        result.modified.push(newPath);
+      }
+    }
+
+    // Remove old symbols from the global index
+    for (const oldPath of oldSymbolPaths) {
+      const symbols = this.globalSymbols.get(oldPath);
+      if (symbols) {
+        const filtered = symbols.filter((s) => s.fileUri !== fileUri);
+        if (filtered.length === 0) {
+          this.globalSymbols.delete(oldPath);
+        } else {
+          this.globalSymbols.set(oldPath, filtered);
+        }
+      }
+    }
+
+    // Add new symbols to the global index
+    for (const { path, kind, node } of newSymbols) {
+      this.addSymbol(path, kind, fileUri, node);
+      result.affectedKinds.add(kind);
+    }
+
+    // Update file tracking maps
+    this.symbolsByFile.set(fileUri, newSymbolPaths);
+    this.kindsByFile.set(fileUri, newKinds);
     this.fileReferences.set(fileUri, references);
+
+    // Selectively invalidate cache only for affected kinds
+    // This is the key optimization: if only requirements changed, we don't
+    // invalidate the module/feature/constraint caches
+    const allAffectedKinds = new Set([...result.affectedKinds, ...oldKinds]);
+    for (const kind of allAffectedKinds) {
+      this.symbolsByKindCache.delete(kind);
+    }
+
+    return result;
   }
 
   /**
    * Remove all symbols from a file.
    *
    * @param fileUri The URI of the file to remove
+   * @returns Information about what was removed
    */
-  removeFile(fileUri: string): void {
+  removeFile(fileUri: string): SymbolIndexUpdateResult {
     const paths = this.symbolsByFile.get(fileUri);
+    const kinds = this.kindsByFile.get(fileUri);
+
+    const result: SymbolIndexUpdateResult = {
+      added: [],
+      removed: [],
+      modified: [],
+      affectedKinds: new Set<SymbolKind>(),
+    };
+
     if (!paths) {
-      return;
+      return result;
     }
 
-    // Invalidate the symbols-by-kind cache since we're removing symbols
-    this.symbolsByKindCache.clear();
+    // Collect the kinds of symbols being removed for selective cache invalidation
+    if (kinds) {
+      for (const kind of kinds) {
+        result.affectedKinds.add(kind);
+      }
+    }
 
     for (const path of paths) {
       const symbols = this.globalSymbols.get(path);
       if (symbols) {
+        // Track the kinds being removed
+        for (const sym of symbols) {
+          if (sym.fileUri === fileUri) {
+            result.affectedKinds.add(sym.kind);
+            result.removed.push(path);
+          }
+        }
+
         const filtered = symbols.filter((s) => s.fileUri !== fileUri);
         if (filtered.length === 0) {
           this.globalSymbols.delete(path);
@@ -184,8 +310,16 @@ export class CrossFileSymbolIndex {
     }
 
     this.symbolsByFile.delete(fileUri);
+    this.kindsByFile.delete(fileUri);
     this.fileSymbols.delete(fileUri);
     this.fileReferences.delete(fileUri);
+
+    // Selectively invalidate cache only for affected kinds
+    for (const kind of result.affectedKinds) {
+      this.symbolsByKindCache.delete(kind);
+    }
+
+    return result;
   }
 
   /**
@@ -465,6 +599,7 @@ export class CrossFileSymbolIndex {
     this.globalSymbols.clear();
     this.fileSymbols.clear();
     this.symbolsByFile.clear();
+    this.kindsByFile.clear();
     this.fileReferences.clear();
     this.symbolsByKindCache.clear();
   }

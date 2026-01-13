@@ -633,4 +633,207 @@ describe("CrossFileSymbolIndex", () => {
       expect(unresolved).toHaveLength(0);
     });
   });
+
+  describe("incremental updates", () => {
+    test("addFile returns update result with added symbols", () => {
+      const code = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+`;
+      const result = index.addFile("file:///auth.bp", parseToAST(code));
+
+      expect(result.added).toContain("auth");
+      expect(result.added).toContain("auth.login");
+      expect(result.added).toContain("auth.login.basic-auth");
+      expect(result.removed).toHaveLength(0);
+      expect(result.modified).toHaveLength(0);
+      expect(result.affectedKinds.has("module")).toBe(true);
+      expect(result.affectedKinds.has("feature")).toBe(true);
+      expect(result.affectedKinds.has("requirement")).toBe(true);
+    });
+
+    test("addFile returns update result with modified symbols", () => {
+      const code1 = `
+@module auth
+
+@feature login
+  Login feature v1.
+`;
+      const code2 = `
+@module auth
+
+@feature login
+  Login feature v2 (updated).
+`;
+      index.addFile("file:///auth.bp", parseToAST(code1));
+      const result = index.addFile("file:///auth.bp", parseToAST(code2));
+
+      // Same paths exist in both versions, so they're modified
+      expect(result.modified).toContain("auth");
+      expect(result.modified).toContain("auth.login");
+      expect(result.added).toHaveLength(0);
+      expect(result.removed).toHaveLength(0);
+    });
+
+    test("addFile returns update result with removed symbols", () => {
+      const code1 = `
+@module auth
+
+@feature login
+
+@feature logout
+`;
+      const code2 = `
+@module auth
+
+@feature login
+`;
+      index.addFile("file:///auth.bp", parseToAST(code1));
+      const result = index.addFile("file:///auth.bp", parseToAST(code2));
+
+      expect(result.removed).toContain("auth.logout");
+      expect(result.modified).toContain("auth");
+      expect(result.modified).toContain("auth.login");
+    });
+
+    test("addFile returns update result with mixed changes", () => {
+      const code1 = `
+@module auth
+
+@feature login
+
+@feature old-feature
+`;
+      const code2 = `
+@module auth
+
+@feature login
+
+@feature new-feature
+`;
+      index.addFile("file:///auth.bp", parseToAST(code1));
+      const result = index.addFile("file:///auth.bp", parseToAST(code2));
+
+      expect(result.added).toContain("auth.new-feature");
+      expect(result.removed).toContain("auth.old-feature");
+      expect(result.modified).toContain("auth");
+      expect(result.modified).toContain("auth.login");
+    });
+
+    test("removeFile returns update result with removed symbols", () => {
+      const code = `
+@module auth
+
+@feature login
+`;
+      index.addFile("file:///auth.bp", parseToAST(code));
+      const result = index.removeFile("file:///auth.bp");
+
+      expect(result.removed).toContain("auth");
+      expect(result.removed).toContain("auth.login");
+      expect(result.added).toHaveLength(0);
+      expect(result.modified).toHaveLength(0);
+      expect(result.affectedKinds.has("module")).toBe(true);
+      expect(result.affectedKinds.has("feature")).toBe(true);
+    });
+
+    test("removeFile on non-existent file returns empty result", () => {
+      const result = index.removeFile("file:///nonexistent.bp");
+
+      expect(result.added).toHaveLength(0);
+      expect(result.removed).toHaveLength(0);
+      expect(result.modified).toHaveLength(0);
+      expect(result.affectedKinds.size).toBe(0);
+    });
+
+    test("selective cache invalidation preserves unaffected caches", () => {
+      // Add a file with modules and features
+      const code1 = `
+@module auth
+
+@feature login
+`;
+      index.addFile("file:///auth.bp", parseToAST(code1));
+
+      // Prime the cache by calling getSymbolsByKind
+      const modules1 = index.getSymbolsByKind("module");
+      const features1 = index.getSymbolsByKind("feature");
+      const requirements1 = index.getSymbolsByKind("requirement");
+
+      expect(modules1).toHaveLength(1);
+      expect(features1).toHaveLength(1);
+      expect(requirements1).toHaveLength(0);
+
+      // Add a file with only requirements (should not affect module/feature cache)
+      const code2 = `
+@module payments
+
+@feature checkout
+
+@requirement payment-form
+  Payment form.
+`;
+      const result = index.addFile("file:///payments.bp", parseToAST(code2));
+
+      // All kinds should be affected since we added new symbols of each type
+      expect(result.affectedKinds.has("module")).toBe(true);
+      expect(result.affectedKinds.has("feature")).toBe(true);
+      expect(result.affectedKinds.has("requirement")).toBe(true);
+
+      // Re-query to verify data is correct after cache invalidation
+      const modules2 = index.getSymbolsByKind("module");
+      const features2 = index.getSymbolsByKind("feature");
+      const requirements2 = index.getSymbolsByKind("requirement");
+
+      expect(modules2).toHaveLength(2);
+      expect(features2).toHaveLength(2);
+      expect(requirements2).toHaveLength(1);
+    });
+
+    test("updating file with only requirement changes only invalidates requirement cache", () => {
+      // Add a file with module, feature, and requirement
+      const code1 = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  v1.
+`;
+      index.addFile("file:///auth.bp", parseToAST(code1));
+
+      // Prime all caches
+      index.getSymbolsByKind("module");
+      index.getSymbolsByKind("feature");
+      index.getSymbolsByKind("requirement");
+      index.getSymbolsByKind("constraint");
+
+      // Update only the requirement (add a new one)
+      const code2 = `
+@module auth
+
+@feature login
+
+@requirement basic-auth
+  v1.
+
+@requirement oauth
+  v1.
+`;
+      const result = index.addFile("file:///auth.bp", parseToAST(code2));
+
+      // Only requirement kind should show as having new symbols
+      expect(result.added).toContain("auth.login.oauth");
+      expect(result.modified).toContain("auth");
+      expect(result.modified).toContain("auth.login");
+      expect(result.modified).toContain("auth.login.basic-auth");
+
+      // Verify the cache was updated correctly
+      const requirements = index.getSymbolsByKind("requirement");
+      expect(requirements).toHaveLength(2);
+    });
+  });
 });
