@@ -178,9 +178,9 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 6.4 Identifier Suggestions
 
-- [ ] When typing a new identifier name, suggest based on context
-- [ ] For requirements in a feature, suggest action-based names
-- [ ] Optional: learn from existing naming patterns
+- [x] When typing a new identifier name, suggest based on context
+- [x] For requirements in a feature, suggest action-based names
+- [x] Optional: learn from existing naming patterns
 
 ---
 

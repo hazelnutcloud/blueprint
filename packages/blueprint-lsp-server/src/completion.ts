@@ -203,6 +203,63 @@ export const DESCRIPTION_STARTERS = [
   },
 ] as const;
 
+/**
+ * Common action verbs for requirement naming.
+ * Requirements typically follow an action-based naming pattern.
+ */
+export const REQUIREMENT_ACTION_VERBS = [
+  { prefix: "validate", description: "Validate input or state" },
+  { prefix: "create", description: "Create a new resource" },
+  { prefix: "update", description: "Update an existing resource" },
+  { prefix: "delete", description: "Delete/remove a resource" },
+  { prefix: "get", description: "Retrieve/fetch data" },
+  { prefix: "list", description: "List multiple items" },
+  { prefix: "search", description: "Search for items" },
+  { prefix: "filter", description: "Filter results" },
+  { prefix: "authenticate", description: "Verify identity" },
+  { prefix: "authorize", description: "Check permissions" },
+  { prefix: "send", description: "Send a message/notification" },
+  { prefix: "receive", description: "Receive data" },
+  { prefix: "process", description: "Process data" },
+  { prefix: "transform", description: "Transform/convert data" },
+  { prefix: "encrypt", description: "Encrypt data" },
+  { prefix: "decrypt", description: "Decrypt data" },
+  { prefix: "store", description: "Store/persist data" },
+  { prefix: "load", description: "Load data" },
+  { prefix: "cache", description: "Cache data" },
+  { prefix: "sync", description: "Synchronize data" },
+  { prefix: "export", description: "Export data" },
+  { prefix: "import", description: "Import data" },
+  { prefix: "notify", description: "Send notification" },
+  { prefix: "log", description: "Log activity" },
+  { prefix: "handle", description: "Handle an event" },
+  { prefix: "parse", description: "Parse input" },
+  { prefix: "format", description: "Format output" },
+  { prefix: "render", description: "Render content" },
+  { prefix: "display", description: "Display to user" },
+  { prefix: "connect", description: "Establish connection" },
+  { prefix: "disconnect", description: "Close connection" },
+  { prefix: "configure", description: "Configure settings" },
+  { prefix: "initialize", description: "Initialize system/component" },
+  { prefix: "reset", description: "Reset state" },
+  { prefix: "retry", description: "Retry operation" },
+  { prefix: "schedule", description: "Schedule task" },
+  { prefix: "cancel", description: "Cancel operation" },
+  { prefix: "approve", description: "Approve request" },
+  { prefix: "reject", description: "Reject request" },
+  { prefix: "submit", description: "Submit data" },
+  { prefix: "upload", description: "Upload file" },
+  { prefix: "download", description: "Download file" },
+] as const;
+
+/**
+ * Naming patterns observed in codebases for identifier suggestions.
+ */
+export interface IdentifierPattern {
+  name: string;
+  count: number;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -246,6 +303,10 @@ export interface CompletionContext {
   existingReferences: string[];
   /** Whether cursor is after a comma (adding additional reference) */
   isAfterComma: boolean;
+  /** Whether we're in an identifier name context (after @module/@feature/@requirement keyword) */
+  isInIdentifierName: boolean;
+  /** The keyword that precedes the identifier being named (module, feature, or requirement) */
+  identifierKeyword: "module" | "feature" | "requirement" | null;
 }
 
 /**
@@ -522,6 +583,27 @@ export function getCursorContext(
     isAfterComma = /,\s*[\w.-]*$/.test(textBeforeCursor);
   }
 
+  // Detect if we're in an identifier name context (after @module/@feature/@requirement keyword with a space)
+  // Matches: "@module " or "@module name" but not "@module" alone (which is keyword completion)
+  // Also matches "@feature " and "@requirement "
+  let isInIdentifierName = false;
+  let identifierKeyword: "module" | "feature" | "requirement" | null = null;
+
+  const moduleMatch = /^\s*@module\s+/.test(textBeforeCursor);
+  const featureMatch = /^\s*@feature\s+/.test(textBeforeCursor);
+  const requirementMatch = /^\s*@requirement\s+/.test(textBeforeCursor);
+
+  if (moduleMatch && !isInDependsOn && !isInConstraint) {
+    isInIdentifierName = true;
+    identifierKeyword = "module";
+  } else if (featureMatch && !isInDependsOn && !isInConstraint) {
+    isInIdentifierName = true;
+    identifierKeyword = "feature";
+  } else if (requirementMatch && !isInDependsOn && !isInConstraint) {
+    isInIdentifierName = true;
+    identifierKeyword = "requirement";
+  }
+
   // Extract scope path information
   let currentModule: string | null = null;
   let currentFeature: string | null = null;
@@ -546,18 +628,61 @@ export function getCursorContext(
       }
       current = current.parent;
     }
+  }
 
-    // Build scope path
-    if (currentModule) {
-      scopePath = currentModule;
-      if (currentFeature) {
-        scopePath += `.${currentFeature}`;
-        if (currentRequirement) {
-          scopePath += `.${currentRequirement}`;
+  // When in identifier name context and containingBlock is null (tree hasn't captured it yet),
+  // detect parent scope by looking at the document text and tree structure
+  if (isInIdentifierName && !containingBlock) {
+    const root = tree.rootNode;
+
+    // Find the innermost block that contains or is just before the cursor position
+    for (const child of root.children) {
+      if (child.type === "module_block") {
+        const moduleNameNode = child.childForFieldName("name");
+        const moduleName = moduleNameNode?.text;
+
+        // Check if this module block's range includes or is right before the cursor line
+        if (
+          child.startPosition.row <= position.line &&
+          (child.endPosition.row >= position.line ||
+            child.endPosition.row === position.line - 1 ||
+            (child.endPosition.row === position.line &&
+              child.endPosition.column < position.character))
+        ) {
+          currentModule = moduleName ?? null;
+
+          // Also check for containing feature
+          for (const moduleChild of child.children) {
+            if (moduleChild.type === "feature_block") {
+              const featureNameNode = moduleChild.childForFieldName("name");
+              const featureName = featureNameNode?.text;
+
+              if (
+                moduleChild.startPosition.row <= position.line &&
+                (moduleChild.endPosition.row >= position.line ||
+                  moduleChild.endPosition.row === position.line - 1 ||
+                  (moduleChild.endPosition.row === position.line &&
+                    moduleChild.endPosition.column < position.character))
+              ) {
+                currentFeature = featureName ?? null;
+              }
+            }
+          }
         }
-      } else if (currentRequirement) {
+      }
+    }
+  }
+
+  // Build scope path
+  if (currentModule) {
+    scopePath = currentModule;
+    if (currentFeature) {
+      scopePath += `.${currentFeature}`;
+      if (currentRequirement) {
         scopePath += `.${currentRequirement}`;
       }
+    } else if (currentRequirement) {
+      scopePath += `.${currentRequirement}`;
     }
   }
 
@@ -577,6 +702,8 @@ export function getCursorContext(
     currentRequirement,
     existingReferences,
     isAfterComma,
+    isInIdentifierName,
+    identifierKeyword,
   };
 }
 
@@ -1076,6 +1203,221 @@ export function getConstraintNameCompletions(
 }
 
 // ============================================================================
+// Identifier Name Completion
+// ============================================================================
+
+/**
+ * Extract identifier name prefix from the text before cursor.
+ * E.g., "@module auth" -> "auth", "@feature log" -> "log"
+ *
+ * @param prefix The full prefix from context
+ * @param keyword The keyword type (module, feature, requirement)
+ * @returns The identifier name portion after the keyword
+ */
+function extractIdentifierPrefix(prefix: string, keyword: string): string {
+  const regex = new RegExp(`^@${keyword}\\s*`, "i");
+  return prefix.replace(regex, "");
+}
+
+/**
+ * Collect existing identifier names of a given kind from the symbol index.
+ * This is used to learn from existing naming patterns in the workspace.
+ *
+ * @param symbolIndex The cross-file symbol index
+ * @param kind The symbol kind to collect names for
+ * @returns Array of unique names with their usage frequency, sorted by frequency
+ */
+export function collectIdentifierNames(
+  symbolIndex: CrossFileSymbolIndex,
+  kind: "module" | "feature" | "requirement"
+): IdentifierPattern[] {
+  const nameFrequency = new Map<string, number>();
+
+  // Get all symbols of the specified kind
+  const symbols = symbolIndex.getSymbolsByKind(kind);
+
+  for (const symbol of symbols) {
+    const name = symbol.node.name;
+    if (name) {
+      nameFrequency.set(name, (nameFrequency.get(name) ?? 0) + 1);
+    }
+  }
+
+  // Convert to array and sort by frequency (descending), then alphabetically
+  const result: IdentifierPattern[] = [];
+  for (const [name, count] of nameFrequency) {
+    result.push({ name, count });
+  }
+
+  result.sort((a, b) => {
+    // Higher frequency first
+    if (b.count !== a.count) {
+      return b.count - a.count;
+    }
+    // Alphabetical as tiebreaker
+    return a.name.localeCompare(b.name);
+  });
+
+  return result;
+}
+
+/**
+ * Get identifier name completions based on context and existing patterns.
+ * Provides suggestions for naming modules, features, and requirements.
+ *
+ * For requirements inside features, suggests action-based names.
+ * Also learns from existing naming patterns in the workspace.
+ *
+ * @param context The completion context
+ * @param handlerContext Context with symbol index
+ * @returns Array of completion items for identifier names
+ */
+export function getIdentifierNameCompletions(
+  context: CompletionContext,
+  handlerContext: CompletionHandlerContext
+): CompletionItem[] {
+  const { symbolIndex } = handlerContext;
+  const { prefix, identifierKeyword, currentModule } = context;
+
+  if (!identifierKeyword) {
+    return [];
+  }
+
+  const completions: CompletionItem[] = [];
+
+  // Extract the identifier name prefix (text after the keyword)
+  const identifierPrefix = extractIdentifierPrefix(prefix, identifierKeyword);
+  const lowerPrefix = identifierPrefix.toLowerCase();
+
+  // Track added names to avoid duplicates
+  const addedNames = new Set<string>();
+
+  // For requirements, prioritize action-based name suggestions
+  if (identifierKeyword === "requirement") {
+    // Suggest action verb prefixes that match
+    for (let i = 0; i < REQUIREMENT_ACTION_VERBS.length; i++) {
+      const { prefix: verbPrefix, description } = REQUIREMENT_ACTION_VERBS[i]!;
+
+      // Filter by typed prefix
+      if (lowerPrefix && !verbPrefix.startsWith(lowerPrefix)) {
+        continue;
+      }
+
+      // Skip if already added
+      if (addedNames.has(verbPrefix)) {
+        continue;
+      }
+
+      // Create snippet with placeholder for the noun part
+      const snippetText = `${verbPrefix}-\${1:object}`;
+      const sortText = String(i).padStart(4, "0");
+
+      const item: CompletionItem = {
+        label: `${verbPrefix}-...`,
+        kind: CompletionItemKind.Value,
+        detail: description,
+        sortText,
+        filterText: verbPrefix,
+        insertText: snippetText,
+        insertTextFormat: InsertTextFormat.Snippet,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `**Action pattern:** \`${verbPrefix}-<object>\`\n\n${description}.\n\n**Examples:**\n- \`${verbPrefix}-credentials\`\n- \`${verbPrefix}-session\`\n- \`${verbPrefix}-data\``,
+        },
+      };
+
+      completions.push(item);
+      addedNames.add(verbPrefix);
+    }
+  }
+
+  // Learn from existing names in the workspace
+  const existingNames = collectIdentifierNames(symbolIndex, identifierKeyword);
+
+  // Add existing names as suggestions (after action verbs for requirements)
+  const baseIndex = completions.length;
+  for (let i = 0; i < existingNames.length && i < 20; i++) {
+    const { name, count } = existingNames[i]!;
+
+    // Filter by typed prefix
+    if (lowerPrefix && !name.toLowerCase().startsWith(lowerPrefix)) {
+      continue;
+    }
+
+    // Skip if already added (e.g., from action verbs)
+    if (addedNames.has(name)) {
+      continue;
+    }
+
+    // Sort after action verbs
+    const sortText = `1${String(baseIndex + i).padStart(4, "0")}`;
+
+    const item: CompletionItem = {
+      label: name,
+      kind: CompletionItemKind.Value,
+      detail: `Used ${count} time${count === 1 ? "" : "s"} in workspace`,
+      sortText,
+      filterText: name,
+      insertText: name,
+    };
+
+    completions.push(item);
+    addedNames.add(name);
+  }
+
+  // Add contextual suggestions based on parent scope
+  if (identifierKeyword === "feature" && currentModule) {
+    // Suggest feature names based on common patterns
+    const contextualSuggestions = [
+      { name: "create", description: "Create operations for the module" },
+      { name: "read", description: "Read/query operations" },
+      { name: "update", description: "Update operations" },
+      { name: "delete", description: "Delete operations" },
+      { name: "list", description: "List/browse operations" },
+      { name: "search", description: "Search functionality" },
+      { name: "settings", description: "Configuration/settings" },
+      { name: "admin", description: "Administrative functions" },
+    ];
+
+    const ctxBaseIndex = completions.length;
+    for (let i = 0; i < contextualSuggestions.length; i++) {
+      const { name, description } = contextualSuggestions[i]!;
+
+      // Filter by typed prefix
+      if (lowerPrefix && !name.toLowerCase().startsWith(lowerPrefix)) {
+        continue;
+      }
+
+      // Skip if already added
+      if (addedNames.has(name)) {
+        continue;
+      }
+
+      // Sort after workspace patterns
+      const sortText = `2${String(ctxBaseIndex + i).padStart(4, "0")}`;
+
+      const item: CompletionItem = {
+        label: name,
+        kind: CompletionItemKind.Value,
+        detail: description,
+        sortText,
+        filterText: name,
+        insertText: name,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `Common feature pattern: \`${name}\`\n\n${description}`,
+        },
+      };
+
+      completions.push(item);
+      addedNames.add(name);
+    }
+  }
+
+  return completions;
+}
+
+// ============================================================================
 // Code Block Language Completion
 // ============================================================================
 
@@ -1228,6 +1570,10 @@ export function buildCompletions(
   // Reference completion (in @depends-on context)
   else if (context.isInDependsOn && !context.isAfterAtTrigger) {
     items.push(...getReferenceCompletions(context, handlerContext));
+  }
+  // Identifier name completion (after @module/@feature/@requirement keyword)
+  else if (context.isInIdentifierName && !context.isAfterAtTrigger) {
+    items.push(...getIdentifierNameCompletions(context, handlerContext));
   }
   // Keyword completion (after @ or at line start)
   else if (context.isAfterAtTrigger || context.prefix === "" || context.prefix.startsWith("@")) {

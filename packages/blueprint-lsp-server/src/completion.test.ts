@@ -21,8 +21,11 @@ import {
   getCodeBlockLanguageCompletions,
   getDescriptionCompletions,
   resolveCompletionItem,
+  collectIdentifierNames,
+  getIdentifierNameCompletions,
   CODE_BLOCK_LANGUAGES,
   DESCRIPTION_STARTERS,
+  REQUIREMENT_ACTION_VERBS,
   type CompletionContext,
   type CompletionHandlerContext,
 } from "./completion";
@@ -2487,6 +2490,408 @@ describe("completion", () => {
       expect(labels).toContain("Overview:");
       expect(labels).toContain("Goals:");
       expect(labels).toContain("Non-Goals:");
+    });
+  });
+
+  // ============================================================================
+  // Phase 6.4: Identifier Name Suggestions
+  // ============================================================================
+
+  describe("identifier name completion", () => {
+    test("detects @module identifier context", () => {
+      const source = `@module `;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 0, character: 8 }, source);
+      expect(context.isInIdentifierName).toBe(true);
+      expect(context.identifierKeyword).toBe("module");
+      expect(context.isAfterAtTrigger).toBe(false);
+    });
+
+    test("detects @feature identifier context", () => {
+      const source = `@module auth
+  @feature `;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 1, character: 11 }, source);
+      expect(context.isInIdentifierName).toBe(true);
+      expect(context.identifierKeyword).toBe("feature");
+    });
+
+    test("detects @requirement identifier context", () => {
+      const source = `@module auth
+  @feature login
+    @requirement `;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 2, character: 17 }, source);
+      expect(context.isInIdentifierName).toBe(true);
+      expect(context.identifierKeyword).toBe("requirement");
+    });
+
+    test("detects identifier context with partial name", () => {
+      const source = `@module auth
+  @feature log`;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 1, character: 14 }, source);
+      expect(context.isInIdentifierName).toBe(true);
+      expect(context.identifierKeyword).toBe("feature");
+    });
+
+    test("does not detect identifier context when typing keyword", () => {
+      const source = `@module`;
+      const { tree } = createTestContext(source);
+
+      // At the end of "@module" without space - keyword completion
+      const context = getCursorContext(tree!, { line: 0, character: 7 }, source);
+      expect(context.isInIdentifierName).toBe(false);
+      expect(context.isAfterAtTrigger).toBe(true);
+    });
+
+    test("collectIdentifierNames returns unique names with frequency", () => {
+      const source = `@module auth
+  @feature login
+    @requirement validate-input
+  @feature session
+    @requirement validate-input
+    @requirement create-token
+
+@module storage
+  @feature database
+    @requirement validate-input`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const names = collectIdentifierNames(symbolIndex, "requirement");
+
+      // validate-input appears 3 times, should be first
+      expect(names[0].name).toBe("validate-input");
+      expect(names[0].count).toBe(3);
+
+      // create-token appears once
+      const createToken = names.find((n: { name: string }) => n.name === "create-token");
+      expect(createToken).toBeDefined();
+      expect(createToken!.count).toBe(1);
+    });
+
+    test("collectIdentifierNames works for modules", () => {
+      const source = `@module auth
+  Description.
+
+@module storage
+  Description.
+
+@module cache
+  Description.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const names = collectIdentifierNames(symbolIndex, "module");
+
+      expect(names.length).toBe(3);
+      const moduleNames = names.map((n: { name: string }) => n.name);
+      expect(moduleNames).toContain("auth");
+      expect(moduleNames).toContain("storage");
+      expect(moduleNames).toContain("cache");
+    });
+
+    test("getIdentifierNameCompletions returns action verbs for requirements", () => {
+      const source = `@module auth
+  @feature login
+    @requirement `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "feature",
+        scopePath: "auth.login",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: false,
+        isInIdentifierName: true,
+        identifierKeyword: "requirement",
+        prefix: "@requirement ",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: "auth",
+        currentFeature: "login",
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getIdentifierNameCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // Should suggest action verb patterns
+      expect(labels).toContain("validate-...");
+      expect(labels).toContain("create-...");
+      expect(labels).toContain("update-...");
+      expect(labels).toContain("delete-...");
+      expect(labels).toContain("get-...");
+    });
+
+    test("getIdentifierNameCompletions filters action verbs by prefix", () => {
+      const source = `@module auth
+  @feature login
+    @requirement val`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "feature",
+        scopePath: "auth.login",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: false,
+        isInIdentifierName: true,
+        identifierKeyword: "requirement",
+        prefix: "@requirement val",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: "auth",
+        currentFeature: "login",
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getIdentifierNameCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // Should only match actions starting with "val"
+      expect(labels).toContain("validate-...");
+      expect(labels).not.toContain("create-...");
+      expect(labels).not.toContain("update-...");
+    });
+
+    test("getIdentifierNameCompletions includes existing names from workspace", () => {
+      const source = `@module auth
+  @feature login
+    @requirement custom-validation
+      Description.
+  @feature session
+    @requirement `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "feature",
+        scopePath: "auth.session",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: false,
+        isInIdentifierName: true,
+        identifierKeyword: "requirement",
+        prefix: "@requirement ",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: "auth",
+        currentFeature: "session",
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getIdentifierNameCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // Should include existing requirement name from workspace
+      expect(labels).toContain("custom-validation");
+    });
+
+    test("getIdentifierNameCompletions suggests contextual feature names", () => {
+      const source = `@module auth
+  @feature `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "auth",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: false,
+        isInIdentifierName: true,
+        identifierKeyword: "feature",
+        prefix: "@feature ",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: "auth",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getIdentifierNameCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // Should suggest common CRUD-like feature names
+      expect(labels).toContain("create");
+      expect(labels).toContain("read");
+      expect(labels).toContain("update");
+      expect(labels).toContain("delete");
+      expect(labels).toContain("list");
+      expect(labels).toContain("search");
+    });
+
+    test("requirement action completions include snippets", () => {
+      const source = `@module auth
+  @feature login
+    @requirement `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "feature",
+        scopePath: "auth.login",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: false,
+        isInIdentifierName: true,
+        identifierKeyword: "requirement",
+        prefix: "@requirement ",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: "auth",
+        currentFeature: "login",
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getIdentifierNameCompletions(context, handlerContext);
+      const validateCompletion = completions.find((c) => c.label === "validate-...");
+
+      expect(validateCompletion).toBeDefined();
+      expect(validateCompletion!.insertText).toContain("${1:object}");
+      expect(validateCompletion!.insertTextFormat).toBe(2); // InsertTextFormat.Snippet
+    });
+
+    test("requirement action completions include documentation", () => {
+      const source = `@module auth
+  @feature login
+    @requirement `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "feature",
+        scopePath: "auth.login",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: false,
+        isInIdentifierName: true,
+        identifierKeyword: "requirement",
+        prefix: "@requirement ",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: "auth",
+        currentFeature: "login",
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getIdentifierNameCompletions(context, handlerContext);
+      const createCompletion = completions.find((c) => c.label === "create-...");
+
+      expect(createCompletion).toBeDefined();
+      expect(createCompletion!.documentation).toBeDefined();
+      expect((createCompletion!.documentation as any).kind).toBe("markdown");
+      expect((createCompletion!.documentation as any).value).toContain("create-credentials");
+    });
+
+    test("buildCompletions returns identifier suggestions after @requirement keyword", () => {
+      const source = `@module auth
+  @feature login
+    @requirement `;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 2, character: 17 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+      // Should get action verb suggestions
+      expect(labels).toContain("validate-...");
+      expect(labels).toContain("create-...");
+    });
+
+    test("buildCompletions returns identifier suggestions after @feature keyword", () => {
+      const source = `@module auth
+  @feature `;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 1, character: 11 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+      // Should get contextual feature suggestions
+      expect(labels).toContain("create");
+      expect(labels).toContain("read");
+    });
+
+    test("REQUIREMENT_ACTION_VERBS includes common action patterns", () => {
+      const prefixes = REQUIREMENT_ACTION_VERBS.map((v) => v.prefix);
+
+      // These are common action verbs for requirements
+      expect(prefixes).toContain("validate");
+      expect(prefixes).toContain("create");
+      expect(prefixes).toContain("update");
+      expect(prefixes).toContain("delete");
+      expect(prefixes).toContain("get");
+      expect(prefixes).toContain("authenticate");
+      expect(prefixes).toContain("authorize");
+      expect(prefixes).toContain("send");
+      expect(prefixes).toContain("process");
     });
   });
 });
