@@ -924,6 +924,154 @@ describe("completion", () => {
       expect(loginCompletion).toBeDefined();
       expect(loginCompletion!.documentation).toBeUndefined();
     });
+
+    test("filters out symbols that would create circular dependencies", () => {
+      // Create a scenario where:
+      // - moduleB depends on moduleA
+      // - When completing @depends-on in moduleA, moduleB should be filtered out
+      //   because moduleB already depends on moduleA, creating A -> B -> A cycle
+      const source = `@module moduleA
+  @feature featureA
+    Feature A description.
+
+@module moduleB
+  @depends-on moduleA
+  @feature featureB
+    Feature B description.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      // Create context as if we're in moduleA trying to add a dependency
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "moduleA",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "moduleA",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // moduleB depends on moduleA, so adding moduleA -> moduleB would create a cycle
+      // Therefore moduleB should be filtered out
+      expect(labels).not.toContain("moduleB");
+      expect(labels).not.toContain("moduleB.featureB");
+      // moduleA and its children are already filtered by self-reference check
+      expect(labels).not.toContain("moduleA");
+      expect(labels).not.toContain("moduleA.featureA");
+    });
+
+    test("filters out transitive circular dependencies", () => {
+      // Create a scenario where:
+      // - moduleC depends on moduleB
+      // - moduleB depends on moduleA
+      // - When completing in moduleA, both moduleB and moduleC should be filtered
+      //   because they both transitively depend on moduleA
+      const source = `@module moduleA
+  @feature featureA
+    Feature A.
+
+@module moduleB
+  @depends-on moduleA
+  @feature featureB
+    Feature B.
+
+@module moduleC
+  @depends-on moduleB
+  @feature featureC
+    Feature C.
+
+@module moduleD
+  @feature featureD
+    Feature D (no dependencies).`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      // Create context as if we're in moduleA trying to add a dependency
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "moduleA",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "moduleA",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // moduleB and moduleC both transitively depend on moduleA
+      expect(labels).not.toContain("moduleB");
+      expect(labels).not.toContain("moduleB.featureB");
+      expect(labels).not.toContain("moduleC");
+      expect(labels).not.toContain("moduleC.featureC");
+      // moduleD has no dependencies, so it's safe to add
+      expect(labels).toContain("moduleD");
+      expect(labels).toContain("moduleD.featureD");
+    });
+
+    test("allows valid dependencies that don't create cycles", () => {
+      // moduleA and moduleB are independent, so they can depend on each other
+      // (but once one depends on the other, the reverse is blocked)
+      const source = `@module moduleA
+  @feature featureA
+    Feature A.
+
+@module moduleB
+  @feature featureB
+    Feature B.`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      // Create context as if we're in moduleA trying to add a dependency
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "moduleA",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "moduleA",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getReferenceCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // moduleB doesn't depend on moduleA, so it's safe
+      expect(labels).toContain("moduleB");
+      expect(labels).toContain("moduleB.featureB");
+    });
   });
 
   // ============================================================================

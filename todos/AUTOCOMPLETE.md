@@ -108,7 +108,7 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 ### 4.2 Symbol Gathering
 
 - [x] Query `CrossFileSymbolIndex` for all available symbols
-- [ ] Filter out symbols that would create circular dependencies
+- [x] Filter out symbols that would create circular dependencies
 - [x] Filter out self-references (cannot depend on yourself)
 - [x] Filter by kind: only modules, features, requirements can be referenced
 
@@ -220,7 +220,7 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 ### 8.3 Unit Tests for Reference Completion
 
 - [x] Test reference gathering from symbol index
-- [ ] Test circular dependency filtering
+- [x] Test circular dependency filtering
 - [x] Test scoring and sorting
 
 ### 8.4 Unit Tests for Path Completion

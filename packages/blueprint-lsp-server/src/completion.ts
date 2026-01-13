@@ -501,6 +501,11 @@ export function getReferenceCompletions(
       continue;
     }
 
+    // Skip symbols that would create circular dependencies
+    if (scopePath && symbolIndex.wouldCreateCircularDependency(scopePath, path)) {
+      continue;
+    }
+
     // Filter by prefix if provided
     if (prefix && !path.toLowerCase().includes(prefix.toLowerCase())) {
       continue;

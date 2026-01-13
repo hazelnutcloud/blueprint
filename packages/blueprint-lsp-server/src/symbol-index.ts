@@ -443,6 +443,105 @@ export class CrossFileSymbolIndex {
   }
 
   /**
+   * Get all symbols that transitively depend on a given symbol path.
+   * This is useful for detecting circular dependencies.
+   *
+   * @param targetPath The path of the symbol to check dependents for
+   * @returns Set of symbol paths that depend on the target (directly or transitively)
+   */
+  getTransitiveDependents(targetPath: string): Set<string> {
+    const dependents = new Set<string>();
+    const visited = new Set<string>();
+    const queue: string[] = [targetPath];
+
+    while (queue.length > 0) {
+      const currentPath = queue.shift()!;
+      if (visited.has(currentPath)) {
+        continue;
+      }
+      visited.add(currentPath);
+
+      // Find all symbols that have a direct dependency on currentPath
+      for (const [fileUri, refs] of this.fileReferences) {
+        for (const { reference, containingPath } of refs) {
+          // Check if this reference points to currentPath or a child of it
+          if (
+            reference.path === currentPath ||
+            reference.path.startsWith(currentPath + ".") ||
+            currentPath.startsWith(reference.path + ".")
+          ) {
+            if (!dependents.has(containingPath) && containingPath !== targetPath) {
+              dependents.add(containingPath);
+              queue.push(containingPath);
+            }
+          }
+        }
+      }
+    }
+
+    return dependents;
+  }
+
+  /**
+   * Check if adding a dependency from sourceSymbol to targetSymbol would create a cycle.
+   * Returns true if targetSymbol (or any of its transitive dependencies) depends on sourceSymbol.
+   *
+   * @param sourceSymbolPath The symbol that wants to add a dependency
+   * @param targetSymbolPath The symbol that would be depended upon
+   * @returns True if adding this dependency would create a circular dependency
+   */
+  wouldCreateCircularDependency(sourceSymbolPath: string, targetSymbolPath: string): boolean {
+    // If target already depends on source (directly or transitively), adding source -> target creates a cycle
+    const targetDependencies = this.getTransitiveDependencies(targetSymbolPath);
+    return targetDependencies.has(sourceSymbolPath);
+  }
+
+  /**
+   * Get all symbols that a given symbol path depends on (transitively).
+   *
+   * @param symbolPath The path of the symbol to get dependencies for
+   * @returns Set of symbol paths that are dependencies
+   */
+  getTransitiveDependencies(symbolPath: string): Set<string> {
+    const dependencies = new Set<string>();
+    const visited = new Set<string>();
+    const queue: string[] = [symbolPath];
+
+    while (queue.length > 0) {
+      const currentPath = queue.shift()!;
+      if (visited.has(currentPath)) {
+        continue;
+      }
+      visited.add(currentPath);
+
+      // Find the file that contains this symbol
+      const symbols = this.globalSymbols.get(currentPath);
+      if (!symbols || symbols.length === 0) {
+        continue;
+      }
+
+      const fileUri = symbols[0]!.fileUri;
+      const refs = this.fileReferences.get(fileUri);
+      if (!refs) {
+        continue;
+      }
+
+      // Find all references from this symbol
+      for (const { reference, containingPath } of refs) {
+        if (containingPath === currentPath || currentPath.startsWith(containingPath + ".")) {
+          const depPath = reference.path;
+          if (!dependencies.has(depPath) && depPath !== symbolPath) {
+            dependencies.add(depPath);
+            queue.push(depPath);
+          }
+        }
+      }
+    }
+
+    return dependencies;
+  }
+
+  /**
    * Add a symbol to the global index.
    */
   private addSymbol(
