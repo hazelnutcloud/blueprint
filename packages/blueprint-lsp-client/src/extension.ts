@@ -513,12 +513,13 @@ export function activate(context: ExtensionContext): void {
   const serverOptions = {
     run: {
       command: serverBin,
-      transport: TransportKind.pipe,
+      args: ["--stdio"],
+      transport: TransportKind.stdio,
     },
     debug: {
       command: serverBin,
-      transport: TransportKind.pipe,
-      args: ["--nolazy", "--inspect=6009"],
+      args: ["--stdio", "--nolazy", "--inspect=6009"],
+      transport: TransportKind.stdio,
     },
   } satisfies ServerOptions;
 
@@ -552,11 +553,16 @@ export function activate(context: ExtensionContext): void {
 
   // Start the client. This will also launch the server.
   // Wait for the client to be ready before enabling decorations
-  client.start().then(() => {
-    // Initialize gutter and background decorations after server is ready
-    updateGutterIconsEnabled(context);
-    updateProgressHighlightingEnabled();
-  });
+  client
+    .start()
+    .then(() => {
+      // Initialize gutter and background decorations after server is ready
+      updateGutterIconsEnabled(context);
+      updateProgressHighlightingEnabled();
+    })
+    .catch((error) => {
+      window.showErrorMessage(`Blueprint LSP server failed to start: ${error.message}`);
+    });
 
   // Apply initial settings
   updateSemanticTokenColors();

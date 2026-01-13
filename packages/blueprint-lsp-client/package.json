@@ -124,7 +124,7 @@
           "type": "number",
           "default": 300,
           "minimum": 0,
-          "maximum": 10000,
+          "maximum": 1e4,
           "description": "Delay in milliseconds after which the hover is shown for Blueprint files"
         }
       }
@@ -209,8 +209,9 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "bun run compile && bun run bundle-server",
+    "vscode:prepublish": "bun run bundle && bun run bundle-server",
     "compile": "tsc -p ./",
+    "bundle": "bunx esbuild ./src/extension.ts --bundle --outfile=./out/extension.js --platform=node --format=cjs --external:vscode --minify",
     "bundle-server": "mkdir -p out/server && cp ../blueprint-lsp-server/dist/server ./out/server/ && cp ../tree-sitter-blueprint/tree-sitter-blueprint.wasm out/server/",
     "compile:tests": "tsc -p ./tsconfig.test.json",
     "watch": "tsc -watch -p ./",
@@ -225,10 +226,11 @@
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/mocha": "^10.0.6",
     "@types/vscode": "^1.85.0",
-    "@types/bun": "latest",
     "@vscode/test-electron": "^2.3.8",
+    "esbuild": "^0.27.2",
     "glob": "^10.3.10",
     "mocha": "^10.2.0",
     "typescript": "^5.7.3"
