@@ -326,6 +326,10 @@ export interface CompletionHandlerContext {
 /**
  * Find the containing block node at a given position.
  * Walks up the tree to find the nearest module, feature, or requirement block.
+ *
+ * @param tree - The parsed tree-sitter syntax tree
+ * @param position - The cursor position in the document
+ * @returns The containing block node with its type, or null if at top-level
  */
 export function findContainingBlock(
   tree: Tree,
@@ -386,6 +390,10 @@ function findNodeAtPosition(node: Node, line: number, column: number): Node | nu
 
 /**
  * Get the current scope based on cursor position in the tree.
+ *
+ * @param tree - The parsed tree-sitter syntax tree
+ * @param position - The cursor position in the document
+ * @returns The scope type at the cursor position (top-level, module, feature, or requirement)
  */
 export function getCurrentScope(tree: Tree, position: Position): CompletionScope {
   const containingBlock = findContainingBlock(tree, position);
@@ -409,6 +417,10 @@ export function getCurrentScope(tree: Tree, position: Position): CompletionScope
 /**
  * Find the containing @depends-on node at a given position.
  * Walks up the tree to find if cursor is inside a depends_on node.
+ *
+ * @param tree - The parsed tree-sitter syntax tree
+ * @param position - The cursor position in the document
+ * @returns The depends_on node containing the cursor, or null if not in a @depends-on clause
  */
 export function findContainingDependsOn(tree: Tree, position: Position): Node | null {
   const root = tree.rootNode;
@@ -433,6 +445,10 @@ export function findContainingDependsOn(tree: Tree, position: Position): Node | 
 /**
  * Find the containing @description block at a given position.
  * Walks up the tree to find if cursor is inside a description_block node.
+ *
+ * @param tree - The parsed tree-sitter syntax tree
+ * @param position - The cursor position in the document
+ * @returns The description_block node containing the cursor, or null if not in a @description block
  */
 export function findContainingDescriptionBlock(tree: Tree, position: Position): Node | null {
   const root = tree.rootNode;
@@ -457,6 +473,9 @@ export function findContainingDescriptionBlock(tree: Tree, position: Position): 
 /**
  * Extract existing references from a @depends-on clause.
  * Returns an array of reference paths (e.g., ["auth.login", "storage"]).
+ *
+ * @param dependsOnNode - The depends_on AST node to extract references from
+ * @returns Array of reference path strings found in the @depends-on clause
  */
 export function extractExistingReferences(dependsOnNode: Node): string[] {
   const references: string[] = [];
@@ -473,6 +492,17 @@ export function extractExistingReferences(dependsOnNode: Node): string[] {
 
 /**
  * Get the full context for completion at a given position.
+ *
+ * Analyzes the cursor position to determine the completion context including:
+ * - Current scope (top-level, module, feature, requirement)
+ * - Trigger character context (after @, after ., in @depends-on, etc.)
+ * - Partial text prefix for filtering suggestions
+ * - Parent scope information for path building
+ *
+ * @param tree - The parsed tree-sitter syntax tree
+ * @param position - The cursor position in the document
+ * @param documentText - The full text content of the document
+ * @returns Complete context information for generating appropriate completions
  */
 export function getCursorContext(
   tree: Tree,
@@ -713,6 +743,14 @@ export function getCursorContext(
 
 /**
  * Check if a keyword is valid in the given scope.
+ *
+ * Each Blueprint keyword has specific valid contexts where it can appear.
+ * For example, @module is only valid at top-level, while @constraint
+ * can appear within modules, features, or requirements.
+ *
+ * @param keyword - The keyword name to check (e.g., "@module", "@feature")
+ * @param scope - The current scope context
+ * @returns True if the keyword is valid in the given scope, false otherwise
  */
 export function isKeywordValidInScope(keyword: KeywordName, scope: CompletionScope): boolean {
   const keywordMeta = COMPLETION_KEYWORDS[keyword];
@@ -721,6 +759,14 @@ export function isKeywordValidInScope(keyword: KeywordName, scope: CompletionSco
 
 /**
  * Get keyword completions filtered by scope and prefix.
+ *
+ * Returns completion items for Blueprint keywords that are valid in the
+ * current scope and match the typed prefix. Each completion item includes
+ * a snippet template for easy insertion.
+ *
+ * @param scope - The current scope context (top-level, module, feature, requirement)
+ * @param prefix - The partial text typed by the user for filtering
+ * @returns Array of keyword completion items valid for the current context
  */
 export function getKeywordCompletions(scope: CompletionScope, prefix: string): CompletionItem[] {
   const completions: CompletionItem[] = [];
@@ -755,10 +801,15 @@ export function getKeywordCompletions(scope: CompletionScope, prefix: string): C
 
 /**
  * Check if a symbol matches a query string for reference completion.
+ *
  * Matching is case-insensitive and supports:
  * - Prefix matching (query matches start of name or path)
  * - Substring matching (query is contained in name or path)
  * - Fuzzy matching (query characters appear in order in name)
+ *
+ * @param symbol - The indexed symbol to check against the query
+ * @param query - The search query string (empty query matches all symbols)
+ * @returns True if the symbol matches the query, false otherwise
  */
 export function matchesReferenceQuery(symbol: IndexedSymbol, query: string): boolean {
   if (!query) {
@@ -809,6 +860,10 @@ export function matchesReferenceQuery(symbol: IndexedSymbol, query: string): boo
  * - 50-60: Substring match on name (earlier position is better)
  * - 40: Substring match on path
  * - 20: Fuzzy match (fallback)
+ *
+ * @param symbol - The indexed symbol to score
+ * @param query - The search query to score against
+ * @returns A numeric score (0-100) indicating match quality, higher is better
  */
 export function calculateReferenceScore(symbol: IndexedSymbol, query: string): number {
   if (!query) {
@@ -861,6 +916,15 @@ export function calculateReferenceScore(symbol: IndexedSymbol, query: string): n
  * Uses fuzzy matching and scoring to rank results:
  * - exact match > prefix match > substring match > fuzzy match
  * - Local symbols (same file) are boosted in ranking
+ *
+ * Also filters out:
+ * - Self-references (cannot depend on yourself)
+ * - Circular dependencies
+ * - References already in the current @depends-on clause
+ *
+ * @param context - The completion context with prefix and scope information
+ * @param handlerContext - Context containing the symbol index and current file URI
+ * @returns Array of completion items for referenceable symbols (limited to 50)
  */
 export function getReferenceCompletions(
   context: CompletionContext,
@@ -999,6 +1063,14 @@ export function getReferenceCompletions(
 
 /**
  * Get child symbol completions for path navigation (after a dot).
+ *
+ * When the user types "auth." this function returns all direct children
+ * of the "auth" module (features, requirements under that module).
+ * Only returns one level of children - nested paths require additional dots.
+ *
+ * @param context - The completion context with the path prefix (e.g., "auth.")
+ * @param handlerContext - Context containing the symbol index
+ * @returns Array of completion items for direct child symbols of the parent path
  */
 export function getPathCompletions(
   context: CompletionContext,
@@ -1109,6 +1181,9 @@ interface ConstraintNameFrequency {
 /**
  * Collect all unique constraint names from the symbol index with their usage frequency.
  * This allows suggesting common constraint patterns to users.
+ *
+ * @param symbolIndex - The cross-file symbol index to query for constraint symbols
+ * @returns Array of constraint names with their usage counts, sorted by frequency (descending)
  */
 export function collectConstraintNames(
   symbolIndex: CrossFileSymbolIndex

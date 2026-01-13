@@ -462,7 +462,7 @@ export class CrossFileSymbolIndex {
       visited.add(currentPath);
 
       // Find all symbols that have a direct dependency on currentPath
-      for (const [fileUri, refs] of this.fileReferences) {
+      for (const [_fileUri, refs] of this.fileReferences) {
         for (const { reference, containingPath } of refs) {
           // Check if this reference points to currentPath or a child of it
           if (
