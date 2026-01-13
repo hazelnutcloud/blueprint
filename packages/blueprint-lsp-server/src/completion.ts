@@ -8,6 +8,84 @@
  * - Context-aware suggestions based on cursor position
  *
  * @module completion
+ *
+ * ## Architecture Overview
+ *
+ * The completion provider follows a **context-driven dispatch** architecture where the
+ * cursor position is analyzed to determine what type of completions to offer. The system
+ * is designed for extensibility and lazy evaluation to maintain responsiveness.
+ *
+ * ### Core Flow
+ *
+ * ```
+ * ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+ * │ LSP Completion  │────▶│ getCursorContext │────▶│ Context-Based   │
+ * │ Request         │     │                  │     │ Dispatch        │
+ * └─────────────────┘     └──────────────────┘     └─────────────────┘
+ *                                                          │
+ *         ┌────────────────────────────────────────────────┼────────────────┐
+ *         ▼                    ▼                    ▼                       ▼
+ * ┌───────────────┐   ┌───────────────┐   ┌───────────────┐   ┌────────────────┐
+ * │   Keyword     │   │  Reference    │   │    Path       │   │   Identifier   │
+ * │  Completions  │   │  Completions  │   │  Completions  │   │   Completions  │
+ * └───────────────┘   └───────────────┘   └───────────────┘   └────────────────┘
+ * ```
+ *
+ * ### Module Structure
+ *
+ * **1. Context Detection Layer** (`getCursorContext`)
+ * - Analyzes cursor position using tree-sitter AST
+ * - Determines scope (top-level, module, feature, requirement)
+ * - Detects trigger contexts (@, ., @depends-on, etc.)
+ * - Extracts prefix text for filtering
+ * - Identifies "skip zones" (comments, code blocks)
+ *
+ * **2. Completion Generators**
+ * - `getKeywordCompletions()` - Scope-aware keyword suggestions with snippets
+ * - `getReferenceCompletions()` - Fuzzy-matched symbols for @depends-on
+ * - `getPathCompletions()` - Child symbols after dot navigation
+ * - `getConstraintNameCompletions()` - Workspace-learned constraint names
+ * - `getIdentifierNameCompletions()` - Action-verb patterns for naming
+ * - `getCodeBlockLanguageCompletions()` - Language identifiers for fenced blocks
+ * - `getDescriptionCompletions()` - Documentation templates
+ *
+ * **3. Main Entry Points**
+ * - `buildCompletions()` - Dispatches to appropriate generator based on context
+ * - `resolveCompletionItem()` - Lazy-loads rich documentation on selection
+ *
+ * ### Key Design Decisions
+ *
+ * 1. **Scope-Based Filtering**: Keywords are filtered by validity in current scope.
+ *    For example, `@module` only appears at top-level, `@feature` only inside modules.
+ *
+ * 2. **Fuzzy Matching**: Reference completions use multi-tier scoring:
+ *    - Exact match (100) > Prefix match (80-90) > Substring (50-60) > Fuzzy (20)
+ *    - Local symbols (same file) are boosted in ranking
+ *
+ * 3. **Circular Dependency Prevention**: `getReferenceCompletions()` filters out
+ *    references that would create dependency cycles via `symbolIndex.wouldCreateCircularDependency()`.
+ *
+ * 4. **Lazy Resolution**: Rich documentation (dependencies, constraints, file location)
+ *    is only loaded when user focuses on an item, reducing initial completion latency.
+ *
+ * 5. **Snippet Templates**: All keywords use snippet syntax for tab-stop navigation,
+ *    e.g., `@module ${1:name}\n\t$0` places cursor at name, then inside the block.
+ *
+ * ### Integration with LSP Server
+ *
+ * The completion provider is registered in `index.ts` with:
+ * - Trigger characters: `@` (keywords), `.` (path navigation)
+ * - `resolveProvider: true` for lazy documentation loading
+ *
+ * The `onCompletion` handler calls `buildCompletions()` with the parsed tree-sitter
+ * tree and symbol index. The `onCompletionResolve` handler calls `resolveCompletionItem()`
+ * to fetch full documentation when a completion item is selected.
+ *
+ * ### Dependencies
+ *
+ * - `CrossFileSymbolIndex` - Provides workspace-wide symbol queries
+ * - `tree-sitter` - Parses Blueprint DSL for AST-based context detection
+ * - `vscode-languageserver` - LSP protocol types and completion item kinds
  */
 
 import {
