@@ -137,6 +137,8 @@ export interface CompletionContext {
   isAfterDotTrigger: boolean;
   /** Whether we're in a @depends-on context */
   isInDependsOn: boolean;
+  /** Whether we're in a @constraint context (after @constraint keyword) */
+  isInConstraint: boolean;
   /** The partial text before the cursor for filtering */
   prefix: string;
   /** Whether we're inside a comment or code block (skip completion) */
@@ -318,6 +320,10 @@ export function getCursorContext(
   // Check if we're in a @depends-on context
   const isInDependsOn = textBeforeCursor.includes("@depends-on");
 
+  // Check if we're in a @constraint context (after @constraint keyword with a space)
+  // Matches: "@constraint " or "@constraint name" but not "@constraint" alone (which is keyword completion)
+  const isInConstraint = /^\s*@constraint\s+/.test(textBeforeCursor);
+
   // Check if we're in a comment or code block
   const node = findNodeAtPosition(tree.rootNode, position.line, position.character);
   const isInSkipZone = node?.type === "comment" || node?.type === "code_block";
@@ -402,6 +408,7 @@ export function getCursorContext(
     isAfterAtTrigger,
     isAfterDotTrigger,
     isInDependsOn,
+    isInConstraint,
     prefix,
     isInSkipZone,
     currentModule,
@@ -646,7 +653,8 @@ export function getReferenceCompletions(
   const completions: CompletionItem[] = [];
 
   for (let i = 0; i < scoredSymbols.length && i < 50; i++) {
-    const { symbol, isLocal } = scoredSymbols[i];
+    const entry = scoredSymbols[i]!;
+    const { symbol, isLocal } = entry;
     const path = symbol.path;
 
     // Map symbol kind to CompletionItemKind
@@ -799,6 +807,114 @@ export function getPathCompletions(
 }
 
 // ============================================================================
+// Constraint Name Completion
+// ============================================================================
+
+/**
+ * Represents a constraint name with its usage frequency.
+ */
+interface ConstraintNameFrequency {
+  name: string;
+  count: number;
+}
+
+/**
+ * Collect all unique constraint names from the symbol index with their usage frequency.
+ * This allows suggesting common constraint patterns to users.
+ */
+export function collectConstraintNames(
+  symbolIndex: CrossFileSymbolIndex
+): ConstraintNameFrequency[] {
+  const nameFrequency = new Map<string, number>();
+
+  // Get all constraint symbols
+  const constraints = symbolIndex.getSymbolsByKind("constraint");
+
+  for (const constraint of constraints) {
+    // Extract just the name (last segment of the path)
+    const name = constraint.node.name;
+    if (name) {
+      nameFrequency.set(name, (nameFrequency.get(name) ?? 0) + 1);
+    }
+  }
+
+  // Convert to array and sort by frequency (descending), then alphabetically
+  const result: ConstraintNameFrequency[] = [];
+  for (const [name, count] of nameFrequency) {
+    result.push({ name, count });
+  }
+
+  result.sort((a, b) => {
+    // Higher frequency first
+    if (b.count !== a.count) {
+      return b.count - a.count;
+    }
+    // Alphabetical as tiebreaker
+    return a.name.localeCompare(b.name);
+  });
+
+  return result;
+}
+
+/**
+ * Get constraint name completions for @constraint context.
+ * Suggests common constraint names from the workspace, ranked by frequency.
+ *
+ * @param context The completion context
+ * @param handlerContext Context with symbol index
+ * @returns Array of completion items for constraint names
+ */
+export function getConstraintNameCompletions(
+  context: CompletionContext,
+  handlerContext: CompletionHandlerContext
+): CompletionItem[] {
+  const { symbolIndex } = handlerContext;
+  const { prefix } = context;
+
+  // Extract the constraint name prefix (text after "@constraint ")
+  const constraintPrefix = prefix.replace(/^@constraint\s*/, "");
+
+  // Get all constraint names with their frequency
+  const constraintNames = collectConstraintNames(symbolIndex);
+
+  // Filter by prefix if there's a partial name
+  const filtered = constraintNames.filter(({ name }) => {
+    if (!constraintPrefix) {
+      return true;
+    }
+    return name.toLowerCase().startsWith(constraintPrefix.toLowerCase());
+  });
+
+  // Limit to reasonable count
+  const limited = filtered.slice(0, 30);
+
+  // Convert to CompletionItems
+  const completions: CompletionItem[] = [];
+
+  for (let i = 0; i < limited.length; i++) {
+    const entry = limited[i]!;
+    const { name, count } = entry;
+
+    // Use sortText to preserve the sorted order (by frequency)
+    const sortText = String(i).padStart(4, "0");
+
+    const item: CompletionItem = {
+      label: name,
+      kind: CompletionItemKind.Property,
+      detail: `Used ${count} time${count === 1 ? "" : "s"} in workspace`,
+      sortText,
+      filterText: name,
+      // Insert just the name (the @constraint keyword is already typed)
+      insertText: name,
+    };
+
+    completions.push(item);
+  }
+
+  return completions;
+}
+
+// ============================================================================
 // Main Completion Handler
 // ============================================================================
 
@@ -832,6 +948,10 @@ export function buildCompletions(
   // Path completion (after a dot)
   if (context.isAfterDotTrigger) {
     items.push(...getPathCompletions(context, handlerContext));
+  }
+  // Constraint name completion (in @constraint context)
+  else if (context.isInConstraint && !context.isAfterAtTrigger) {
+    items.push(...getConstraintNameCompletions(context, handlerContext));
   }
   // Reference completion (in @depends-on context)
   else if (context.isInDependsOn && !context.isAfterAtTrigger) {

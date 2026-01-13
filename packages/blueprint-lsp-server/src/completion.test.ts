@@ -15,6 +15,8 @@ import {
   buildCompletions,
   matchesReferenceQuery,
   calculateReferenceScore,
+  collectConstraintNames,
+  getConstraintNameCompletions,
   type CompletionContext,
   type CompletionHandlerContext,
 } from "./completion";
@@ -1637,6 +1639,354 @@ describe("completion", () => {
       // Depends on whether empty prefix triggers keyword completions
       // At top-level with empty prefix, we get @module and @description
       expect(result).not.toBeNull();
+    });
+  });
+
+  // ============================================================================
+  // Phase 6.1: Constraint Name Completion
+  // ============================================================================
+
+  describe("constraint name completion", () => {
+    test("detects @constraint context", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint `;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 3, character: 18 }, source);
+      expect(context.isInConstraint).toBe(true);
+      expect(context.isAfterAtTrigger).toBe(false); // Not after @ alone
+    });
+
+    test("detects @constraint context with partial name", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint inp`;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 3, character: 21 }, source);
+      expect(context.isInConstraint).toBe(true);
+    });
+
+    test("does not detect @constraint context when typing keyword", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint`;
+      const { tree } = createTestContext(source);
+
+      // At the end of "@constraint" without space - keyword completion
+      const context = getCursorContext(tree!, { line: 3, character: 17 }, source);
+      expect(context.isInConstraint).toBe(false);
+      expect(context.isAfterAtTrigger).toBe(true);
+    });
+
+    test("collectConstraintNames returns unique constraint names with frequency", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+      @constraint rate-limiting
+    @requirement oauth
+      @constraint input-validation
+      @constraint token-validation
+  @feature session
+    @requirement token-mgmt
+      @constraint input-validation`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const names = collectConstraintNames(symbolIndex);
+
+      // input-validation appears 3 times, should be first
+      expect(names[0].name).toBe("input-validation");
+      expect(names[0].count).toBe(3);
+
+      // rate-limiting and token-validation appear once each
+      const rateLimiting = names.find((n: { name: string }) => n.name === "rate-limiting");
+      const tokenValidation = names.find((n: { name: string }) => n.name === "token-validation");
+      expect(rateLimiting).toBeDefined();
+      expect(rateLimiting.count).toBe(1);
+      expect(tokenValidation).toBeDefined();
+      expect(tokenValidation.count).toBe(1);
+    });
+
+    test("getConstraintNameCompletions returns constraint names from workspace", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+      @constraint rate-limiting
+    @requirement oauth
+      @constraint input-validation
+
+@module storage
+  @requirement connect
+    @constraint `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "requirement",
+        scopePath: "storage.connect",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "storage",
+        currentFeature: null,
+        currentRequirement: "connect",
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getConstraintNameCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // Should suggest both constraint names
+      expect(labels).toContain("input-validation");
+      expect(labels).toContain("rate-limiting");
+    });
+
+    test("getConstraintNameCompletions filters by prefix", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+      @constraint rate-limiting
+      @constraint retry-logic
+
+@module storage
+  @requirement connect
+    @constraint ra`;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "requirement",
+        scopePath: "storage.connect",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: true,
+        prefix: "ra",
+        isInSkipZone: false,
+        currentModule: "storage",
+        currentFeature: null,
+        currentRequirement: "connect",
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getConstraintNameCompletions(context, handlerContext);
+      const labels = completions.map((c) => c.label);
+
+      // Should only suggest names starting with "ra"
+      expect(labels).toContain("rate-limiting");
+      expect(labels).not.toContain("input-validation");
+      expect(labels).not.toContain("retry-logic");
+    });
+
+    test("getConstraintNameCompletions sorts by frequency", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+      @constraint rate-limiting
+    @requirement oauth
+      @constraint input-validation
+    @requirement session
+      @constraint input-validation
+
+@module storage
+  @requirement connect
+    @constraint `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "requirement",
+        scopePath: "storage.connect",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "storage",
+        currentFeature: null,
+        currentRequirement: "connect",
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getConstraintNameCompletions(context, handlerContext);
+
+      // input-validation (3 times) should come before rate-limiting (1 time)
+      const inputIdx = completions.findIndex((c) => c.label === "input-validation");
+      const rateIdx = completions.findIndex((c) => c.label === "rate-limiting");
+      expect(inputIdx).toBeLessThan(rateIdx);
+    });
+
+    test("getConstraintNameCompletions shows usage count in detail", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+    @requirement oauth
+      @constraint input-validation
+    @requirement session
+      @constraint input-validation
+
+@module storage
+  @requirement connect
+    @constraint `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "requirement",
+        scopePath: "storage.connect",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "storage",
+        currentFeature: null,
+        currentRequirement: "connect",
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getConstraintNameCompletions(context, handlerContext);
+      const inputCompletion = completions.find((c) => c.label === "input-validation");
+
+      expect(inputCompletion).toBeDefined();
+      expect(inputCompletion!.detail).toBe("Used 3 times in workspace");
+    });
+
+    test("buildCompletions returns constraint name completions in @constraint context", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+      @constraint rate-limiting
+
+@module storage
+  @requirement connect
+    @constraint `;
+
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 8, character: 16 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+
+      // Should suggest constraint names, not keywords
+      expect(labels).toContain("input-validation");
+      expect(labels).toContain("rate-limiting");
+      expect(labels).not.toContain("@constraint");
+    });
+
+    test("returns empty completions when no constraints exist in workspace", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "requirement",
+        scopePath: "auth.login.basic-auth",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "auth",
+        currentFeature: "login",
+        currentRequirement: "basic-auth",
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      // At this point, the source has been parsed but no constraints are complete
+      // (the one we're typing is incomplete), so the symbol index has no constraints
+      const completions = getConstraintNameCompletions(context, handlerContext);
+      expect(completions).toHaveLength(0);
+    });
+
+    test("constraint name completion uses singular grammar for count of 1", () => {
+      const source = `@module auth
+  @feature login
+    @requirement basic-auth
+      @constraint input-validation
+
+@module storage
+  @requirement connect
+    @constraint `;
+
+      const { symbolIndex } = createTestContext(source);
+
+      const context: CompletionContext = {
+        scope: "requirement",
+        scopePath: "storage.connect",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: true,
+        prefix: "",
+        isInSkipZone: false,
+        currentModule: "storage",
+        currentFeature: null,
+        currentRequirement: "connect",
+        existingReferences: [],
+        isAfterComma: false,
+      };
+      const handlerContext: CompletionHandlerContext = {
+        symbolIndex,
+        fileUri: "file:///test.bp",
+      };
+
+      const completions = getConstraintNameCompletions(context, handlerContext);
+      const inputCompletion = completions.find((c) => c.label === "input-validation");
+
+      expect(inputCompletion).toBeDefined();
+      expect(inputCompletion!.detail).toBe("Used 1 time in workspace");
     });
   });
 });

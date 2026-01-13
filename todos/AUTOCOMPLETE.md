@@ -159,10 +159,10 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 6.1 Constraint Name Completion
 
-- [ ] Detect cursor is after `@constraint` keyword
-- [ ] Suggest common constraint names from workspace
-- [ ] Collect unique constraint names from `CrossFileSymbolIndex`
-- [ ] Rank by frequency of use
+- [x] Detect cursor is after `@constraint` keyword
+- [x] Suggest common constraint names from workspace
+- [x] Collect unique constraint names from `CrossFileSymbolIndex`
+- [x] Rank by frequency of use
 
 ### 6.2 Description Block Completion
 
