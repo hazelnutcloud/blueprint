@@ -46,7 +46,7 @@ async function doInitialize(): Promise<Parser> {
     // When running from the server package directly
     path.resolve(__dirname, "../../tree-sitter-blueprint/tree-sitter-blueprint.wasm"),
     // When running from dist/bundled location
-    path.resolve(__dirname, "../tree-sitter-blueprint.wasm"),
+    path.resolve(__dirname, "./tree-sitter-blueprint.wasm"),
     // Monorepo sibling package
     path.resolve(__dirname, "../../../tree-sitter-blueprint/tree-sitter-blueprint.wasm"),
   ];

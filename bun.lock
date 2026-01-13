@@ -33,19 +33,17 @@
     "packages/blueprint-lsp-server": {
       "name": "blueprint-lsp-server",
       "version": "0.1.0",
-      "dependencies": {
+      "bin": {
+        "blueprint-lsp-server": "./dist/server",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
         "valibot": "^1.2.0",
         "vscode-languageserver": "^9.0.1",
         "vscode-languageserver-textdocument": "^1.0.12",
         "vscode-uri": "^3.0.8",
         "web-tree-sitter": "^0.26.3",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "zshy": "^0.7.0",
-      },
-      "peerDependencies": {
-        "typescript": "^5",
       },
     },
     "packages/tree-sitter-blueprint": {

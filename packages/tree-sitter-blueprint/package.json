@@ -3,8 +3,6 @@
   "version": "0.1.0",
   "description": "Tree-sitter grammar for Blueprint DSL",
   "private": true,
-  "main": "bindings/node",
-  "types": "bindings/node",
   "scripts": {
     "generate": "tree-sitter generate",
     "build": "tree-sitter generate && tree-sitter build --wasm",

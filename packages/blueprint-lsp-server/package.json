@@ -4,17 +4,9 @@
   "description": "Language Server Protocol implementation for Blueprint DSL",
   "type": "module",
   "private": true,
-  "zshy": {
-    "exports": {
-      ".": "./src/index.ts"
-    },
-    "bin": {
-      "blueprint-lsp-server": "./src/index.ts"
-    }
-  },
   "scripts": {
-    "build": "zshy",
-    "build:dry-run": "zshy --dry-run --verbose",
+    "build": "bun run compile && cp ../tree-sitter-blueprint/tree-sitter-blueprint.wasm ./dist",
+    "compile": "bun build --outfile=./dist/server --compile --minify --sourcemap --bytecode ./src/index.ts",
     "dev": "bun --watch src/index.ts",
     "dev:debug": "bun --watch --inspect=6009 src/index.ts",
     "test": "bun test",
@@ -30,32 +22,17 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "zshy": "^0.7.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
-  "dependencies": {
     "valibot": "^1.2.0",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
     "vscode-uri": "^3.0.8",
-    "web-tree-sitter": "^0.26.3"
+    "web-tree-sitter": "^0.26.3",
+    "typescript": "^5"
   },
   "files": [
     "dist"
   ],
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.cts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.cts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    }
-  },
   "bin": {
-    "blueprint-lsp-server": "./dist/index.cjs"
+    "blueprint-lsp-server": "./dist/server"
   }
 }

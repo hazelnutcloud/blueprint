@@ -6,6 +6,15 @@
   "publisher": "blueprint",
   "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hazelnutcloud/blueprint.git",
+    "directory": "packages/blueprint-lsp-client"
+  },
+  "homepage": "https://github.com/hazelnutcloud/blueprint#readme",
+  "bugs": {
+    "url": "https://github.com/hazelnutcloud/blueprint/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -200,8 +209,9 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "bun run compile",
+    "vscode:prepublish": "bun run compile && bun run bundle-server",
     "compile": "tsc -p ./",
+    "bundle-server": "mkdir -p out/server && cp ../blueprint-lsp-server/dist/server ./out/server/ && cp ../tree-sitter-blueprint/tree-sitter-blueprint.wasm out/server/",
     "compile:tests": "tsc -p ./tsconfig.test.json",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src",

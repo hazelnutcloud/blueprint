@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import * as fs from "node:fs";
 import {
   workspace,
   ExtensionContext,
@@ -481,26 +482,45 @@ function updateProgressHighlightingEnabled(): void {
 
 export function activate(context: ExtensionContext): void {
   // The server is implemented in the blueprint-lsp-server package
-  // We look for the server module in node_modules or use a local path during development
-  const serverModule = context.asAbsolutePath(
-    path.join("..", "blueprint-lsp-server", "dist", "index.cjs")
-  );
+  // Search order:
+  // 1. out/server/ - bundled during vscode:prepublish for distribution
+  // 2. node_modules/blueprint-lsp-server/dist/ - when installed as dependency
+  // 3. ../blueprint-lsp-server/dist/ - monorepo development path
+  const serverPaths = [
+    path.join("out", "server", "server"),
+    path.join("node_modules", "blueprint-lsp-server", "dist", "server"),
+    path.join("..", "blueprint-lsp-server", "dist", "server"),
+  ];
+
+  let serverBin: string | undefined;
+  for (const relativePath of serverPaths) {
+    const fullPath = context.asAbsolutePath(relativePath);
+    if (fs.existsSync(fullPath)) {
+      serverBin = fullPath;
+      break;
+    }
+  }
+
+  if (!serverBin) {
+    window.showErrorMessage(
+      "Blueprint LSP server not found. Please ensure the extension is properly installed."
+    );
+    return;
+  }
 
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
-  const serverOptions: ServerOptions = {
+  const serverOptions = {
     run: {
-      module: serverModule,
-      transport: TransportKind.ipc,
+      command: serverBin,
+      transport: TransportKind.pipe,
     },
     debug: {
-      module: serverModule,
-      transport: TransportKind.ipc,
-      options: {
-        execArgv: ["--nolazy", "--inspect=6009"],
-      },
+      command: serverBin,
+      transport: TransportKind.pipe,
+      args: ["--nolazy", "--inspect=6009"],
     },
-  };
+  } satisfies ServerOptions;
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {

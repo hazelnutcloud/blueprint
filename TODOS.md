@@ -450,7 +450,7 @@ Note: 29 tests added in `hover.test.ts` covering all hover functionality includi
 ### 14.2 VS Code Extension Packaging
 
 - [x] Create `.vscodeignore` for extension (Created comprehensive `.vscodeignore` that excludes source files, tests, source maps, type declarations, and development artifacts. Added `package` and `package:ls` scripts to `package.json` using `--no-dependencies` flag to properly handle monorepo workspace. The extension package includes only: `package.json`, `README.md`, `language-configuration.json`, `syntaxes/blueprint.tmLanguage.json`, `out/extension.js`, `out/index.js`, and `icons/*.svg`.)
-- [ ] Package extension with `vsce package`
+- [x] Package extension with `vsce package` (Configured complete packaging pipeline: Added `repository`, `homepage`, `bugs` fields to package.json. Created MIT LICENSE file. Added `bundle-server` script using `bun build` to bundle LSP server with all dependencies into single `out/server/index.js` file (681KB). Copies `tree-sitter-blueprint.wasm` to `out/server/`. Updated extension.ts to search for server in multiple locations: `out/server/` for distribution, `node_modules/` for dependency install, and `../blueprint-lsp-server/` for monorepo development. Final `.vsix` package is 133KB containing 17 files. Run `bun run package` to generate `blueprint-lsp-client-0.1.0.vsix`.)
 - [ ] Test extension installation from `.vsix`
 
 ### 14.3 Distribution
