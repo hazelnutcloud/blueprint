@@ -438,31 +438,37 @@ export function findContainingBlock(
 
 /**
  * Find the deepest node at a given position.
+ *
+ * Uses a recursive descent through the AST to find the most specific
+ * (deepest) node that contains the given position. This is essential
+ * for context detection - a more specific node gives more context.
  */
 function findNodeAtPosition(node: Node, line: number, column: number): Node | null {
-  // Check if position is within this node
+  // Bounds check: verify position falls within this node's range
+  // Tree-sitter uses 0-based row/column coordinates
   const start = node.startPosition;
   const end = node.endPosition;
 
-  // Before start
+  // Position is before this node starts - not contained
   if (line < start.row || (line === start.row && column < start.column)) {
     return null;
   }
 
-  // After end
+  // Position is after this node ends - not contained
   if (line > end.row || (line === end.row && column > end.column)) {
     return null;
   }
 
-  // Try to find a more specific child
+  // Position is within this node - try to find a more specific child
+  // Recursively descend to find the deepest containing node
   for (const child of node.children) {
     const found = findNodeAtPosition(child, line, column);
     if (found) {
-      return found;
+      return found; // Child contains position - return the deeper result
     }
   }
 
-  // No child contains the position, return this node
+  // No child contains the position, this node is the deepest match
   return node;
 }
 
@@ -590,58 +596,66 @@ export function getCursorContext(
   const scope = getCurrentScope(tree, position);
   const containingBlock = findContainingBlock(tree, position);
 
-  // Handle empty document or position beyond document bounds
+  // === STEP 1: Safely extract the line text before the cursor ===
+  // Handle edge cases: empty documents, cursor beyond document bounds, etc.
   const lines = documentText.split("\n");
 
-  // Clamp line index to valid range
+  // Clamp line index to valid range (handles cursor past end of document)
   const lineIndex = Math.max(0, Math.min(position.line, lines.length - 1));
   const currentLine = lines[lineIndex] ?? "";
 
-  // Clamp character position to valid range within line
+  // Clamp character position to valid range within line (handles cursor past end of line)
   const charPosition = Math.max(0, Math.min(position.character, currentLine.length));
   const textBeforeCursor = currentLine.slice(0, charPosition);
 
-  // Detect trigger contexts
+  // === STEP 2: Detect trigger characters for completion dispatch ===
+  // "@" trigger: user is typing a keyword like "@module", "@feature", etc.
+  // Pattern: optional whitespace + @ + optional partial keyword
   const isAfterAtTrigger = /^\s*@[a-z-]*$/i.test(textBeforeCursor);
+  // "." trigger: user is navigating a path like "auth.login."
   const isAfterDotTrigger = /\.$/.test(textBeforeCursor);
 
-  // Extract prefix for filtering (text after last whitespace or @)
+  // === STEP 3: Extract the prefix text for filtering completions ===
+  // The prefix is the partial text the user has typed that we need to match against.
+  // Regex captures: optional "@" + word characters + dots + hyphens (for paths like "auth.log")
   const prefixMatch = textBeforeCursor.match(/(@?[\w.-]*)$/);
   const prefix = prefixMatch?.[1] ?? "";
 
-  // Check if we're in a @depends-on context
+  // === STEP 4: Detect special keyword contexts ===
+  // @depends-on context: user is typing a reference to another symbol
   const isInDependsOn = textBeforeCursor.includes("@depends-on");
 
-  // Check if we're in a @constraint context (after @constraint keyword with a space)
-  // Matches: "@constraint " or "@constraint name" but not "@constraint" alone (which is keyword completion)
+  // @constraint context: user is typing a constraint name after the keyword
+  // Matches: "@constraint " or "@constraint name" but NOT "@constraint" alone
+  // (the latter is keyword completion, handled separately)
   const isInConstraint = /^\s*@constraint\s+/.test(textBeforeCursor);
 
-  // Check if we're in a @description block context
-  // This is true when:
-  // 1. The cursor is inside a description_block, OR
-  // 2. The cursor is on a line immediately following a @description keyword (for empty descriptions)
-  // AND the line only has whitespace before the cursor - for suggesting description starters
+  // === STEP 5: Detect @description block context for template suggestions ===
+  // Description block completion should only trigger when:
+  // 1. The cursor is inside a description_block AST node, OR
+  // 2. The cursor is after @description but before any module (for empty descriptions)
+  // AND the line is empty/whitespace-only (we don't want to be aggressive mid-sentence)
   const isAtLineStart = /^\s*$/.test(textBeforeCursor);
   let isInDescriptionBlock = false;
 
   if (isAtLineStart) {
-    // First check if cursor is inside a description_block
+    // Case 1: Check if cursor is syntactically inside a description_block
     const descriptionBlockNode = findContainingDescriptionBlock(tree, position);
     if (descriptionBlockNode !== null) {
       isInDescriptionBlock = true;
     } else {
-      // Check if we're on a line immediately after a @description block
-      // This handles the case where description has no content yet
+      // Case 2: Handle empty/new descriptions not yet captured by parser
+      // Look for a @description block in the document and check if cursor is
+      // in the "content area" (after @description line, before first @module)
       const root = tree.rootNode;
       const descBlock = root.children.find((c) => c.type === "description_block");
       if (descBlock) {
-        // Check if cursor line is right after the description block's end line
-        // and before any module_block starts
         const descEndLine = descBlock.endPosition.row;
         const firstModuleBlock = root.children.find((c) => c.type === "module_block");
         const moduleStartLine = firstModuleBlock?.startPosition.row ?? Infinity;
 
-        // Cursor should be after description keyword line and before any module
+        // The cursor is in the "gap" between @description end and first @module
+        // This is where new description content would go
         if (position.line > descEndLine && position.line < moduleStartLine) {
           isInDescriptionBlock = true;
         }
@@ -649,42 +663,53 @@ export function getCursorContext(
     }
   }
 
-  // Check if we're in a comment or code block
+  // === STEP 6: Detect "skip zones" where completion should be disabled ===
+  // Skip zones are areas where offering completions would be inappropriate:
+  // - Inside comments (// or /* */)
+  // - Inside code block content (but NOT at the language position after ```)
   const node = findNodeAtPosition(tree.rootNode, position.line, position.character);
 
-  // Check if we're right after opening backticks for code block language
-  // Matches: "```" at end of line OR "```lang" where cursor is right after backticks
+  // Special case: right after ``` we DO want to offer language completions
+  // Pattern matches: "```" or "```ts" or "```typescript" etc.
   const isInCodeBlockLanguage = /```[a-zA-Z0-9_-]*$/.test(textBeforeCursor);
 
-  // Skip zone is inside code block content but NOT at the language position
-  // We want to allow completion for the language identifier right after ```
+  // Skip zone logic:
+  // - code_content = inside the actual code content of a fenced block
+  // - code_block without language position = somewhere in code block but not at lang spot
   const isInCodeBlockContent =
     node?.type === "code_content" || (node?.type === "code_block" && !isInCodeBlockLanguage);
   const isInSkipZone = node?.type === "comment" || isInCodeBlockContent;
 
-  // Parse existing references in the @depends-on clause
+  // === STEP 7: Parse @depends-on clause to track existing references ===
+  // We need to know what references are already in the clause so we:
+  // 1. Don't suggest duplicates
+  // 2. Can detect comma position for multi-reference completion
   let existingReferences: string[] = [];
   let isAfterComma = false;
 
   if (isInDependsOn) {
-    // Try to find the depends_on node from the tree
+    // Strategy: Combine tree-based extraction with text parsing
+    // The tree gives us complete, validated references
+    // Text parsing catches in-progress references the tree may not have yet
     const dependsOnNode = findContainingDependsOn(tree, position);
     if (dependsOnNode) {
       existingReferences = extractExistingReferences(dependsOnNode);
     }
 
-    // Also parse from the text for incomplete references (tree may not have them yet)
-    // Extract references from text: "@depends-on ref1, ref2, " -> ["ref1", "ref2"]
+    // Text-based fallback for incomplete/in-progress references
+    // Example: "@depends-on ref1, ref2, " -> ["ref1", "ref2"]
     const dependsOnMatch = textBeforeCursor.match(/@depends-on\s+(.*)$/);
     if (dependsOnMatch && dependsOnMatch[1]) {
       const refsText = dependsOnMatch[1];
-      // Split by comma and extract complete references
+      // Split by comma, trim whitespace, filter out empty strings and incomplete paths
+      // (incomplete paths end with "." like "auth." - user is still typing)
       const textRefs = refsText
         .split(",")
         .map((r) => r.trim())
-        .filter((r) => r.length > 0 && !r.endsWith(".")); // Filter out incomplete refs
+        .filter((r) => r.length > 0 && !r.endsWith("."));
 
-      // Merge with tree-based refs (tree has complete refs, text may have partial)
+      // Merge text-based refs with tree-based refs, avoiding duplicates
+      // Don't include the current prefix (that's what we're completing)
       for (const ref of textRefs) {
         if (!existingReferences.includes(ref) && ref !== prefix) {
           existingReferences.push(ref);
@@ -692,14 +717,15 @@ export function getCursorContext(
       }
     }
 
-    // Detect if we're after a comma (adding additional reference)
-    // Check if there's a comma followed by optional whitespace before the prefix
+    // Detect comma position for multi-reference scenarios
+    // Pattern: comma followed by optional whitespace and optional partial reference
     isAfterComma = /,\s*[\w.-]*$/.test(textBeforeCursor);
   }
 
-  // Detect if we're in an identifier name context (after @module/@feature/@requirement keyword with a space)
-  // Matches: "@module " or "@module name" but not "@module" alone (which is keyword completion)
-  // Also matches "@feature " and "@requirement "
+  // === STEP 8: Detect identifier naming context ===
+  // When user is naming a new symbol (e.g., "@module auth", "@feature login")
+  // we can suggest naming patterns based on conventions and workspace examples.
+  // Pattern: keyword + space + partial name (NOT just the keyword alone)
   let isInIdentifierName = false;
   let identifierKeyword: "module" | "feature" | "requirement" | null = null;
 
@@ -707,6 +733,8 @@ export function getCursorContext(
   const featureMatch = /^\s*@feature\s+/.test(textBeforeCursor);
   const requirementMatch = /^\s*@requirement\s+/.test(textBeforeCursor);
 
+  // Determine which keyword we're in, but exclude @depends-on and @constraint
+  // contexts which have their own specialized completion
   if (moduleMatch && !isInDependsOn && !isInConstraint) {
     isInIdentifierName = true;
     identifierKeyword = "module";
@@ -718,14 +746,19 @@ export function getCursorContext(
     identifierKeyword = "requirement";
   }
 
-  // Extract scope path information
+  // === STEP 9: Extract hierarchical scope information ===
+  // We need to know the current module/feature/requirement names to:
+  // 1. Filter out self-references in @depends-on
+  // 2. Provide contextual suggestions
+  // 3. Build the fully-qualified scope path
   let currentModule: string | null = null;
   let currentFeature: string | null = null;
   let currentRequirement: string | null = null;
   let scopePath: string | null = null;
 
   if (containingBlock) {
-    // Walk up to find all parent context
+    // Walk up the AST from the containing block to collect all ancestor names
+    // We visit each ancestor type only once (first match wins - closest scope)
     let current: Node | null = containingBlock.node;
     while (current) {
       if (current.type === "requirement_block" && !currentRequirement) {
@@ -744,18 +777,24 @@ export function getCursorContext(
     }
   }
 
-  // When in identifier name context and containingBlock is null (tree hasn't captured it yet),
-  // detect parent scope by looking at the document text and tree structure
+  // === STEP 10: Fallback scope detection for incomplete AST ===
+  // When typing a new identifier (e.g., "@requirement " at end of file),
+  // the tree-sitter parser may not have captured the containing block yet.
+  // We use heuristics to determine the parent scope based on document structure.
   if (isInIdentifierName && !containingBlock) {
     const root = tree.rootNode;
 
-    // Find the innermost block that contains or is just before the cursor position
+    // Scan top-level blocks to find which one "contains" our cursor position
+    // A block "contains" the cursor if:
+    // 1. Cursor is within the block's line range, OR
+    // 2. Cursor is on the line immediately after the block (adjacent continuation)
     for (const child of root.children) {
       if (child.type === "module_block") {
         const moduleNameNode = child.childForFieldName("name");
         const moduleName = moduleNameNode?.text;
 
-        // Check if this module block's range includes or is right before the cursor line
+        // Check positional containment with tolerance for adjacent lines
+        // This handles the case where we're typing at the end of a module
         if (
           child.startPosition.row <= position.line &&
           (child.endPosition.row >= position.line ||
@@ -765,12 +804,13 @@ export function getCursorContext(
         ) {
           currentModule = moduleName ?? null;
 
-          // Also check for containing feature
+          // Recursively check for containing feature within this module
           for (const moduleChild of child.children) {
             if (moduleChild.type === "feature_block") {
               const featureNameNode = moduleChild.childForFieldName("name");
               const featureName = featureNameNode?.text;
 
+              // Same containment logic for features
               if (
                 moduleChild.startPosition.row <= position.line &&
                 (moduleChild.endPosition.row >= position.line ||
@@ -787,7 +827,9 @@ export function getCursorContext(
     }
   }
 
-  // Build scope path
+  // === STEP 11: Construct fully-qualified scope path ===
+  // The scope path is used for filtering (e.g., can't @depends-on yourself)
+  // Format: "module.feature.requirement" or partial path
   if (currentModule) {
     scopePath = currentModule;
     if (currentFeature) {
@@ -796,6 +838,7 @@ export function getCursorContext(
         scopePath += `.${currentRequirement}`;
       }
     } else if (currentRequirement) {
+      // Requirement directly under module (no feature)
       scopePath += `.${currentRequirement}`;
     }
   }
@@ -896,36 +939,44 @@ export function getKeywordCompletions(scope: CompletionScope, prefix: string): C
  * @returns True if the symbol matches the query, false otherwise
  */
 export function matchesReferenceQuery(symbol: IndexedSymbol, query: string): boolean {
+  // Empty query = show all results (no filter)
   if (!query) {
-    return true; // Empty query matches everything
+    return true;
   }
 
+  // Case-insensitive matching throughout
   const lowerQuery = query.toLowerCase();
   const name = symbol.node.name?.toLowerCase() ?? "";
   const path = symbol.path.toLowerCase();
 
-  // Exact prefix match on name
+  // Match tier 1: Name prefix match (strongest relevance)
+  // Example: "log" matches "login", "logout"
   if (name.startsWith(lowerQuery)) {
     return true;
   }
 
-  // Substring match on name
+  // Match tier 2: Name substring match
+  // Example: "auth" matches "authenticate", "oauth"
   if (name.includes(lowerQuery)) {
     return true;
   }
 
-  // Substring match on full path
+  // Match tier 3: Full path substring match
+  // Example: "auth" matches "security.auth.login"
   if (path.includes(lowerQuery)) {
     return true;
   }
 
-  // Fuzzy match: query characters appear in order in name
+  // Match tier 4: Fuzzy matching - characters appear in order
+  // Example: "vl" matches "validate" (v-a-l-i-d-a-t-e)
+  // This is a simple sequential character matching algorithm
   let queryIdx = 0;
   for (let i = 0; i < name.length && queryIdx < lowerQuery.length; i++) {
     if (name[i] === lowerQuery[queryIdx]) {
-      queryIdx++;
+      queryIdx++; // Found next query character, advance
     }
   }
+  // If we matched all query characters, it's a fuzzy match
   if (queryIdx === lowerQuery.length) {
     return true;
   }
@@ -950,6 +1001,7 @@ export function matchesReferenceQuery(symbol: IndexedSymbol, query: string): boo
  * @returns A numeric score (0-100) indicating match quality, higher is better
  */
 export function calculateReferenceScore(symbol: IndexedSymbol, query: string): number {
+  // No query = no preference (neutral score)
   if (!query) {
     return 0;
   }
@@ -958,34 +1010,42 @@ export function calculateReferenceScore(symbol: IndexedSymbol, query: string): n
   const name = symbol.node.name?.toLowerCase() ?? "";
   const path = symbol.path.toLowerCase();
 
-  // Exact match on name
+  // === SCORING TIERS ===
+  // Higher score = better match, shown first in completion list
+
+  // Tier 1 (100): Exact name match - user typed the complete name
   if (name === lowerQuery) {
     return 100;
   }
 
-  // Prefix match on name
+  // Tier 2 (80-90): Prefix match on name - user is typing the start
+  // Score increases with query coverage (longer prefix = closer to exact)
+  // Formula: 80 base + up to 10 bonus for coverage ratio
   if (name.startsWith(lowerQuery)) {
     return 80 + (lowerQuery.length / name.length) * 10;
   }
 
-  // Exact match on path segment
+  // Tier 3 (70): Exact match on a path segment
+  // Example: "login" exactly matches "auth.login.validate"
   const pathParts = path.split(".");
   if (pathParts.includes(lowerQuery)) {
     return 70;
   }
 
-  // Substring match on name (earlier position is better)
+  // Tier 4 (50-60): Substring match on name
+  // Earlier positions score higher (searching for "auth" in "oauth" vs "authenticate")
   const nameIdx = name.indexOf(lowerQuery);
   if (nameIdx !== -1) {
+    // 60 base, minus position penalty (max 10 penalty)
     return 60 - Math.min(nameIdx, 10);
   }
 
-  // Substring match on path
+  // Tier 5 (40): Substring match on full path
   if (path.includes(lowerQuery)) {
     return 40;
   }
 
-  // Fuzzy match (fallback)
+  // Tier 6 (20): Fuzzy match fallback - weakest relevance
   return 20;
 }
 
@@ -1017,93 +1077,102 @@ export function getReferenceCompletions(
   const { symbolIndex, fileUri } = handlerContext;
   const { prefix, scopePath, existingReferences } = context;
 
-  // Collect all referenceable symbols (modules, features, requirements)
+  // === PHASE 1: Gather candidate symbols ===
+  // Only modules, features, and requirements can be referenced in @depends-on
+  // Constraints cannot be referenced directly
   const allSymbols = [
     ...symbolIndex.getSymbolsByKind("module"),
     ...symbolIndex.getSymbolsByKind("feature"),
     ...symbolIndex.getSymbolsByKind("requirement"),
   ];
 
-  // Track paths we've already added to avoid duplicates
+  // Deduplication tracking - symbols may appear in multiple files
   const addedPaths = new Set<string>();
 
-  // Create set of existing references for fast lookup
+  // Fast lookup for already-referenced symbols (to avoid suggesting duplicates)
   const existingRefSet = new Set(existingReferences);
 
-  // Collect matching symbols with their scores
+  // === PHASE 2: Filter and score symbols ===
+  // Apply multiple filtering criteria and calculate relevance scores
   const scoredSymbols: Array<{ symbol: IndexedSymbol; score: number; isLocal: boolean }> = [];
 
   for (const symbol of allSymbols) {
     const path = symbol.path;
 
-    // Skip if already added (can happen with multi-file duplicates)
+    // Filter 1: Deduplication - skip if we've already processed this path
     if (addedPaths.has(path)) {
       continue;
     }
 
-    // Skip references already in the @depends-on clause
+    // Filter 2: Existing references - don't suggest what's already in the clause
     if (existingRefSet.has(path)) {
       continue;
     }
 
-    // Skip self-references (can't depend on yourself)
+    // Filter 3: Self-reference prevention - can't depend on yourself or children
+    // Using startsWith catches both exact match and child paths (auth.login under auth)
     if (scopePath && path.startsWith(scopePath)) {
       continue;
     }
 
-    // Skip symbols that would create circular dependencies
+    // Filter 4: Circular dependency detection - check if adding this dependency
+    // would create a cycle (A depends on B, B depends on C, C depends on A)
     if (scopePath && symbolIndex.wouldCreateCircularDependency(scopePath, path)) {
       continue;
     }
 
-    // Use fuzzy matching to filter symbols
+    // Filter 5: Query matching - use fuzzy matching against the typed prefix
     if (!matchesReferenceQuery(symbol, prefix)) {
       continue;
     }
 
-    // Calculate relevance score
+    // Calculate relevance score for sorting (higher = better match)
     const score = calculateReferenceScore(symbol, prefix);
+    // Track locality - local symbols (same file) get boosted in ranking
     const isLocal = symbol.fileUri === fileUri;
 
     scoredSymbols.push({ symbol, score, isLocal });
     addedPaths.add(path);
   }
 
-  // Sort by: local boost first, then by score (descending), then by name (ascending)
+  // === PHASE 3: Sort results by relevance ===
+  // Sort order priority: local > remote, then score (descending), then alphabetical
   scoredSymbols.sort((a, b) => {
-    // Local symbols come first
+    // Primary: Local symbols come first (same file = likely more relevant)
     if (a.isLocal !== b.isLocal) {
       return a.isLocal ? -1 : 1;
     }
 
-    // Higher score is better
+    // Secondary: Higher score = better match (exact > prefix > substring > fuzzy)
     if (b.score !== a.score) {
       return b.score - a.score;
     }
 
-    // Alphabetical by path as tiebreaker
+    // Tertiary: Alphabetical by path for deterministic ordering
     return a.symbol.path.localeCompare(b.symbol.path);
   });
 
-  // Convert to CompletionItems with sortText based on sorted order
+  // === PHASE 4: Convert to CompletionItems ===
   const completions: CompletionItem[] = [];
 
+  // Limit to 50 results to keep the completion list manageable
   for (let i = 0; i < scoredSymbols.length && i < 50; i++) {
     const entry = scoredSymbols[i]!;
     const { symbol, isLocal } = entry;
     const path = symbol.path;
 
-    // Map symbol kind to CompletionItemKind
+    // Map Blueprint symbol kinds to LSP CompletionItemKind
+    // These icons help users visually distinguish between symbol types
     let kind: CompletionItemKind;
     switch (symbol.kind) {
       case "module":
-        kind = CompletionItemKind.Module;
+        kind = CompletionItemKind.Module; // folder-like icon
         break;
       case "feature":
-        kind = CompletionItemKind.Class;
+        kind = CompletionItemKind.Class; // class icon (features are like classes)
         break;
       case "requirement":
-        kind = CompletionItemKind.Function;
+        kind = CompletionItemKind.Function; // function icon (requirements are actionable)
         break;
       default:
         kind = CompletionItemKind.Reference;
@@ -1111,12 +1180,13 @@ export function getReferenceCompletions(
 
     const fileName = symbol.fileUri.split("/").pop() ?? symbol.fileUri;
 
-    // Extract description from the symbol's AST node if available
+    // Extract description for documentation preview (if available in AST)
     const description =
       "description" in symbol.node && symbol.node.description ? symbol.node.description : undefined;
 
-    // Use sortText to preserve the sorted order (0-padded index)
-    // Local symbols get "0" prefix, remote get "1" prefix
+    // sortText controls the display order in the completion menu
+    // Format: "L" + 4-digit index where L=0 for local, L=1 for remote
+    // This preserves our carefully computed sort order
     const sortText = `${isLocal ? "0" : "1"}${String(i).padStart(4, "0")}`;
 
     const item: CompletionItem = {
@@ -1164,15 +1234,17 @@ export function getPathCompletions(
   const { prefix } = context;
   const completions: CompletionItem[] = [];
 
-  // Extract the parent path (everything before the last dot)
+  // Parse the parent path from the prefix (everything before the last dot)
+  // Example: "auth.login." -> parentPath = "auth.login"
   const parentPathMatch = prefix.match(/^(.+)\./);
   if (!parentPathMatch || !parentPathMatch[1]) {
-    return completions;
+    return completions; // No valid parent path - can't do path completion
   }
 
   const parentPath = parentPathMatch[1];
 
-  // Collect all symbols that could be children
+  // Gather all symbol types that can be children in paths
+  // Constraints are included here because they can appear in paths too
   const allSymbols = [
     ...symbolIndex.getSymbolsByKind("module"),
     ...symbolIndex.getSymbolsByKind("feature"),
@@ -1180,26 +1252,29 @@ export function getPathCompletions(
     ...symbolIndex.getSymbolsByKind("constraint"),
   ];
 
-  // Track paths we've already added to avoid duplicates
+  // Deduplication - a child name should only appear once
   const addedPaths = new Set<string>();
 
   for (const symbol of allSymbols) {
     const path = symbol.path;
 
-    // Check if this is a direct child of the parent path
+    // Check if this symbol is a child of the parent path
+    // Must start with "parentPath." to be a child (not just prefix match)
     if (!path.startsWith(parentPath + ".")) {
       continue;
     }
 
-    // Get the remaining path after the parent
+    // Extract the remaining path segment after the parent
+    // Example: "auth.login.validate" with parent "auth.login" -> "validate"
     const remainingPath = path.slice(parentPath.length + 1);
 
-    // Only include direct children (no dots in remaining path)
+    // Only show direct children (single segment, no dots)
+    // Grandchildren should require another dot to navigate to
     if (remainingPath.includes(".")) {
       continue;
     }
 
-    // Skip if already added
+    // Deduplication check
     if (addedPaths.has(remainingPath)) {
       continue;
     }
@@ -1700,45 +1775,50 @@ export function buildCompletions(
 ): CompletionList | null {
   const position = params.position;
 
-  // Get the cursor context
+  // Analyze cursor position to determine completion context
   const context = getCursorContext(tree, position, documentText);
 
-  // Skip completion in comments and code blocks
+  // Early exit for zones where completion is inappropriate
   if (context.isInSkipZone) {
     return null;
   }
 
   const items: CompletionItem[] = [];
 
-  // Code block language completion (after ```)
+  // === COMPLETION DISPATCH ===
+  // Order matters! More specific contexts are checked first.
+  // Each context is mutually exclusive (else-if chain).
+
+  // Priority 1: Code block language (after ```) - most specific trigger
   if (context.isInCodeBlockLanguage) {
     items.push(...getCodeBlockLanguageCompletions(context));
   }
-  // Description block completion (inside @description block at line start)
+  // Priority 2: Description block templates (at start of line in @description)
   else if (context.isInDescriptionBlock) {
     items.push(...getDescriptionCompletions(context));
   }
-  // Path completion (after a dot)
+  // Priority 3: Path navigation (after a dot like "auth.") - dot trigger
   else if (context.isAfterDotTrigger) {
     items.push(...getPathCompletions(context, handlerContext));
   }
-  // Constraint name completion (in @constraint context)
+  // Priority 4: Constraint names (after "@constraint ") - keyword-specific
+  // Note: !isAfterAtTrigger excludes "@const" partial keyword matches
   else if (context.isInConstraint && !context.isAfterAtTrigger) {
     items.push(...getConstraintNameCompletions(context, handlerContext));
   }
-  // Reference completion (in @depends-on context)
+  // Priority 5: References for @depends-on (symbol path completion)
   else if (context.isInDependsOn && !context.isAfterAtTrigger) {
     items.push(...getReferenceCompletions(context, handlerContext));
   }
-  // Identifier name completion (after @module/@feature/@requirement keyword)
+  // Priority 6: Identifier names (after "@module ", "@feature ", "@requirement ")
   else if (context.isInIdentifierName && !context.isAfterAtTrigger) {
     items.push(...getIdentifierNameCompletions(context, handlerContext));
   }
-  // Keyword completion (after @ or at line start)
+  // Priority 7: Keywords (after @ or at empty line start)
   else if (context.isAfterAtTrigger || context.prefix === "" || context.prefix.startsWith("@")) {
     items.push(...getKeywordCompletions(context.scope, context.prefix));
   }
-  // General reference completion (fallback)
+  // Priority 8: Fallback - reference completion for any other context
   else {
     items.push(...getReferenceCompletions(context, handlerContext));
   }
