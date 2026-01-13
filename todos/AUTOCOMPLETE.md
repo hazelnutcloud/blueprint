@@ -172,9 +172,9 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 6.3 Code Block Completion
 
-- [ ] After triple backticks, suggest language identifiers
-- [ ] Common languages: `typescript`, `javascript`, `json`, `sql`, `graphql`, `http`
-- [ ] Do not provide completion inside code block content
+- [x] After triple backticks, suggest language identifiers
+- [x] Common languages: `typescript`, `javascript`, `json`, `sql`, `graphql`, `http`
+- [x] Do not provide completion inside code block content
 
 ### 6.4 Identifier Suggestions
 

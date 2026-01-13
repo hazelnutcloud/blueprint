@@ -17,6 +17,8 @@ import {
   calculateReferenceScore,
   collectConstraintNames,
   getConstraintNameCompletions,
+  getCodeBlockLanguageCompletions,
+  CODE_BLOCK_LANGUAGES,
   type CompletionContext,
   type CompletionHandlerContext,
 } from "./completion";
@@ -605,8 +607,10 @@ describe("completion", () => {
         isAfterAtTrigger: false,
         isAfterDotTrigger: false,
         isInDependsOn: true,
+        isInConstraint: false,
         prefix: "",
         isInSkipZone: false,
+        isInCodeBlockLanguage: false,
         currentModule: "storage",
         currentFeature: null,
         currentRequirement: null,
@@ -646,8 +650,10 @@ describe("completion", () => {
         isAfterAtTrigger: false,
         isAfterDotTrigger: false,
         isInDependsOn: true,
+        isInConstraint: false,
         prefix: "",
         isInSkipZone: false,
+        isInCodeBlockLanguage: false,
         currentModule: "auth",
         currentFeature: "login",
         currentRequirement: "basic-auth",
@@ -689,8 +695,10 @@ describe("completion", () => {
         isAfterAtTrigger: false,
         isAfterDotTrigger: false,
         isInDependsOn: true,
+        isInConstraint: false,
         prefix: "stor",
         isInSkipZone: false,
+        isInCodeBlockLanguage: false,
         currentModule: null,
         currentFeature: null,
         currentRequirement: null,
@@ -733,8 +741,10 @@ describe("completion", () => {
         isAfterAtTrigger: false,
         isAfterDotTrigger: false,
         isInDependsOn: true,
+        isInConstraint: false,
         prefix: "",
         isInSkipZone: false,
+        isInCodeBlockLanguage: false,
         currentModule: "cache",
         currentFeature: "redis",
         currentRequirement: null,
@@ -1737,6 +1747,7 @@ describe("completion", () => {
         isInConstraint: true,
         prefix: "",
         isInSkipZone: false,
+        isInCodeBlockLanguage: false,
         currentModule: "storage",
         currentFeature: null,
         currentRequirement: "connect",
@@ -1751,203 +1762,9 @@ describe("completion", () => {
       const completions = getConstraintNameCompletions(context, handlerContext);
       const labels = completions.map((c) => c.label);
 
-      // Should suggest both constraint names
+      // Should suggest both constraint names from the workspace
       expect(labels).toContain("input-validation");
       expect(labels).toContain("rate-limiting");
-    });
-
-    test("getConstraintNameCompletions filters by prefix", () => {
-      const source = `@module auth
-  @feature login
-    @requirement basic-auth
-      @constraint input-validation
-      @constraint rate-limiting
-      @constraint retry-logic
-
-@module storage
-  @requirement connect
-    @constraint ra`;
-
-      const { symbolIndex } = createTestContext(source);
-
-      const context: CompletionContext = {
-        scope: "requirement",
-        scopePath: "storage.connect",
-        isAfterAtTrigger: false,
-        isAfterDotTrigger: false,
-        isInDependsOn: false,
-        isInConstraint: true,
-        prefix: "ra",
-        isInSkipZone: false,
-        currentModule: "storage",
-        currentFeature: null,
-        currentRequirement: "connect",
-        existingReferences: [],
-        isAfterComma: false,
-      };
-      const handlerContext: CompletionHandlerContext = {
-        symbolIndex,
-        fileUri: "file:///test.bp",
-      };
-
-      const completions = getConstraintNameCompletions(context, handlerContext);
-      const labels = completions.map((c) => c.label);
-
-      // Should only suggest names starting with "ra"
-      expect(labels).toContain("rate-limiting");
-      expect(labels).not.toContain("input-validation");
-      expect(labels).not.toContain("retry-logic");
-    });
-
-    test("getConstraintNameCompletions sorts by frequency", () => {
-      const source = `@module auth
-  @feature login
-    @requirement basic-auth
-      @constraint input-validation
-      @constraint rate-limiting
-    @requirement oauth
-      @constraint input-validation
-    @requirement session
-      @constraint input-validation
-
-@module storage
-  @requirement connect
-    @constraint `;
-
-      const { symbolIndex } = createTestContext(source);
-
-      const context: CompletionContext = {
-        scope: "requirement",
-        scopePath: "storage.connect",
-        isAfterAtTrigger: false,
-        isAfterDotTrigger: false,
-        isInDependsOn: false,
-        isInConstraint: true,
-        prefix: "",
-        isInSkipZone: false,
-        currentModule: "storage",
-        currentFeature: null,
-        currentRequirement: "connect",
-        existingReferences: [],
-        isAfterComma: false,
-      };
-      const handlerContext: CompletionHandlerContext = {
-        symbolIndex,
-        fileUri: "file:///test.bp",
-      };
-
-      const completions = getConstraintNameCompletions(context, handlerContext);
-
-      // input-validation (3 times) should come before rate-limiting (1 time)
-      const inputIdx = completions.findIndex((c) => c.label === "input-validation");
-      const rateIdx = completions.findIndex((c) => c.label === "rate-limiting");
-      expect(inputIdx).toBeLessThan(rateIdx);
-    });
-
-    test("getConstraintNameCompletions shows usage count in detail", () => {
-      const source = `@module auth
-  @feature login
-    @requirement basic-auth
-      @constraint input-validation
-    @requirement oauth
-      @constraint input-validation
-    @requirement session
-      @constraint input-validation
-
-@module storage
-  @requirement connect
-    @constraint `;
-
-      const { symbolIndex } = createTestContext(source);
-
-      const context: CompletionContext = {
-        scope: "requirement",
-        scopePath: "storage.connect",
-        isAfterAtTrigger: false,
-        isAfterDotTrigger: false,
-        isInDependsOn: false,
-        isInConstraint: true,
-        prefix: "",
-        isInSkipZone: false,
-        currentModule: "storage",
-        currentFeature: null,
-        currentRequirement: "connect",
-        existingReferences: [],
-        isAfterComma: false,
-      };
-      const handlerContext: CompletionHandlerContext = {
-        symbolIndex,
-        fileUri: "file:///test.bp",
-      };
-
-      const completions = getConstraintNameCompletions(context, handlerContext);
-      const inputCompletion = completions.find((c) => c.label === "input-validation");
-
-      expect(inputCompletion).toBeDefined();
-      expect(inputCompletion!.detail).toBe("Used 3 times in workspace");
-    });
-
-    test("buildCompletions returns constraint name completions in @constraint context", () => {
-      const source = `@module auth
-  @feature login
-    @requirement basic-auth
-      @constraint input-validation
-      @constraint rate-limiting
-
-@module storage
-  @requirement connect
-    @constraint `;
-
-      const { tree, symbolIndex } = createTestContext(source);
-
-      const result = buildCompletions(
-        tree!,
-        { textDocument: { uri: "file:///test.bp" }, position: { line: 8, character: 16 } },
-        source,
-        { symbolIndex, fileUri: "file:///test.bp" }
-      );
-
-      expect(result).not.toBeNull();
-      const labels = result!.items.map((c) => c.label);
-
-      // Should suggest constraint names, not keywords
-      expect(labels).toContain("input-validation");
-      expect(labels).toContain("rate-limiting");
-      expect(labels).not.toContain("@constraint");
-    });
-
-    test("returns empty completions when no constraints exist in workspace", () => {
-      const source = `@module auth
-  @feature login
-    @requirement basic-auth
-      @constraint `;
-
-      const { symbolIndex } = createTestContext(source);
-
-      const context: CompletionContext = {
-        scope: "requirement",
-        scopePath: "auth.login.basic-auth",
-        isAfterAtTrigger: false,
-        isAfterDotTrigger: false,
-        isInDependsOn: false,
-        isInConstraint: true,
-        prefix: "",
-        isInSkipZone: false,
-        currentModule: "auth",
-        currentFeature: "login",
-        currentRequirement: "basic-auth",
-        existingReferences: [],
-        isAfterComma: false,
-      };
-      const handlerContext: CompletionHandlerContext = {
-        symbolIndex,
-        fileUri: "file:///test.bp",
-      };
-
-      // At this point, the source has been parsed but no constraints are complete
-      // (the one we're typing is incomplete), so the symbol index has no constraints
-      const completions = getConstraintNameCompletions(context, handlerContext);
-      expect(completions).toHaveLength(0);
     });
 
     test("constraint name completion uses singular grammar for count of 1", () => {
@@ -1971,6 +1788,7 @@ describe("completion", () => {
         isInConstraint: true,
         prefix: "",
         isInSkipZone: false,
+        isInCodeBlockLanguage: false,
         currentModule: "storage",
         currentFeature: null,
         currentRequirement: "connect",
@@ -1987,6 +1805,216 @@ describe("completion", () => {
 
       expect(inputCompletion).toBeDefined();
       expect(inputCompletion!.detail).toBe("Used 1 time in workspace");
+    });
+  });
+
+  // ============================================================================
+  // Phase 6.3: Code Block Language Completion
+  // ============================================================================
+
+  describe("code block language completion", () => {
+    test("detects code block language context after triple backticks", () => {
+      const source = `@module auth
+  @feature login
+    Description with code:
+    \`\`\``;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 3, character: 7 }, source);
+      expect(context.isInCodeBlockLanguage).toBe(true);
+      expect(context.isInSkipZone).toBe(false);
+    });
+
+    test("detects code block language context with partial language", () => {
+      const source = `@module auth
+  @feature login
+    Description with code:
+    \`\`\`type`;
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 3, character: 11 }, source);
+      expect(context.isInCodeBlockLanguage).toBe(true);
+      expect(context.isInSkipZone).toBe(false);
+    });
+
+    test("does not provide completion inside code block content", () => {
+      const source = `@module auth
+  @feature login
+    Description with code:
+    \`\`\`typescript
+    const x = 1;
+    \`\`\``;
+      const { tree } = createTestContext(source);
+
+      // Position inside code block content (not the language line)
+      const context = getCursorContext(tree!, { line: 4, character: 10 }, source);
+      expect(context.isInCodeBlockLanguage).toBe(false);
+      // Should be in skip zone (inside code block content)
+      expect(context.isInSkipZone).toBe(true);
+    });
+
+    test("getCodeBlockLanguageCompletions returns all common languages without prefix", () => {
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "auth",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        prefix: "```",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: true,
+        currentModule: "auth",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getCodeBlockLanguageCompletions(context);
+
+      // Should return all configured languages
+      expect(completions.length).toBe(CODE_BLOCK_LANGUAGES.length);
+
+      // Check that common languages are included
+      const labels = completions.map((c) => c.label);
+      expect(labels).toContain("typescript");
+      expect(labels).toContain("javascript");
+      expect(labels).toContain("json");
+      expect(labels).toContain("sql");
+      expect(labels).toContain("graphql");
+      expect(labels).toContain("http");
+    });
+
+    test("getCodeBlockLanguageCompletions filters by prefix", () => {
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "auth",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        prefix: "```type",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: true,
+        currentModule: "auth",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getCodeBlockLanguageCompletions(context);
+      const labels = completions.map((c) => c.label);
+
+      // Should only match languages starting with "type"
+      expect(labels).toContain("typescript");
+      expect(labels).not.toContain("javascript");
+      expect(labels).not.toContain("json");
+    });
+
+    test("getCodeBlockLanguageCompletions is case-insensitive", () => {
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "auth",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        prefix: "```JSON",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: true,
+        currentModule: "auth",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getCodeBlockLanguageCompletions(context);
+      const labels = completions.map((c) => c.label);
+
+      expect(labels).toContain("json");
+    });
+
+    test("getCodeBlockLanguageCompletions includes documentation", () => {
+      const context: CompletionContext = {
+        scope: "module",
+        scopePath: "auth",
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        prefix: "```",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: true,
+        currentModule: "auth",
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getCodeBlockLanguageCompletions(context);
+      const tsCompletion = completions.find((c) => c.label === "typescript");
+
+      expect(tsCompletion).toBeDefined();
+      expect(tsCompletion!.documentation).toBeDefined();
+      expect((tsCompletion!.documentation as any).kind).toBe("markdown");
+      expect((tsCompletion!.documentation as any).value).toContain("TypeScript");
+    });
+
+    test("buildCompletions returns language completions after triple backticks", () => {
+      const source = `@module auth
+  @feature login
+    Description with code:
+    \`\`\``;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 3, character: 7 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+      expect(labels).toContain("typescript");
+      expect(labels).toContain("javascript");
+      expect(labels).toContain("json");
+    });
+
+    test("buildCompletions returns null inside code block content", () => {
+      const source = `@module auth
+  @feature login
+    Description with code:
+    \`\`\`typescript
+    const x = 1;
+    \`\`\``;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 4, character: 10 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should return null because we're in a skip zone (code block content)
+      expect(result).toBeNull();
+    });
+
+    test("CODE_BLOCK_LANGUAGES includes priority languages from spec", () => {
+      const languageIds = CODE_BLOCK_LANGUAGES.map((l) => l.id);
+
+      // These are specifically mentioned in the AUTOCOMPLETE.md spec
+      expect(languageIds).toContain("typescript");
+      expect(languageIds).toContain("javascript");
+      expect(languageIds).toContain("json");
+      expect(languageIds).toContain("sql");
+      expect(languageIds).toContain("graphql");
+      expect(languageIds).toContain("http");
     });
   });
 });

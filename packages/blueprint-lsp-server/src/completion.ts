@@ -114,6 +114,39 @@ export const COMPLETION_KEYWORDS = {
  */
 export type KeywordName = keyof typeof COMPLETION_KEYWORDS;
 
+/**
+ * Common language identifiers for code blocks.
+ * Based on LSP language identifiers specification.
+ */
+export const CODE_BLOCK_LANGUAGES = [
+  { id: "typescript", description: "TypeScript" },
+  { id: "javascript", description: "JavaScript" },
+  { id: "json", description: "JSON data format" },
+  { id: "sql", description: "SQL database queries" },
+  { id: "graphql", description: "GraphQL query language" },
+  { id: "http", description: "HTTP request examples" },
+  { id: "python", description: "Python" },
+  { id: "go", description: "Go" },
+  { id: "rust", description: "Rust" },
+  { id: "java", description: "Java" },
+  { id: "csharp", description: "C#" },
+  { id: "cpp", description: "C++" },
+  { id: "c", description: "C" },
+  { id: "ruby", description: "Ruby" },
+  { id: "php", description: "PHP" },
+  { id: "swift", description: "Swift" },
+  { id: "kotlin", description: "Kotlin" },
+  { id: "yaml", description: "YAML configuration" },
+  { id: "xml", description: "XML markup" },
+  { id: "html", description: "HTML markup" },
+  { id: "css", description: "CSS styles" },
+  { id: "scss", description: "SCSS styles" },
+  { id: "markdown", description: "Markdown" },
+  { id: "bash", description: "Bash shell script" },
+  { id: "shell", description: "Shell script" },
+  { id: "dockerfile", description: "Dockerfile" },
+] as const;
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -143,6 +176,8 @@ export interface CompletionContext {
   prefix: string;
   /** Whether we're inside a comment or code block (skip completion) */
   isInSkipZone: boolean;
+  /** Whether we're right after opening triple backticks for code block language */
+  isInCodeBlockLanguage: boolean;
   /** Current module name, if inside a module */
   currentModule: string | null;
   /** Current feature name, if inside a feature */
@@ -326,7 +361,16 @@ export function getCursorContext(
 
   // Check if we're in a comment or code block
   const node = findNodeAtPosition(tree.rootNode, position.line, position.character);
-  const isInSkipZone = node?.type === "comment" || node?.type === "code_block";
+
+  // Check if we're right after opening backticks for code block language
+  // Matches: "```" at end of line OR "```lang" where cursor is right after backticks
+  const isInCodeBlockLanguage = /```[a-zA-Z0-9_-]*$/.test(textBeforeCursor);
+
+  // Skip zone is inside code block content but NOT at the language position
+  // We want to allow completion for the language identifier right after ```
+  const isInCodeBlockContent =
+    node?.type === "code_content" || (node?.type === "code_block" && !isInCodeBlockLanguage);
+  const isInSkipZone = node?.type === "comment" || isInCodeBlockContent;
 
   // Parse existing references in the @depends-on clause
   let existingReferences: string[] = [];
@@ -411,6 +455,7 @@ export function getCursorContext(
     isInConstraint,
     prefix,
     isInSkipZone,
+    isInCodeBlockLanguage,
     currentModule,
     currentFeature,
     currentRequirement,
@@ -915,6 +960,59 @@ export function getConstraintNameCompletions(
 }
 
 // ============================================================================
+// Code Block Language Completion
+// ============================================================================
+
+/**
+ * Get code block language completions for positions right after triple backticks.
+ * Suggests common language identifiers used in fenced code blocks.
+ *
+ * @param context The completion context
+ * @returns Array of completion items for language identifiers
+ */
+export function getCodeBlockLanguageCompletions(context: CompletionContext): CompletionItem[] {
+  const { prefix } = context;
+
+  // Extract the language prefix (text after ```)
+  const languagePrefix = prefix.replace(/^.*```/, "").toLowerCase();
+
+  // Filter languages by prefix
+  const filtered = CODE_BLOCK_LANGUAGES.filter(({ id }) => {
+    if (!languagePrefix) {
+      return true;
+    }
+    return id.toLowerCase().startsWith(languagePrefix);
+  });
+
+  // Convert to CompletionItems
+  const completions: CompletionItem[] = [];
+
+  for (let i = 0; i < filtered.length; i++) {
+    const { id, description } = filtered[i]!;
+
+    // Use sortText to preserve alphabetical order
+    const sortText = String(i).padStart(4, "0");
+
+    const item: CompletionItem = {
+      label: id,
+      kind: CompletionItemKind.Enum,
+      detail: description,
+      sortText,
+      filterText: id,
+      insertText: id,
+      documentation: {
+        kind: MarkupKind.Markdown,
+        value: `Language identifier for ${description} code blocks.\n\n\`\`\`\`blueprint\n\`\`\`${id}\n// ${description} code here\n\`\`\`\n\`\`\`\``,
+      },
+    };
+
+    completions.push(item);
+  }
+
+  return completions;
+}
+
+// ============================================================================
 // Main Completion Handler
 // ============================================================================
 
@@ -945,8 +1043,12 @@ export function buildCompletions(
 
   const items: CompletionItem[] = [];
 
+  // Code block language completion (after ```)
+  if (context.isInCodeBlockLanguage) {
+    items.push(...getCodeBlockLanguageCompletions(context));
+  }
   // Path completion (after a dot)
-  if (context.isAfterDotTrigger) {
+  else if (context.isAfterDotTrigger) {
     items.push(...getPathCompletions(context, handlerContext));
   }
   // Constraint name completion (in @constraint context)
