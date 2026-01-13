@@ -512,10 +512,16 @@ export function getCursorContext(
   const scope = getCurrentScope(tree, position);
   const containingBlock = findContainingBlock(tree, position);
 
-  // Get the current line text up to the cursor
+  // Handle empty document or position beyond document bounds
   const lines = documentText.split("\n");
-  const currentLine = lines[position.line] ?? "";
-  const textBeforeCursor = currentLine.slice(0, position.character);
+
+  // Clamp line index to valid range
+  const lineIndex = Math.max(0, Math.min(position.line, lines.length - 1));
+  const currentLine = lines[lineIndex] ?? "";
+
+  // Clamp character position to valid range within line
+  const charPosition = Math.max(0, Math.min(position.character, currentLine.length));
+  const textBeforeCursor = currentLine.slice(0, charPosition);
 
   // Detect trigger contexts
   const isAfterAtTrigger = /^\s*@[a-z-]*$/i.test(textBeforeCursor);

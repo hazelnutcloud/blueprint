@@ -260,10 +260,10 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 9.4 Edge Cases and Error Handling
 
-- [ ] Handle empty/corrupted documents gracefully
-- [ ] Handle partial parse trees (syntax errors)
-- [ ] Test with cursor at document boundaries
-- [ ] Ensure no crashes on malformed input
+- [x] Handle empty/corrupted documents gracefully
+- [x] Handle partial parse trees (syntax errors)
+- [x] Test with cursor at document boundaries
+- [x] Ensure no crashes on malformed input
 
 ---
 

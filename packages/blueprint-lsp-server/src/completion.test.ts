@@ -2894,4 +2894,265 @@ describe("completion", () => {
       expect(prefixes).toContain("process");
     });
   });
+
+  // ============================================================================
+  // Phase 9.4: Edge Cases and Error Handling
+  // ============================================================================
+
+  describe("edge cases and error handling", () => {
+    test("handles empty document gracefully", () => {
+      const source = "";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 0, character: 0 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should return keyword completions for top-level (empty document is top-level)
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+      expect(labels).toContain("@module");
+      expect(labels).toContain("@description");
+    });
+
+    test("handles document with only whitespace gracefully", () => {
+      const source = "   \n\n   ";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 1, character: 0 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should return keyword completions for top-level
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+      expect(labels).toContain("@module");
+      expect(labels).toContain("@description");
+    });
+
+    test("handles cursor position beyond document length", () => {
+      const source = "@module test";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      // Position beyond document bounds
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 10, character: 100 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should not crash, may return null or empty completions
+      // The important thing is it doesn't throw an error
+      expect(() => result).not.toThrow();
+    });
+
+    test("handles cursor at line 0 character 0 in non-empty document", () => {
+      const source = "@module auth\n  @feature login";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 0, character: 0 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should return something valid (empty prefix at start of @module line)
+      expect(() => result).not.toThrow();
+    });
+
+    test("handles document with syntax errors (partial parse)", () => {
+      // Invalid Blueprint syntax - missing module name
+      const source = "@module \n  @feature login";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      // The tree may have ERROR nodes but should still be valid
+      expect(tree).not.toBeNull();
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 1, character: 11 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should not crash even with syntax errors
+      expect(() => result).not.toThrow();
+    });
+
+    test("handles document with unclosed blocks", () => {
+      // Unclosed module block (no content or nested elements)
+      const source = "@module auth\n  @feature";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      expect(tree).not.toBeNull();
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 1, character: 10 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should not crash
+      expect(() => result).not.toThrow();
+    });
+
+    test("handles document with malformed keywords", () => {
+      const source = "@modul auth\n  @featur login";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      expect(tree).not.toBeNull();
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 0, character: 11 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should not crash on malformed input
+      expect(() => result).not.toThrow();
+    });
+
+    test("handles very long line gracefully", () => {
+      const longText = "a".repeat(10000);
+      const source = `@module ${longText}`;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      expect(tree).not.toBeNull();
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 0, character: 5000 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should not crash on very long lines
+      expect(() => result).not.toThrow();
+    });
+
+    test("handles document with only @description keyword", () => {
+      const source = "@description";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 0, character: 12 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should not crash
+      expect(() => result).not.toThrow();
+    });
+
+    test("handles document with only newlines", () => {
+      const source = "\n\n\n\n\n";
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 2, character: 0 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // Should return keyword completions for top-level
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+      expect(labels).toContain("@module");
+    });
+
+    test("handles document with mixed valid and invalid syntax", () => {
+      const source = `@module auth
+  @feature login
+    valid description
+  @invalid-keyword something
+  @requirement test
+    more valid content`;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      expect(tree).not.toBeNull();
+
+      // Test completion at various positions in the mixed document
+      const result1 = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 2, character: 5 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+      expect(() => result1).not.toThrow();
+
+      const result2 = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 3, character: 10 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+      expect(() => result2).not.toThrow();
+    });
+
+    test("getCursorContext handles empty document", () => {
+      const source = "";
+      const { tree } = createTestContext(source);
+
+      const context = getCursorContext(tree!, { line: 0, character: 0 }, source);
+
+      expect(context.scope).toBe("top-level");
+      expect(context.prefix).toBe("");
+      expect(context.isInSkipZone).toBe(false);
+    });
+
+    test("getCursorContext handles position beyond line length", () => {
+      const source = "@module test";
+      const { tree } = createTestContext(source);
+
+      // Character position beyond the line length
+      const context = getCursorContext(tree!, { line: 0, character: 100 }, source);
+
+      // Should handle gracefully - prefix should be the whole line or empty
+      expect(() => context).not.toThrow();
+      expect(context.scope).toBeDefined();
+    });
+
+    test("getCursorContext handles line beyond document lines", () => {
+      const source = "@module test";
+      const { tree } = createTestContext(source);
+
+      // Line beyond document bounds
+      const context = getCursorContext(tree!, { line: 10, character: 0 }, source);
+
+      // Should handle gracefully
+      expect(() => context).not.toThrow();
+      expect(context.scope).toBe("top-level");
+    });
+
+    test("findContainingBlock handles empty tree gracefully", () => {
+      const source = "";
+      const { tree } = createTestContext(source);
+
+      const block = findContainingBlock(tree!, { line: 0, character: 0 });
+
+      // Should return null for empty document
+      expect(block).toBeNull();
+    });
+
+    test("getCurrentScope returns top-level for position in empty document", () => {
+      const source = "";
+      const { tree } = createTestContext(source);
+
+      const scope = getCurrentScope(tree!, { line: 0, character: 0 });
+
+      expect(scope).toBe("top-level");
+    });
+  });
 });
