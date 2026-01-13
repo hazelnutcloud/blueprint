@@ -24,11 +24,11 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 1.2 Register Completion Capability
 
-- [ ] Update `index.ts` to declare `completionProvider` in server capabilities
-- [ ] Configure trigger characters: `@` (keywords), `.` (path navigation)
-- [ ] Set `resolveProvider: true` for lazy resolution of completion details
-- [ ] Register `onCompletion` handler
-- [ ] Register `onCompletionResolve` handler
+- [x] Update `index.ts` to declare `completionProvider` in server capabilities
+- [x] Configure trigger characters: `@` (keywords), `.` (path navigation)
+- [x] Set `resolveProvider: true` for lazy resolution of completion details
+- [x] Register `onCompletion` handler
+- [x] Register `onCompletionResolve` handler
 
 ### 1.3 Define Completion Types and Constants
 

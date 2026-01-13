@@ -19,6 +19,7 @@ import type {
   DocumentSymbolParams,
   WorkspaceSymbolParams,
   CodeActionParams,
+  CompletionParams,
 } from "vscode-languageserver/node";
 import {
   semanticTokensLegend,
@@ -52,6 +53,11 @@ import {
 } from "./workspace-diagnostics";
 import { computeAllBlockingStatus } from "./blocking-status";
 import { buildCodeActions, type CodeActionsContext } from "./code-actions";
+import {
+  buildCompletions,
+  resolveCompletionItem,
+  type CompletionHandlerContext,
+} from "./completion";
 import { ComputedDataCache } from "./computed-data-cache";
 import { readFile } from "node:fs/promises";
 import { URI } from "vscode-uri";
@@ -302,6 +308,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
       codeActionProvider: true,
+      completionProvider: {
+        triggerCharacters: ["@", "."],
+        resolveProvider: true,
+      },
       semanticTokensProvider: {
         legend: semanticTokensLegend,
         full: true,
@@ -943,6 +953,47 @@ connection.onCodeAction((params: CodeActionParams) => {
   };
 
   return buildCodeActions(params, codeActionsContext);
+});
+
+// Handle completion request (autocompletion)
+connection.onCompletion((params: CompletionParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  if (!isBlueprintDocument(document)) {
+    return null;
+  }
+
+  if (!parserInitialized) {
+    return null;
+  }
+
+  // Get the parse tree from the document manager
+  const state = documentManager.getState(params.textDocument.uri);
+  if (!state?.tree) {
+    return null;
+  }
+
+  // Build the completion handler context
+  const completionContext: CompletionHandlerContext = {
+    symbolIndex,
+    fileUri: params.textDocument.uri,
+  };
+
+  return buildCompletions(state.tree, params, document.getText(), completionContext);
+});
+
+// Handle completion resolve request (lazy documentation loading)
+connection.onCompletionResolve((item) => {
+  // Build the completion handler context for resolution
+  const completionContext: CompletionHandlerContext = {
+    symbolIndex,
+    fileUri: "", // Not needed for resolve
+  };
+
+  return resolveCompletionItem(item, completionContext);
 });
 
 connection.onShutdown(() => {
