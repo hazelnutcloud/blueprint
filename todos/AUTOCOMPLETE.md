@@ -166,9 +166,9 @@ The Blueprint LSP currently supports hover, go-to-definition, find-references, d
 
 ### 6.2 Description Block Completion
 
-- [ ] After `@description`, suggest common description starters
-- [ ] Provide templates for requirement descriptions
-- [ ] No aggressive completion inside description text
+- [x] After `@description`, suggest common description starters
+- [x] Provide templates for requirement descriptions
+- [x] No aggressive completion inside description text
 
 ### 6.3 Code Block Completion
 

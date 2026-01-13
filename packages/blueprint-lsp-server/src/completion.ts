@@ -147,6 +147,62 @@ export const CODE_BLOCK_LANGUAGES = [
   { id: "dockerfile", description: "Dockerfile" },
 ] as const;
 
+/**
+ * Common description starters for @description blocks.
+ * These provide templates for common documentation patterns.
+ */
+export const DESCRIPTION_STARTERS = [
+  {
+    label: "This document describes...",
+    insertText: "This document describes ${1:the system/feature/component}.\n\n$0",
+    detail: "Document overview template",
+    documentation:
+      "Template for starting a document description with an overview of what is being documented.",
+  },
+  {
+    label: "This module provides...",
+    insertText: "This module provides ${1:functionality description}.\n\n$0",
+    detail: "Module description template",
+    documentation: "Template for describing the primary purpose of a module.",
+  },
+  {
+    label: "Purpose:",
+    insertText: "Purpose:\n${1:Describe the main goal or objective.}\n\n$0",
+    detail: "Purpose section template",
+    documentation: "Template for a structured purpose section.",
+  },
+  {
+    label: "Overview:",
+    insertText: "Overview:\n${1:High-level description of the system.}\n\n$0",
+    detail: "Overview section template",
+    documentation: "Template for a structured overview section.",
+  },
+  {
+    label: "Background:",
+    insertText: "Background:\n${1:Context and history.}\n\n$0",
+    detail: "Background section template",
+    documentation: "Template for providing context and background information.",
+  },
+  {
+    label: "Goals:",
+    insertText: "Goals:\n- ${1:First goal}\n- ${2:Second goal}\n\n$0",
+    detail: "Goals list template",
+    documentation: "Template for listing project or feature goals.",
+  },
+  {
+    label: "Non-Goals:",
+    insertText: "Non-Goals:\n- ${1:What this does NOT cover}\n\n$0",
+    detail: "Non-goals list template",
+    documentation: "Template for explicitly stating what is out of scope.",
+  },
+  {
+    label: "Requirements covered:",
+    insertText: "Requirements covered:\n- ${1:Requirement category}\n\n$0",
+    detail: "Requirements summary template",
+    documentation: "Template for summarizing the requirements covered in this document.",
+  },
+] as const;
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -172,6 +228,8 @@ export interface CompletionContext {
   isInDependsOn: boolean;
   /** Whether we're in a @constraint context (after @constraint keyword) */
   isInConstraint: boolean;
+  /** Whether we're in a @description block context (at start of line with empty/whitespace text) */
+  isInDescriptionBlock: boolean;
   /** The partial text before the cursor for filtering */
   prefix: string;
   /** Whether we're inside a comment or code block (skip completion) */
@@ -312,6 +370,30 @@ export function findContainingDependsOn(tree: Tree, position: Position): Node | 
 }
 
 /**
+ * Find the containing @description block at a given position.
+ * Walks up the tree to find if cursor is inside a description_block node.
+ */
+export function findContainingDescriptionBlock(tree: Tree, position: Position): Node | null {
+  const root = tree.rootNode;
+  const deepestNode = findNodeAtPosition(root, position.line, position.character);
+
+  if (!deepestNode) {
+    return null;
+  }
+
+  // Walk up to find a description_block node
+  let current: Node | null = deepestNode;
+  while (current) {
+    if (current.type === "description_block") {
+      return current;
+    }
+    current = current.parent;
+  }
+
+  return null;
+}
+
+/**
  * Extract existing references from a @depends-on clause.
  * Returns an array of reference paths (e.g., ["auth.login", "storage"]).
  */
@@ -358,6 +440,39 @@ export function getCursorContext(
   // Check if we're in a @constraint context (after @constraint keyword with a space)
   // Matches: "@constraint " or "@constraint name" but not "@constraint" alone (which is keyword completion)
   const isInConstraint = /^\s*@constraint\s+/.test(textBeforeCursor);
+
+  // Check if we're in a @description block context
+  // This is true when:
+  // 1. The cursor is inside a description_block, OR
+  // 2. The cursor is on a line immediately following a @description keyword (for empty descriptions)
+  // AND the line only has whitespace before the cursor - for suggesting description starters
+  const isAtLineStart = /^\s*$/.test(textBeforeCursor);
+  let isInDescriptionBlock = false;
+
+  if (isAtLineStart) {
+    // First check if cursor is inside a description_block
+    const descriptionBlockNode = findContainingDescriptionBlock(tree, position);
+    if (descriptionBlockNode !== null) {
+      isInDescriptionBlock = true;
+    } else {
+      // Check if we're on a line immediately after a @description block
+      // This handles the case where description has no content yet
+      const root = tree.rootNode;
+      const descBlock = root.children.find((c) => c.type === "description_block");
+      if (descBlock) {
+        // Check if cursor line is right after the description block's end line
+        // and before any module_block starts
+        const descEndLine = descBlock.endPosition.row;
+        const firstModuleBlock = root.children.find((c) => c.type === "module_block");
+        const moduleStartLine = firstModuleBlock?.startPosition.row ?? Infinity;
+
+        // Cursor should be after description keyword line and before any module
+        if (position.line > descEndLine && position.line < moduleStartLine) {
+          isInDescriptionBlock = true;
+        }
+      }
+    }
+  }
 
   // Check if we're in a comment or code block
   const node = findNodeAtPosition(tree.rootNode, position.line, position.character);
@@ -453,6 +568,7 @@ export function getCursorContext(
     isAfterDotTrigger,
     isInDependsOn,
     isInConstraint,
+    isInDescriptionBlock,
     prefix,
     isInSkipZone,
     isInCodeBlockLanguage,
@@ -1013,6 +1129,56 @@ export function getCodeBlockLanguageCompletions(context: CompletionContext): Com
 }
 
 // ============================================================================
+// Description Block Completion
+// ============================================================================
+
+/**
+ * Get description starter completions for @description block context.
+ * Suggests common documentation templates for starting descriptions.
+ * Only provides completions at the start of a line (empty or whitespace only).
+ *
+ * @param context The completion context
+ * @returns Array of completion items for description starters
+ */
+export function getDescriptionCompletions(context: CompletionContext): CompletionItem[] {
+  const { prefix } = context;
+
+  // Only show suggestions when at the start of a line (empty prefix)
+  // This implements "no aggressive completion inside description text"
+  if (prefix.trim().length > 0) {
+    return [];
+  }
+
+  // Convert to CompletionItems
+  const completions: CompletionItem[] = [];
+
+  for (let i = 0; i < DESCRIPTION_STARTERS.length; i++) {
+    const starter = DESCRIPTION_STARTERS[i]!;
+
+    // Use sortText to preserve defined order
+    const sortText = String(i).padStart(4, "0");
+
+    const item: CompletionItem = {
+      label: starter.label,
+      kind: CompletionItemKind.Snippet,
+      detail: starter.detail,
+      sortText,
+      filterText: starter.label,
+      insertText: starter.insertText,
+      insertTextFormat: InsertTextFormat.Snippet,
+      documentation: {
+        kind: MarkupKind.Markdown,
+        value: starter.documentation,
+      },
+    };
+
+    completions.push(item);
+  }
+
+  return completions;
+}
+
+// ============================================================================
 // Main Completion Handler
 // ============================================================================
 
@@ -1046,6 +1212,10 @@ export function buildCompletions(
   // Code block language completion (after ```)
   if (context.isInCodeBlockLanguage) {
     items.push(...getCodeBlockLanguageCompletions(context));
+  }
+  // Description block completion (inside @description block at line start)
+  else if (context.isInDescriptionBlock) {
+    items.push(...getDescriptionCompletions(context));
   }
   // Path completion (after a dot)
   else if (context.isAfterDotTrigger) {

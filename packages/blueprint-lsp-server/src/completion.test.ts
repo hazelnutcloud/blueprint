@@ -7,6 +7,7 @@ import {
   getCurrentScope,
   findContainingBlock,
   findContainingDependsOn,
+  findContainingDescriptionBlock,
   extractExistingReferences,
   getKeywordCompletions,
   isKeywordValidInScope,
@@ -18,8 +19,10 @@ import {
   collectConstraintNames,
   getConstraintNameCompletions,
   getCodeBlockLanguageCompletions,
+  getDescriptionCompletions,
   resolveCompletionItem,
   CODE_BLOCK_LANGUAGES,
+  DESCRIPTION_STARTERS,
   type CompletionContext,
   type CompletionHandlerContext,
 } from "./completion";
@@ -2262,6 +2265,228 @@ describe("completion", () => {
 
       // Should not crash, just leave documentation undefined
       expect(resolved.documentation).toBeUndefined();
+    });
+  });
+
+  // ============================================================================
+  // Phase 6.2: Description Block Completion
+  // ============================================================================
+
+  describe("description block completion", () => {
+    test("findContainingDescriptionBlock finds description_block node", () => {
+      const source = `@description
+  This is a description.`;
+      const { tree } = createTestContext(source);
+
+      // Position inside description block
+      const descBlockNode = findContainingDescriptionBlock(tree!, { line: 1, character: 5 });
+      expect(descBlockNode).not.toBeNull();
+      expect(descBlockNode!.type).toBe("description_block");
+    });
+
+    test("findContainingDescriptionBlock returns null outside description block", () => {
+      const source = `@module auth
+  Module description.`;
+      const { tree } = createTestContext(source);
+
+      // Position inside module, not description block
+      const descBlockNode = findContainingDescriptionBlock(tree!, { line: 1, character: 5 });
+      expect(descBlockNode).toBeNull();
+    });
+
+    test("detects isInDescriptionBlock at start of line inside @description block", () => {
+      const source = `@description
+  `;
+      const { tree } = createTestContext(source);
+
+      // Position at start of empty line inside description block
+      const context = getCursorContext(tree!, { line: 1, character: 2 }, source);
+      expect(context.isInDescriptionBlock).toBe(true);
+    });
+
+    test("does not detect isInDescriptionBlock when text is typed", () => {
+      const source = `@description
+  This is some text`;
+      const { tree } = createTestContext(source);
+
+      // Position after text - should not trigger description completion
+      const context = getCursorContext(tree!, { line: 1, character: 18 }, source);
+      expect(context.isInDescriptionBlock).toBe(false);
+    });
+
+    test("does not detect isInDescriptionBlock outside @description block", () => {
+      const source = `@module auth
+  `;
+      const { tree } = createTestContext(source);
+
+      // Position at start of line inside module (not description)
+      const context = getCursorContext(tree!, { line: 1, character: 2 }, source);
+      expect(context.isInDescriptionBlock).toBe(false);
+    });
+
+    test("getDescriptionCompletions returns all starters with empty prefix", () => {
+      const context: CompletionContext = {
+        scope: "top-level",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: true,
+        prefix: "",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getDescriptionCompletions(context);
+
+      // Should return all configured description starters
+      expect(completions.length).toBe(DESCRIPTION_STARTERS.length);
+
+      // Check that common starters are included
+      const labels = completions.map((c) => c.label);
+      expect(labels).toContain("This document describes...");
+      expect(labels).toContain("This module provides...");
+      expect(labels).toContain("Purpose:");
+      expect(labels).toContain("Overview:");
+    });
+
+    test("getDescriptionCompletions returns empty when text is typed (non-aggressive)", () => {
+      const context: CompletionContext = {
+        scope: "top-level",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: true,
+        prefix: "Some text",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getDescriptionCompletions(context);
+
+      // Should return empty array - no aggressive completion inside description text
+      expect(completions).toHaveLength(0);
+    });
+
+    test("description completions include snippets", () => {
+      const context: CompletionContext = {
+        scope: "top-level",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: true,
+        prefix: "",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getDescriptionCompletions(context);
+
+      // All completions should be snippets
+      for (const completion of completions) {
+        expect(completion.kind).toBe(CompletionItemKind.Snippet);
+        expect(completion.insertTextFormat).toBe(2); // InsertTextFormat.Snippet
+        expect(completion.insertText).toContain("${1:");
+      }
+    });
+
+    test("description completions include documentation", () => {
+      const context: CompletionContext = {
+        scope: "top-level",
+        scopePath: null,
+        isAfterAtTrigger: false,
+        isAfterDotTrigger: false,
+        isInDependsOn: false,
+        isInConstraint: false,
+        isInDescriptionBlock: true,
+        prefix: "",
+        isInSkipZone: false,
+        isInCodeBlockLanguage: false,
+        currentModule: null,
+        currentFeature: null,
+        currentRequirement: null,
+        existingReferences: [],
+        isAfterComma: false,
+      };
+
+      const completions = getDescriptionCompletions(context);
+      const purposeCompletion = completions.find((c) => c.label === "Purpose:");
+
+      expect(purposeCompletion).toBeDefined();
+      expect(purposeCompletion!.documentation).toBeDefined();
+      expect((purposeCompletion!.documentation as any).kind).toBe("markdown");
+    });
+
+    test("buildCompletions returns description starters in @description block", () => {
+      const source = `@description
+  `;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 1, character: 2 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      expect(result).not.toBeNull();
+      const labels = result!.items.map((c) => c.label);
+      expect(labels).toContain("This document describes...");
+      expect(labels).toContain("Purpose:");
+      expect(labels).toContain("Goals:");
+    });
+
+    test("buildCompletions does not return description starters when typing text", () => {
+      const source = `@description
+  This is a doc`;
+      const { tree, symbolIndex } = createTestContext(source);
+
+      // Position after "This is a doc" - should not get description starters
+      const result = buildCompletions(
+        tree!,
+        { textDocument: { uri: "file:///test.bp" }, position: { line: 1, character: 15 } },
+        source,
+        { symbolIndex, fileUri: "file:///test.bp" }
+      );
+
+      // When in description block but text is typed, should fall through to other completions
+      // or return null/empty based on context
+      if (result !== null) {
+        const labels = result.items.map((c) => c.label);
+        expect(labels).not.toContain("This document describes...");
+        expect(labels).not.toContain("Purpose:");
+      }
+    });
+
+    test("DESCRIPTION_STARTERS includes common documentation patterns", () => {
+      const labels = DESCRIPTION_STARTERS.map((s) => s.label);
+
+      // These are specifically mentioned in the AUTOCOMPLETE.md spec
+      expect(labels).toContain("This document describes...");
+      expect(labels).toContain("Purpose:");
+      expect(labels).toContain("Overview:");
+      expect(labels).toContain("Goals:");
+      expect(labels).toContain("Non-Goals:");
     });
   });
 });
